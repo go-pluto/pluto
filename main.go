@@ -51,6 +51,8 @@ func main() {
 	// Load environment from .env file.
 	Env := config.LoadEnv()
 
+	log.Println(Config.IP, Env.Secret)
+
 	// Initialize imap server.
 	server := InitServer()
 	defer server.Close()

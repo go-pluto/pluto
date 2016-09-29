@@ -1,0 +1,11 @@
+language: go
+go:
+    - tip
+
+script:
+    - go build
+
+notifications:
+  email:
+    on_success: change
+    on_failure: always
