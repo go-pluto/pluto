@@ -1,0 +1,5 @@
+# IP address on which pluto should bind
+ip = "127.0.0.1"
+
+# Port on which to listen
+port = "1993"

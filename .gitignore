@@ -22,3 +22,8 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+# Pluto specific excludes
+.env
+config.toml
+pluto
