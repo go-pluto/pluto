@@ -8,11 +8,18 @@ import (
 
 // Structs
 
-// Config holds all information
-// parsed from supplied config file.
+// Config holds all information parsed from
+// supplied config file.
 type Config struct {
-	IP   string
-	Port string
+	IP     string
+	Port   string
+	Server Server
+}
+
+// Server is the IMAP server related part of the
+// TOML config file.
+type Server struct {
+	Greeting string
 }
 
 // Functions

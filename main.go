@@ -30,5 +30,5 @@ func main() {
 	defer Server.Socket.Close()
 
 	// Loop on incoming requests.
-	Server.RunServer()
+	Server.RunServer(Config.Server.Greeting)
 }

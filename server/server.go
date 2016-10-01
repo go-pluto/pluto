@@ -2,9 +2,10 @@ package server
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net"
+
+	"github.com/numbleroot/pluto/imap"
 )
 
 // Structs
@@ -41,31 +42,44 @@ func InitServer(ip string, port string) *Server {
 	return server
 }
 
-func HandleRequest(c net.Conn) {
+// HandleRequest acts as the jump start for any new
+// incoming connection to pluto. It creates the needed
+// control structure, sends out the initial server
+// greeting and after that hands over control to the
+// IMAP state machine.
+func HandleRequest(conn net.Conn, greeting string) {
 
-	log.Println("> Handling request.")
+	log.Println("[DEBUG] New connection.")
 
-	// Copy request contents.
-	io.Copy(c, c)
-	c.Close()
+	// Create a new connection struct for incoming request.
+	c := imap.NewConnection(conn)
 
-	log.Println("> Request done.")
+	log.Println("[DEBUG] Connection struct created.")
+
+	// Send initial server greeting.
+	c.Send("* OK IMAP4rev1 " + greeting)
+
+	// Expect text from client.
+	text := c.Receive()
+	log.Printf("[DEBUG] Received from client: %s\n", text)
+
+	log.Println("[DEBUG] Connection closed.")
 }
 
 // RunServer loops over incoming requests and
 // dispatches each one to a goroutine taking
 // care of the commands supplied.
-func (server *Server) RunServer() {
+func (server *Server) RunServer(greeting string) {
 
 	for {
 
 		// Accept request or fail on error.
-		c, err := server.Socket.Accept()
+		conn, err := server.Socket.Accept()
 		if err != nil {
 			log.Fatalf("[server.RunServer] Accepting incoming request failed with: %s\n", err.Error())
 		}
 
 		// Dispatch to goroutine.
-		go HandleRequest(c)
+		go HandleRequest(conn, greeting)
 	}
 }
