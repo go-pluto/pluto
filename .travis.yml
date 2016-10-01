@@ -1,10 +1,10 @@
 language: go
 
 go:
-    - tip
+  - tip
 
 script:
-    - make all
+  - make all
 
 notifications:
   email:

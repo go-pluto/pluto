@@ -59,9 +59,16 @@ func HandleRequest(conn net.Conn, greeting string) {
 	// Send initial server greeting.
 	c.Send("* OK IMAP4rev1 " + greeting)
 
-	// Expect text from client.
-	text := c.Receive()
-	log.Printf("[DEBUG] Received from client: %s\n", text)
+	for {
+
+		// Expect text from client.
+		text := c.Receive()
+		log.Printf("[DEBUG] Received from client: %s\n", text)
+
+		// Send back incoming text.
+		c.Send(text)
+		log.Printf("[DEBUG] Sent to client: %s\n", text)
+	}
 
 	log.Println("[DEBUG] Connection closed.")
 }

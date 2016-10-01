@@ -31,6 +31,10 @@ func NewConnection(c net.Conn) *Connection {
 	}
 }
 
+// Receive wraps the main io.Reader function that
+// awaits text until a newline symbol and deletes
+// that symbol afterwards again. It returns the
+// resulting string.
 func (c *Connection) Receive() string {
 
 	text, err := c.Reader.ReadString('\n')
