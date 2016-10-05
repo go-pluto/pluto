@@ -57,20 +57,22 @@ func HandleRequest(conn net.Conn, greeting string) {
 	log.Println("[DEBUG] Connection struct created.")
 
 	// Send initial server greeting.
-	c.Send("* OK IMAP4rev1 " + greeting)
+	err := c.Send("* OK IMAP4rev1 " + greeting)
+	if err != nil {
 
-	for {
+		// If send returned a problem, the connection seems to be broken.
+		// Log error and terminate this connection.
+		log.Printf("[server.HandleRequest] Request terminated due to received Send error: %s\n", err.Error())
 
-		// Expect text from client.
-		text := c.Receive()
-		log.Printf("[DEBUG] Received from client: %s\n", text)
-
-		// Send back incoming text.
-		c.Send(text)
-		log.Printf("[DEBUG] Sent to client: %s\n", text)
+		return
 	}
 
-	log.Println("[DEBUG] Connection closed.")
+	log.Println("[DEBUG] Dispatching to not-authenticated state.")
+
+	// Dispatch to not-authenticated state.
+	c.Transition(imap.NOT_AUTHENTICATED)
+
+	log.Println("[DEBUG] Connection dispatched.")
 }
 
 // RunServer loops over incoming requests and
