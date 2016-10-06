@@ -2,7 +2,6 @@ package imap
 
 import (
 	"fmt"
-	"log"
 )
 
 // Functions
@@ -17,11 +16,7 @@ func (c *Connection) Capability(req *Request) {
 		// this is a client error. Return BAD statement.
 		err := c.Send("* BAD Command CAPABILITY was sent with extra space")
 		if err != nil {
-			log.Fatal(err)
-
-			// TODO: Change to clean up function and termination of
-			//       connection not whole server.
-
+			c.Error("Encountered send error", err)
 			return
 		}
 
@@ -35,11 +30,7 @@ func (c *Connection) Capability(req *Request) {
 		// This means, STARTTLS is allowed and nothing else.
 		err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 STARTTLS LOGINDISABLED\n%s OK CAPABILITY completed", req.Tag))
 		if err != nil {
-			log.Fatal(err)
-
-			// TODO: Change to clean up function and termination of
-			//       connection not whole server.
-
+			c.Error("Encountered send error", err)
 			return
 		}
 
@@ -53,11 +44,7 @@ func (c *Connection) Capability(req *Request) {
 		// This means, AUTH=PLAIN is allowed and nothing else.
 		err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 AUTH=PLAIN\n%s OK CAPABILITY completed", req.Tag))
 		if err != nil {
-			log.Fatal(err)
-
-			// TODO: Change to clean up function and termination of
-			//       connection not whole server.
-
+			c.Error("Encountered send error", err)
 			return
 		}
 

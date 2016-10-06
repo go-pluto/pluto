@@ -86,7 +86,7 @@ func (c *Connection) Receive() (string, error) {
 
 	text, err := c.Reader.ReadString('\n')
 	if err != nil {
-		return "", fmt.Errorf("Fatal error while reading in commands from IMAP client: '%s'", err.Error())
+		return "", err
 	}
 
 	return strings.TrimRight(text, "\n"), nil
@@ -99,8 +99,34 @@ func (c *Connection) Receive() (string, error) {
 func (c *Connection) Send(text string) error {
 
 	if _, err := fmt.Fprintf(c.Conn, "%s\n", text); err != nil {
-		fmt.Errorf("Fatal error occured during write of text to IMAP client: '%s'", err.Error())
+		return err
 	}
 
 	return nil
+}
+
+// Terminate tears down the state of a connection.
+// This includes closing contained connection items.
+// It returns nil or eventual errors.
+func (c *Connection) Terminate() error {
+
+	if err := c.Conn.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Error makes use of Terminate but provides an additional
+// error message before terminating.
+func (c *Connection) Error(msg string, err error) {
+
+	// Log error.
+	log.Printf("%s: %s. Terminating connection to %s\n", msg, err.Error(), c.Conn.RemoteAddr().String())
+
+	// Terminate connection.
+	err = c.Terminate()
+	if err != nil {
+		log.Fatal(err)
+	}
 }

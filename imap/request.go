@@ -37,7 +37,7 @@ func ParseRequest(req string) (*Request, error) {
 	// Assign corresponding parts in new struct.
 	finalReq := &Request{
 		Tag:     tmpReq[0],
-		Command: tmpReq[1],
+		Command: strings.ToUpper(tmpReq[1]),
 	}
 
 	// If the command has a defined payload, add

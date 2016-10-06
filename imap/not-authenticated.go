@@ -24,11 +24,7 @@ func (c *Connection) AcceptNotAuthenticated() {
 		// Receive incoming client command.
 		rawReq, err := c.Receive()
 		if err != nil {
-			log.Fatal(err)
-
-			// TODO: Change to clean up function and termination of
-			//       connection not whole server.
-
+			c.Error("Encountered receive error", err)
 			return
 		}
 
@@ -36,13 +32,10 @@ func (c *Connection) AcceptNotAuthenticated() {
 		req, err := ParseRequest(rawReq)
 		if err != nil {
 
+			// Signal error to client.
 			err := c.Send(err.Error())
 			if err != nil {
-				log.Fatal(err)
-
-				// TODO: Change to clean up function and termination of
-				//       connection not whole server.
-
+				c.Error("Encountered send error", err)
 				return
 			}
 
@@ -64,13 +57,10 @@ func (c *Connection) AcceptNotAuthenticated() {
 			c.Logout(req)
 
 		default:
+			// Client sent inappropriate command. Signal error.
 			err := c.Send(fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
 			if err != nil {
-				log.Fatal(err)
-
-				// TODO: Change to clean up function and termination of
-				//       connection not whole server.
-
+				c.Error("Encountered send error", err)
 				return
 			}
 		}
