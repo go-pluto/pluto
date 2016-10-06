@@ -1,6 +1,7 @@
 package imap_test
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"testing"
@@ -17,6 +18,8 @@ var capabilityTests = []struct {
 	out string
 }{
 	{"a001 CAPABILITY", "* CAPABILITY IMAP4rev1 STARTTLS LOGINDISABLED\na001 OK CAPABILITY completed"},
+	{"a001 CAPABILITY   ", "* BAD Command CAPABILITY was sent with extra space"},
+	{"CAPABILITY", "* BAD Received invalid IMAP command"},
 }
 
 // Variables
@@ -60,7 +63,9 @@ func TestCapability(t *testing.T) {
 		t.Errorf("[imap.TestCapability] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
-	for _, tt := range capabilityTests {
+	for i, tt := range capabilityTests {
+
+		var answer string
 
 		// Table test: send 'in' part of each line.
 		err = c.Send(tt.in)
@@ -68,10 +73,23 @@ func TestCapability(t *testing.T) {
 			t.Fatalf("[imap.TestCapability] Sending message to server failed with: %s\n", err.Error())
 		}
 
-		// Receive answer.
-		answer, err := c.Receive()
+		// Receive options listed in CAPABILITY command.
+		capAnswer, err := c.Receive()
 		if err != nil {
 			t.Errorf("[imap.TestCapability] Error during receiving table test CAPABILITY: %s\n", err.Error())
+		}
+
+		if i == 0 {
+
+			// Receive command termination message from server.
+			okAnswer, err := c.Receive()
+			if err != nil {
+				t.Errorf("[imap.TestCapability] Error during receiving table test CAPABILITY: %s\n", err.Error())
+			}
+
+			answer = fmt.Sprintf("%s\n%s", capAnswer, okAnswer)
+		} else {
+			answer = capAnswer
 		}
 
 		if answer != tt.out {

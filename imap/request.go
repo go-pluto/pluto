@@ -25,13 +25,13 @@ type Request struct {
 func ParseRequest(req string) (*Request, error) {
 
 	// Split req at space symbols at maximum two times.
-	tmpReq := strings.SplitAfterN(req, " ", 3)
+	tmpReq := strings.SplitN(req, " ", 3)
 
 	// There exists no first class IMAP command which
 	// is not tag prefixed. Return an error if only one
 	// token was found.
 	if len(tmpReq) < 2 {
-		return nil, fmt.Errorf("Invalid command.")
+		return nil, fmt.Errorf("* BAD Received invalid IMAP command")
 	}
 
 	// Assign corresponding parts in new struct.

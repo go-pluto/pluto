@@ -54,8 +54,6 @@ func NewConnection(c net.Conn) *Connection {
 // IMAP commands.
 func (c *Connection) Transition(state IMAPState) {
 
-	log.Println("[imap.DEBUG] Transition start.")
-
 	switch state {
 
 	case NOT_AUTHENTICATED:
@@ -78,8 +76,6 @@ func (c *Connection) Transition(state IMAPState) {
 		c.State = LOGOUT
 		go c.AcceptLogout()
 	}
-
-	log.Println("[imap.DEBUG] Transition done.")
 }
 
 // Receive wraps the main io.Reader function that

@@ -49,12 +49,8 @@ func InitServer(ip string, port string) *Server {
 // IMAP state machine.
 func HandleRequest(conn net.Conn, greeting string) {
 
-	log.Println("[DEBUG] New connection.")
-
 	// Create a new connection struct for incoming request.
 	c := imap.NewConnection(conn)
-
-	log.Println("[DEBUG] Connection struct created.")
 
 	// Send initial server greeting.
 	err := c.Send("* OK IMAP4rev1 " + greeting)
@@ -67,12 +63,8 @@ func HandleRequest(conn net.Conn, greeting string) {
 		return
 	}
 
-	log.Println("[DEBUG] Dispatching to not-authenticated state.")
-
 	// Dispatch to not-authenticated state.
 	c.Transition(imap.NOT_AUTHENTICATED)
-
-	log.Println("[DEBUG] Connection dispatched.")
 }
 
 // RunServer loops over incoming requests and
