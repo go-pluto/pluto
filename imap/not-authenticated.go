@@ -18,8 +18,11 @@ func (c *Connection) StartTLS(req *Request) {
 // specific handlers matching the parsed data.
 func (c *Connection) AcceptNotAuthenticated() {
 
-	// TODO: Refactor endless loop into loop with clear end conditions.
-	for {
+	var nextState IMAPState
+
+	// As long as no transition to next consecutive IMAP state
+	// took place, wait in loop for incoming requests.
+	for (nextState != AUTHENTICATED) || (nextState != MAILBOX) {
 
 		// Receive incoming client command.
 		rawReq, err := c.Receive()
@@ -49,20 +52,34 @@ func (c *Connection) AcceptNotAuthenticated() {
 
 		case "STARTTLS":
 			c.StartTLS(req)
+			nextState = AUTHENTICATED
+
+		case "LOGIN":
+			c.Login(req)
 
 		case "CAPABILITY":
 			c.Capability(req)
 
-		case "BYE":
+		case "LOGOUT":
 			c.Logout(req)
+			nextState = LOGOUT
 
 		default:
-			// Client sent inappropriate command. Signal error.
+			// Client sent inappropriate command. Signal tagged error.
 			err := c.Send(fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return
 			}
 		}
+	}
+
+	switch nextState {
+
+	case AUTHENTICATED:
+		c.Transition(AUTHENTICATED)
+
+	case LOGOUT:
+		c.Transition(LOGOUT)
 	}
 }

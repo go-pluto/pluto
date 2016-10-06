@@ -57,22 +57,18 @@ func (c *Connection) Transition(state IMAPState) {
 	switch state {
 
 	case NOT_AUTHENTICATED:
-		log.Println("[imap.DEBUG] NOT_AUTHENTICATED chosen.")
 		c.State = NOT_AUTHENTICATED
 		go c.AcceptNotAuthenticated()
 
 	case AUTHENTICATED:
-		log.Println("[imap.DEBUG] AUTHENTICATED chosen.")
 		c.State = AUTHENTICATED
 		go c.AcceptAuthenticated()
 
 	case MAILBOX:
-		log.Println("[imap.DEBUG] MAILBOX chosen.")
 		c.State = MAILBOX
 		go c.AcceptMailbox()
 
 	case LOGOUT:
-		log.Println("[imap.DEBUG] LOGOUT chosen.")
 		c.State = LOGOUT
 		go c.AcceptLogout()
 	}

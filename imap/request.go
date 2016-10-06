@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+// Variables
+
+var SupportedCommands map[string]bool
+
 // Structs
 
 // Request represents the parsed content of a client
@@ -18,6 +22,18 @@ type Request struct {
 
 // Functions
 
+func init() {
+
+	// Set supported IMAP commands to true in
+	// a map to have quick access.
+	SupportedCommands = make(map[string]bool)
+
+	SupportedCommands["STARTTLS"] = true
+	SupportedCommands["LOGIN"] = true
+	SupportedCommands["CAPABILITY"] = true
+	SupportedCommands["LOGOUT"] = true
+}
+
 // ParseRequest takes in a raw string representing
 // a received IMAP request and parses it into the
 // defined request structure above. Any error encountered
@@ -27,10 +43,15 @@ func ParseRequest(req string) (*Request, error) {
 	// Split req at space symbols at maximum two times.
 	tmpReq := strings.SplitN(req, " ", 3)
 
-	// There exists no first class IMAP command which
-	// is not tag prefixed. Return an error if only one
+	// There exists no first class IMAP command with less
+	// than two arguments. Return an error if only one
 	// token was found.
 	if len(tmpReq) < 2 {
+		return nil, fmt.Errorf("* BAD Received invalid IMAP command")
+	}
+
+	// Check that the tag was not left out.
+	if SupportedCommands[tmpReq[0]] {
 		return nil, fmt.Errorf("* BAD Received invalid IMAP command")
 	}
 
