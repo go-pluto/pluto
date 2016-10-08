@@ -30,10 +30,9 @@ type IMAPState int
 // to one observed connection on its way through
 // the IMAP server.
 type Connection struct {
-	Conn      net.Conn
-	Reader    *bufio.Reader
-	State     IMAPState
-	Encrypted bool
+	Conn   net.Conn
+	Reader *bufio.Reader
+	State  IMAPState
 }
 
 // Functions

@@ -6,8 +6,8 @@ import (
 
 // Functions
 
-// StartTLS handles the IMAP STARTTLS command to
-// initiate an encrypted connection.
+// StartTLS states on IMAP STARTTLS command
+// that current connection is already encrypted.
 func (c *Connection) StartTLS(req *Request) {
 
 	if len(req.Payload) > 0 {
@@ -23,21 +23,9 @@ func (c *Connection) StartTLS(req *Request) {
 		return
 	}
 
-	if c.Encrypted {
-
-		// If the connection is already TLS encrypted,
-		// tell client that a TLS session is active.
-		err := c.Send(fmt.Sprintf("%s BAD TLS is already active", req.Tag))
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return
-		}
-
-		return
-	}
-
-	// Tell client to go ahead with TLS negotiation.
-	err := c.Send(fmt.Sprintf("%s OK Begin TLS negotiation now", req.Tag))
+	// As the connection is already TLS encrypted,
+	// tell client that a TLS session is active.
+	err := c.Send(fmt.Sprintf("%s BAD TLS is already active", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return
@@ -81,19 +69,18 @@ func (c *Connection) AcceptNotAuthenticated() {
 
 		switch req.Command {
 
-		case "STARTTLS":
-			c.StartTLS(req)
-			nextState = AUTHENTICATED
+		case "CAPABILITY":
+			c.Capability(req)
 
 		case "LOGIN":
 			c.Login(req)
 
-		case "CAPABILITY":
-			c.Capability(req)
-
 		case "LOGOUT":
 			c.Logout(req)
 			nextState = LOGOUT
+
+		case "STARTTLS":
+			c.StartTLS(req)
 
 		default:
 			// Client sent inappropriate command. Signal tagged error.

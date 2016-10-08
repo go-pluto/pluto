@@ -1,7 +1,6 @@
 package imap_test
 
 import (
-	"log"
 	"testing"
 
 	"crypto/tls"
@@ -15,8 +14,8 @@ var starttlsTests = []struct {
 	in  string
 	out string
 }{
-	{"yyy STARTTLS", "yyy OK Begin TLS negotiation now"},
-	{"qwerty starttls", "qwerty OK Begin TLS negotiation now"},
+	{"yyy STARTTLS", "yyy BAD TLS is already active"},
+	{"qwerty starttls", "qwerty BAD TLS is already active"},
 	{"1 STARTTLS   ", "1 BAD Command STARTTLS was sent with extra parameters"},
 	{"STARTTLS", "* BAD Received invalid IMAP command"},
 }
@@ -44,8 +43,6 @@ func TestStartTLS(t *testing.T) {
 
 	for _, tt := range starttlsTests {
 
-		log.Printf("Sending: %s\n", tt.in)
-
 		// Table test: send 'in' part of each line.
 		err = c.Send(tt.in)
 		if err != nil {
@@ -62,4 +59,7 @@ func TestStartTLS(t *testing.T) {
 			t.Fatalf("[imap.TestStartTLS] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
+
+	// At the end of each test, terminate connection.
+	c.Terminate()
 }

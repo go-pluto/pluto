@@ -21,8 +21,8 @@ var capabilityTests = []struct {
 	in  string
 	out string
 }{
-	{"a001 CAPABILITY", "* CAPABILITY IMAP4rev1 STARTTLS LOGINDISABLED\na001 OK CAPABILITY completed"},
-	{"1337 capability", "* CAPABILITY IMAP4rev1 STARTTLS LOGINDISABLED\n1337 OK CAPABILITY completed"},
+	{"a001 CAPABILITY", "* CAPABILITY IMAP4rev1 LOGINDISABLED AUTH=PLAIN\na001 OK CAPABILITY completed"},
+	{"1337 capability", "* CAPABILITY IMAP4rev1 LOGINDISABLED AUTH=PLAIN\n1337 OK CAPABILITY completed"},
 	{"tag CAPABILITY   ", "tag BAD Command CAPABILITY was sent with extra parameters"},
 	{"CAPABILITY", "* BAD Received invalid IMAP command"},
 }
@@ -31,8 +31,8 @@ var loginTests = []struct {
 	in  string
 	out string
 }{
-	{"xyz LOGIN smith sesame", "xyz NO Command LOGIN is disabled. Do not send plaintext login information."},
-	{"zyx login smith sesame", "zyx NO Command LOGIN is disabled. Do not send plaintext login information."},
+	{"xyz LOGIN smith sesame", "xyz NO Command LOGIN is disabled"},
+	{"zyx login smith sesame", "zyx NO Command LOGIN is disabled"},
 	{"a1b2c3   LOGIN    smith sesame", "a1b2c3 BAD Received invalid IMAP command"},
 	{"LOGIN ernie bert", "* BAD Received invalid IMAP command"},
 	{"12345 LOL ernie bert", "12345 BAD Received invalid IMAP command"},
@@ -158,6 +158,9 @@ func TestCapability(t *testing.T) {
 			t.Fatalf("[imap.TestCapability] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
+
+	// At the end of each test, terminate connection.
+	c.Terminate()
 }
 
 // TestLogin executes a black-box table test on the
@@ -197,6 +200,9 @@ func TestLogin(t *testing.T) {
 			t.Fatalf("[imap.TestLogin] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
+
+	// At the end of each test, terminate connection.
+	c.Terminate()
 }
 
 // TestLogout executes a black-box table test on the
@@ -249,6 +255,12 @@ func TestLogout(t *testing.T) {
 
 		if answer != tt.out {
 			t.Fatalf("[imap.TestLogout] Expected '%s' but received '%s'\n", tt.out, answer)
+		}
+
+		// At the end of each test, terminate connection.
+		err = c.Terminate()
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 }

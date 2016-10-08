@@ -1,9 +1,5 @@
 package imap
 
-import (
-	"log"
-)
-
 // Functions
 
 // AcceptAuthenticated acts as the main loop for
@@ -13,6 +9,4 @@ import (
 func (c *Connection) AcceptAuthenticated() {
 
 	// TODO: Implement this function.
-
-	log.Println("[imap.AcceptAuthenticated] Received call.")
 }

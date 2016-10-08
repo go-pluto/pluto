@@ -23,31 +23,13 @@ func (c *Connection) Capability(req *Request) {
 		return
 	}
 
-	// Check if state is not authenticated.
-	if c.State == NOT_AUTHENTICATED {
-
-		// Send mandatory capability options in not authenticated state.
-		// This means, STARTTLS is allowed and nothing else.
-		err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 STARTTLS LOGINDISABLED\n%s OK CAPABILITY completed", req.Tag))
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return
-		}
-
-		return
-	}
-
-	// Check if state is authenticated or mailbox.
-	if (c.State == AUTHENTICATED) || (c.State == MAILBOX) {
-
-		// Send mandatory capability options in an authenticated state.
-		// This means, AUTH=PLAIN is allowed and nothing else.
-		err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 LOGINDISABLED AUTH=PLAIN\n%s OK CAPABILITY completed", req.Tag))
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return
-		}
-
+	// Send mandatory capability options.
+	// This means, AUTH=PLAIN is allowed and nothing else.
+	// STARTTLS will be answered but is not listed as
+	// each connection already is a TLS connection.
+	err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 LOGINDISABLED AUTH=PLAIN\n%s OK CAPABILITY completed", req.Tag))
+	if err != nil {
+		c.Error("Encountered send error", err)
 		return
 	}
 }
@@ -56,10 +38,7 @@ func (c *Connection) Capability(req *Request) {
 // because LOGINDISABLED is advertised.
 func (c *Connection) Login(req *Request) {
 
-	// Prepared tagged NO response.
-	response := fmt.Sprintf("%s NO Command LOGIN is disabled. Do not send plaintext login information.", req.Tag)
-
-	err := c.Send(response)
+	err := c.Send(fmt.Sprintf("%s NO Command LOGIN is disabled", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return
