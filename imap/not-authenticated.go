@@ -6,9 +6,42 @@ import (
 
 // Functions
 
+// StartTLS handles the IMAP STARTTLS command to
+// initiate an encrypted connection.
 func (c *Connection) StartTLS(req *Request) {
 
-	// TODO: Implement this function.
+	if len(req.Payload) > 0 {
+
+		// If payload was not empty to STARTTLS command,
+		// this is a client error. Return BAD statement.
+		err := c.Send(fmt.Sprintf("%s BAD Command STARTTLS was sent with extra parameters", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return
+		}
+
+		return
+	}
+
+	if c.Encrypted {
+
+		// If the connection is already TLS encrypted,
+		// tell client that a TLS session is active.
+		err := c.Send(fmt.Sprintf("%s BAD TLS is already active", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return
+		}
+
+		return
+	}
+
+	// Tell client to go ahead with TLS negotiation.
+	err := c.Send(fmt.Sprintf("%s OK Begin TLS negotiation now", req.Tag))
+	if err != nil {
+		c.Error("Encountered send error", err)
+		return
+	}
 }
 
 // AcceptNotAuthenticated acts as the main loop for
@@ -45,8 +78,6 @@ func (c *Connection) AcceptNotAuthenticated() {
 			// Go back to beginning of for loop.
 			continue
 		}
-
-		// log.Printf("tag: '%s', command: '%s', payload: '%s'\n", req.Tag, req.Command, req.Payload)
 
 		switch req.Command {
 

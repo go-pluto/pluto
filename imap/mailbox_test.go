@@ -1,3 +1,3 @@
-package imap
+package imap_test
 
 // Functions

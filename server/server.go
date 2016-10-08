@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 
+	"crypto/tls"
+
 	"github.com/numbleroot/pluto/imap"
 )
 
@@ -19,10 +21,10 @@ type Server struct {
 
 // Functions
 
-// InitServer opens up a TCP socket on supplied
-// IP address and port. It returns those information
-// bundeled in above Server struct.
-func InitServer(ip string, port string) *Server {
+// InitServer listens for TLS connections on a TCP socket
+// opened up on supplied IP address and port. It returns
+// those information bundeled in above Server struct.
+func InitServer(ip string, port string, certLoc string, keyLoc string) *Server {
 
 	var err error
 	server := new(Server)
@@ -31,10 +33,36 @@ func InitServer(ip string, port string) *Server {
 	server.IP = ip
 	server.Port = port
 
-	// Start to listen on defined IP and port.
-	server.Socket, err = net.Listen("tcp", fmt.Sprintf("%s:%s", server.IP, server.Port))
+	// TLS config is taken from the excellent blog post
+	// "Achieving a Perfect SSL Labs Score with Go":
+	// https://blog.bracelab.com/achieving-perfect-ssl-labs-score-with-go
+	tlsConfig := &tls.Config{
+		Certificates:             make([]tls.Certificate, 1),
+		MinVersion:               tls.VersionTLS12,
+		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+		PreferServerCipherSuites: true,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+		},
+	}
+
+	// Put in supplied TLS cert and key.
+	tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(certLoc, keyLoc)
 	if err != nil {
-		log.Fatalf("[server.InitServer] Listening on port failed with: %s\n", err.Error())
+		log.Fatalf("[server.InitServer] Failed to load TLS cert and key: %s\n", err.Error())
+	}
+
+	// Build Common Name (CN) and Subject Alternate
+	// Name (SAN) from tlsConfig.Certificates.
+	tlsConfig.BuildNameToCertificate()
+
+	// Start to listen on defined IP and port.
+	server.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", server.IP, server.Port), tlsConfig)
+	if err != nil {
+		log.Fatalf("[server.InitServer] Listening for TLS connections on port failed with: %s\n", err.Error())
 	}
 
 	log.Printf("[server.InitServer] Listening for incoming IMAP requests on %s.\n", server.Socket.Addr())

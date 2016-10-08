@@ -6,6 +6,7 @@ all: deps build
 
 clean:
 	go clean -i ./...
+	find . -name \*.out -type f -delete
 
 deps:
 	go get -t ./...

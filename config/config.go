@@ -11,14 +11,23 @@ import (
 // Config holds all information parsed from
 // supplied config file.
 type Config struct {
-	IP     string
-	Port   string
-	Server Server
+	IP   string
+	Port string
+	TLS  TLS
+	IMAP IMAP
 }
 
-// Server is the IMAP server related part of the
-// TOML config file.
-type Server struct {
+// TLS contains Transport Layer Security relevant
+// parameters. Use this to provide paths to your
+// TLS certificate and key.
+type TLS struct {
+	CertLoc string
+	KeyLoc  string
+}
+
+// IMAP is the IMAP server related part
+// of the TOML config file.
+type IMAP struct {
 	Greeting string
 }
 

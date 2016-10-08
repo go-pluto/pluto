@@ -24,7 +24,8 @@ _testmain.go
 *.prof
 
 # Pluto specific excludes
-.env
-config.toml
+private/
 pluto
+config.toml
+.env
 *.out

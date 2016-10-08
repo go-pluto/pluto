@@ -16,7 +16,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	// Parse command-line flag that defines a config path.
-	configFlag := flag.String("config", "config.toml", "Provide path to configuration file in YAML syntax.")
+	configFlag := flag.String("config", "config.toml", "Provide path to configuration file in TOML syntax.")
 	flag.Parse()
 
 	// Read configuration from file.
@@ -26,9 +26,9 @@ func main() {
 	// Env := config.LoadEnv()
 
 	// Initialize a server instance.
-	Server := server.InitServer(Config.IP, Config.Port)
+	Server := server.InitServer(Config.IP, Config.Port, Config.TLS.CertLoc, Config.TLS.KeyLoc)
 	defer Server.Socket.Close()
 
 	// Loop on incoming requests.
-	Server.RunServer(Config.Server.Greeting)
+	Server.RunServer(Config.IMAP.Greeting)
 }
