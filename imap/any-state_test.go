@@ -161,24 +161,24 @@ func TestLogin(t *testing.T) {
 // implemented Logout() function.
 func TestLogout(t *testing.T) {
 
-	// Connect to IMAP server.
-	conn, err := net.Dial("tcp", (Config.IP + ":" + Config.Port))
-	if err != nil {
-		t.Fatalf("[imap.TestLogout] Error during connection attempt to IMAP server: %s\n", err.Error())
-	}
-
-	// Create new connection struct.
-	c := imap.NewConnection(conn)
-
-	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
-	if err != nil {
-		t.Errorf("[imap.TestLogout] Error during receiving initial server greeting: %s\n", err.Error())
-	}
-
 	for i, tt := range logoutTests {
 
 		var answer string
+
+		// Connect to IMAP server.
+		conn, err := net.Dial("tcp", (Config.IP + ":" + Config.Port))
+		if err != nil {
+			t.Fatalf("[imap.TestLogout] Error during connection attempt to IMAP server: %s\n", err.Error())
+		}
+
+		// Create new connection struct.
+		c := imap.NewConnection(conn)
+
+		// Consume mandatory IMAP greeting.
+		_, err = c.Receive()
+		if err != nil {
+			t.Errorf("[imap.TestLogout] Error during receiving initial server greeting: %s\n", err.Error())
+		}
 
 		// Table test: send 'in' part of each line.
 		err = c.Send(tt.in)

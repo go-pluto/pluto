@@ -93,6 +93,6 @@ func (c *Connection) Logout(req *Request) {
 		return
 	}
 
-	// TODO: Terminate connection.
-	// c.Terminate()
+	// Terminate connection.
+	c.Terminate()
 }

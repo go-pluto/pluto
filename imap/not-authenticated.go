@@ -2,7 +2,6 @@ package imap
 
 import (
 	"fmt"
-	"log"
 )
 
 // Functions
@@ -18,11 +17,12 @@ func (c *Connection) StartTLS(req *Request) {
 // specific handlers matching the parsed data.
 func (c *Connection) AcceptNotAuthenticated() {
 
-	var nextState IMAPState
+	// Set loop end condition initially to this state.
+	nextState := NOT_AUTHENTICATED
 
 	// As long as no transition to next consecutive IMAP state
 	// took place, wait in loop for incoming requests.
-	for (nextState != AUTHENTICATED) || (nextState != MAILBOX) {
+	for nextState == NOT_AUTHENTICATED {
 
 		// Receive incoming client command.
 		rawReq, err := c.Receive()
@@ -46,7 +46,7 @@ func (c *Connection) AcceptNotAuthenticated() {
 			continue
 		}
 
-		log.Printf("tag: '%s', command: '%s', payload: '%s'\n", req.Tag, req.Command, req.Payload)
+		// log.Printf("tag: '%s', command: '%s', payload: '%s'\n", req.Tag, req.Command, req.Payload)
 
 		switch req.Command {
 
@@ -78,8 +78,5 @@ func (c *Connection) AcceptNotAuthenticated() {
 
 	case AUTHENTICATED:
 		c.Transition(AUTHENTICATED)
-
-	case LOGOUT:
-		c.Transition(LOGOUT)
 	}
 }

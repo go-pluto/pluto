@@ -67,10 +67,6 @@ func (c *Connection) Transition(state IMAPState) {
 	case MAILBOX:
 		c.State = MAILBOX
 		go c.AcceptMailbox()
-
-	case LOGOUT:
-		c.State = LOGOUT
-		go c.AcceptLogout()
 	}
 }
 
