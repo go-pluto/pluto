@@ -29,6 +29,17 @@ type TLS struct {
 // of the TOML config file.
 type IMAP struct {
 	Greeting string
+	Auth     Auth
+}
+
+// Auth stores the system's facility to identify
+// user sessions, i.e. log in a user or deny access.
+type Auth struct {
+	Adaptor  string
+	IP       string
+	Port     string
+	Database string
+	User     string
 }
 
 // Functions

@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 	Config = config.LoadConfig("../config.toml")
 
 	// Initialize a server instance.
-	Server = server.InitServer(Config.IP, Config.Port, Config.TLS.CertLoc, Config.TLS.KeyLoc)
+	Server = server.InitServer(Config)
 
 	// Read in server certificate and create x509 cert pool.
 	TLSConfig = &tls.Config{

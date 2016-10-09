@@ -28,7 +28,7 @@ func LoadEnv() *Env {
 	// Load environment file.
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("[config.LoadEnv] Failed to read in .env file with: %s\n", err.Error())
+		log.Fatalf("[config.LoadEnv] Failed to read in .env file with: %s\n", err.Error())
 	}
 
 	env := new(Env)

@@ -26,7 +26,7 @@ func main() {
 	// Env := config.LoadEnv()
 
 	// Initialize a server instance.
-	Server := server.InitServer(Config.IP, Config.Port, Config.TLS.CertLoc, Config.TLS.KeyLoc)
+	Server := server.InitServer(Config)
 	defer Server.Socket.Close()
 
 	// Loop on incoming requests.

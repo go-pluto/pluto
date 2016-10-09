@@ -7,6 +7,7 @@ import (
 
 	"crypto/tls"
 
+	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/imap"
 )
 
@@ -24,14 +25,14 @@ type Server struct {
 // InitServer listens for TLS connections on a TCP socket
 // opened up on supplied IP address and port. It returns
 // those information bundeled in above Server struct.
-func InitServer(ip string, port string, certLoc string, keyLoc string) *Server {
+func InitServer(config *config.Config) *Server {
 
 	var err error
 	server := new(Server)
 
 	// Place arguments in corresponding struct members.
-	server.IP = ip
-	server.Port = port
+	server.IP = config.IP
+	server.Port = config.Port
 
 	// TLS config is taken from the excellent blog post
 	// "Achieving a Perfect SSL Labs Score with Go":
@@ -50,7 +51,7 @@ func InitServer(ip string, port string, certLoc string, keyLoc string) *Server {
 	}
 
 	// Put in supplied TLS cert and key.
-	tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(certLoc, keyLoc)
+	tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(config.TLS.CertLoc, config.TLS.KeyLoc)
 	if err != nil {
 		log.Fatalf("[server.InitServer] Failed to load TLS cert and key: %s\n", err.Error())
 	}
@@ -75,7 +76,7 @@ func InitServer(ip string, port string, certLoc string, keyLoc string) *Server {
 // control structure, sends out the initial server
 // greeting and after that hands over control to the
 // IMAP state machine.
-func HandleRequest(conn net.Conn, greeting string) {
+func (server *Server) HandleRequest(conn net.Conn, greeting string) {
 
 	// Create a new connection struct for incoming request.
 	c := imap.NewConnection(conn)
@@ -109,6 +110,6 @@ func (server *Server) RunServer(greeting string) {
 		}
 
 		// Dispatch to goroutine.
-		go HandleRequest(conn, greeting)
+		go server.HandleRequest(conn, greeting)
 	}
 }
