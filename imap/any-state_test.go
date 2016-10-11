@@ -239,7 +239,7 @@ func TestLogout(t *testing.T) {
 			t.Fatalf("[imap.TestLogout] Sending message to server failed with: %s\n", err.Error())
 		}
 
-		// Receive logout reponse.
+		// Receive logout response.
 		logoutAnswer, err := c.Receive()
 		if err != nil {
 			t.Errorf("[imap.TestLogout] Error during receiving table test LOGOUT: %s\n", err.Error())

@@ -13,7 +13,7 @@ import (
 
 // Structs
 
-// Struct bundles information of one server instance.
+// Server struct bundles information of one server instance.
 type Server struct {
 	IP     string
 	Port   string

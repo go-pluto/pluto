@@ -10,8 +10,8 @@ import (
 
 // Constants
 
+// Integer counter for IMAP states.
 const (
-	// Integer counter for IMAP states.
 	ANY IMAPState = iota
 	NOT_AUTHENTICATED
 	AUTHENTICATED

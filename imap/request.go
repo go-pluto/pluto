@@ -7,6 +7,9 @@ import (
 
 // Variables
 
+// SupportedCommands is a quick access map
+// for checking if a supplied IMAP command
+// is supported by pluto.
 var SupportedCommands map[string]bool
 
 // Structs

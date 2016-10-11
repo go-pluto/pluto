@@ -32,7 +32,7 @@ func (c *Connection) StartTLS(req *Request) {
 	}
 }
 
-// Authenticate parses included base64 encoded user name
+// AuthenticatePlain parses included base64 encoded user name
 // and password and tries to authenticate them against the
 // server's defined user database.
 func (c *Connection) AuthenticatePlain(req *Request) {
