@@ -1,0 +1,9 @@
+IP = "127.0.0.1"
+Port = "54321"
+
+[TLS]
+CertLoc = "/very/complicated/test/directory/certificate.test"
+KeyLoc = "/very/complicated/test/directory/key.test"
+
+[IMAP]
+Greeting = "Pluto ready."

@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"log"
 	"runtime"
 
 	"github.com/numbleroot/pluto/config"
@@ -20,10 +21,16 @@ func main() {
 	flag.Parse()
 
 	// Read configuration from file.
-	Config := config.LoadConfig(*configFlag)
+	Config, err := config.LoadConfig(*configFlag)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Load environment from .env file.
-	// Env := config.LoadEnv()
+	// Env, err := config.LoadEnv()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
 	// Initialize a server instance.
 	Server := server.InitServer(Config)

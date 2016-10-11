@@ -29,3 +29,7 @@ pluto
 config.toml
 .env
 *.out
+
+# Pluto specific includes
+!config/.env
+!config/config.toml

@@ -59,8 +59,13 @@ var TLSConfig *tls.Config
 
 func TestMain(m *testing.M) {
 
+	var err error
+
 	// Read configuration from file.
-	Config = config.LoadConfig("../config.toml")
+	Config, err = config.LoadConfig("../config.toml")
+	if err != nil {
+		log.Fatalf("[imap.TestMain] Failed to load config file with: '%s'\n", err.Error())
+	}
 
 	// Initialize a server instance.
 	Server = server.InitServer(Config)

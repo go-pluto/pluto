@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"fmt"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -23,12 +23,12 @@ type Env struct {
 
 // LoadEnv looks for an .env file in the directory
 // of pluto and reads in all defined values.
-func LoadEnv() *Env {
+func LoadEnv() (*Env, error) {
 
 	// Load environment file.
-	err := godotenv.Load()
+	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatalf("[config.LoadEnv] Failed to read in .env file with: %s\n", err.Error())
+		return nil, fmt.Errorf("[config.LoadEnv] Failed to read in .env file with: %s\n", err.Error())
 	}
 
 	env := new(Env)
@@ -36,5 +36,5 @@ func LoadEnv() *Env {
 	// Fill variables from .env into struct.
 	env.Secret = os.Getenv("SECRET")
 
-	return env
+	return env, nil
 }
