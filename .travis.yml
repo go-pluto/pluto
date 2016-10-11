@@ -5,6 +5,7 @@ go:
 
 before_install:
   - make deps
+  - make test-certs
 
 script:
   - make build

@@ -13,15 +13,15 @@ import (
 func TestLoadConfig(t *testing.T) {
 
 	// Try to load a broken config file. This should fail.
-	_, err := config.LoadConfig("broken-config.toml")
+	_, err := config.LoadConfig("test-broken-config.toml")
 	if err == nil {
-		t.Fatal("[config.TestLoadConfig] Expected fail while loading broken-config.toml but received 'nil' error.")
+		t.Fatal("[config.TestLoadConfig] Expected fail while loading 'test-broken-config.toml' but received 'nil' error.")
 	}
 
 	// Now load a valid config.
-	config, err := config.LoadConfig("config.toml")
+	config, err := config.LoadConfig("test-config.toml")
 	if err != nil {
-		t.Fatalf("[config.TestLoadConfig] Expected success while loading config.toml but received: '%s'\n", err.Error())
+		t.Fatalf("[config.TestLoadConfig] Expected success while loading 'test-config.toml' but received: '%s'\n", err.Error())
 	}
 
 	// Check for test success.

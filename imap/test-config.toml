@@ -1,0 +1,16 @@
+IP = "127.0.0.1"
+Port = "1993"
+
+[TLS]
+CertLoc = "../private/cert.pem"
+KeyLoc = "../private/key.pem"
+
+[IMAP]
+Greeting = "Pluto ready."
+
+    [IMAP.Auth]
+    Adaptor = "postgres"
+    IP = "127.0.0.1"
+    Port = "5432"
+    Database = "pluto"
+    User = "pluto"
