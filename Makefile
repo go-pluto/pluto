@@ -13,7 +13,7 @@ deps:
 	go get -t ./...
 
 build:
-	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'#
+	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'
 
 certs:
 	mkdir private
