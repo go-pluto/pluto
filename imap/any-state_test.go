@@ -57,6 +57,7 @@ var TLSConfig *tls.Config
 
 // Functions
 
+// TestMain initializes structures and connections needed later on.
 func TestMain(m *testing.M) {
 
 	var err error
@@ -68,7 +69,10 @@ func TestMain(m *testing.M) {
 	}
 
 	// Initialize a distributor node.
-	Node = node.InitNode(Config, true, "", false)
+	Node, err = node.InitNode(Config, true, "", false)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Read in distributor certificate and create x509 cert pool.
 	TLSConfig = &tls.Config{

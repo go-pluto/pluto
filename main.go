@@ -36,7 +36,10 @@ func main() {
 	// }
 
 	// Initialize a server instance.
-	Node := node.InitNode(Config, *distributorFlag, *workerFlag, *storageFlag)
+	Node, err := node.InitNode(Config, *distributorFlag, *workerFlag, *storageFlag)
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer Node.Socket.Close()
 
 	// Loop on incoming requests.

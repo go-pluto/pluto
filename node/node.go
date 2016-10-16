@@ -38,7 +38,7 @@ type Node struct {
 // InitNode listens for TLS connections on a TCP socket
 // opened up on supplied IP address and port. It returns
 // those information bundeled in above Node struct.
-func InitNode(config *config.Config, distributor bool, worker string, storage bool) *Node {
+func InitNode(config *config.Config, distributor bool, worker string, storage bool) (*Node, error) {
 
 	var err error
 	node := new(Node)
@@ -46,6 +46,16 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 	// Place arguments in corresponding struct members.
 	node.IP = config.Distributor.IP
 	node.Port = config.Distributor.Port
+
+	// Check if no type indicator was supplied, not possible.
+	if !distributor && worker == "" && !storage {
+		return nil, fmt.Errorf("[node.InitNode] Node must be of one type, either '-distributor' or '-worker WORKER-ID' or '-storage'.\n")
+	}
+
+	// Check if multiple type indicators were supplied, not possible.
+	if (distributor && worker != "" && storage) || (distributor && worker != "") || (distributor && storage) || (worker != "" && storage) {
+		return nil, fmt.Errorf("[node.InitNode] One node can not be of multiple types, please provide exclusively '-distributor' or '-worker WORKER-ID' or '-storage'.\n")
+	}
 
 	if distributor {
 		// TODO: Continue working here.
@@ -70,7 +80,7 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 	// Put in supplied TLS cert and key.
 	tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(config.Distributor.TLS.CertLoc, config.Distributor.TLS.KeyLoc)
 	if err != nil {
-		log.Fatalf("[node.InitNode] Failed to load TLS cert and key: %s\n", err.Error())
+		return nil, fmt.Errorf("[node.InitNode] Failed to load TLS cert and key: %s\n", err.Error())
 	}
 
 	// Build Common Name (CN) and Subject Alternate
@@ -80,12 +90,12 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 	// Start to listen on defined IP and port.
 	node.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", node.IP, node.Port), tlsConfig)
 	if err != nil {
-		log.Fatalf("[node.InitNode] Listening for TLS connections on port failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[node.InitNode] Listening for TLS connections on port failed with: %s\n", err.Error())
 	}
 
 	log.Printf("[node.InitNode] Listening for incoming IMAP requests on %s.\n", node.Socket.Addr())
 
-	return node
+	return node, nil
 }
 
 // HandleRequest acts as the jump start for any new
@@ -101,11 +111,7 @@ func (node *Node) HandleRequest(conn net.Conn, greeting string) {
 	// Send initial server greeting.
 	err := c.Send("* OK IMAP4rev1 " + greeting)
 	if err != nil {
-
-		// If send returned a problem, the connection seems to be broken.
-		// Log error and terminate this connection.
-		log.Printf("[node.HandleRequest] Request terminated due to received Send error: %s\n", err.Error())
-
+		c.Error("Encountered send error", err)
 		return
 	}
 
