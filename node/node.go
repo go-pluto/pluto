@@ -28,8 +28,7 @@ type Type int
 // Node struct bundles information of one node instance.
 type Node struct {
 	Type   Type
-	IP     string
-	Port   string
+	Config *config.Config
 	Socket net.Listener
 }
 
@@ -43,10 +42,6 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 	var err error
 	node := new(Node)
 
-	// Place arguments in corresponding struct members.
-	node.IP = config.Distributor.IP
-	node.Port = config.Distributor.Port
-
 	// Check if no type indicator was supplied, not possible.
 	if !distributor && worker == "" && !storage {
 		return nil, fmt.Errorf("[node.InitNode] Node must be of one type, either '-distributor' or '-worker WORKER-ID' or '-storage'.\n")
@@ -58,42 +53,87 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 	}
 
 	if distributor {
-		// TODO: Continue working here.
+
+		// Set struct type to distributor.
+		node.Type = DISTRIBUTOR
+
+		// TLS config is taken from the excellent blog post
+		// "Achieving a Perfect SSL Labs Score with Go":
+		// https://blog.bracelab.com/achieving-perfect-ssl-labs-score-with-go
+		tlsConfig := &tls.Config{
+			Certificates:             make([]tls.Certificate, 1),
+			MinVersion:               tls.VersionTLS12,
+			CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+			PreferServerCipherSuites: true,
+			CipherSuites: []uint16{
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+				tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+			},
+		}
+
+		// Put in supplied TLS cert and key.
+		tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(config.Distributor.TLS.CertLoc, config.Distributor.TLS.KeyLoc)
+		if err != nil {
+			return nil, fmt.Errorf("[node.InitNode] Failed to load distributor TLS cert and key: %s\n", err.Error())
+		}
+
+		// Build Common Name (CN) and Subject Alternate
+		// Name (SAN) from tlsConfig.Certificates.
+		tlsConfig.BuildNameToCertificate()
+
+		// Start to listen on defined IP and port.
+		node.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Distributor.IP, config.Distributor.Port), tlsConfig)
+		if err != nil {
+			return nil, fmt.Errorf("[node.InitNode] Listening for TLS connections on distributor port failed with: %s\n", err.Error())
+		}
+
+		log.Printf("[node.InitNode] Listening as distributor node for incoming IMAP requests on %s.\n", node.Socket.Addr())
+
+	} else if worker != "" {
+
+		// Check if supplied worker ID actually is configured.
+		if _, ok := config.Workers[worker]; !ok {
+
+			var workerID string
+
+			// Retrieve first valid worker ID to provide feedback.
+			for workerID = range config.Workers {
+				break
+			}
+
+			return nil, fmt.Errorf("[node.InitNode] Specified worker ID does not exist in config file. Please provide a valid one, for example '%s'.\n", workerID)
+		}
+
+		// Set struct type to worker.
+		node.Type = WORKER
+
+		// Start to listen on defined IP and port.
+		node.Socket, err = net.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker].IP, config.Workers[worker].Port))
+		if err != nil {
+			return nil, fmt.Errorf("[node.InitNode] Listening for TCP connections on worker '%s' failed with: %s\n", worker, err.Error())
+		}
+
+		log.Printf("[node.InitNode] Listening as worker node '%s' for incoming IMAP requests on %s.\n", worker, node.Socket.Addr())
+
+	} else if storage {
+
+		// Set struct type to storage.
+		node.Type = STORAGE
+
+		// Start to listen on defined IP and port.
+		node.Socket, err = net.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.Port))
+		if err != nil {
+			return nil, fmt.Errorf("[node.InitNode] Listening for TCP connections on storage failed with: %s\n", err.Error())
+		}
+
+		log.Printf("[node.InitNode] Listening as storage node for incoming IMAP requests on %s.\n", node.Socket.Addr())
+
 	}
 
-	// TLS config is taken from the excellent blog post
-	// "Achieving a Perfect SSL Labs Score with Go":
-	// https://blog.bracelab.com/achieving-perfect-ssl-labs-score-with-go
-	tlsConfig := &tls.Config{
-		Certificates:             make([]tls.Certificate, 1),
-		MinVersion:               tls.VersionTLS12,
-		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-		PreferServerCipherSuites: true,
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-		},
-	}
-
-	// Put in supplied TLS cert and key.
-	tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(config.Distributor.TLS.CertLoc, config.Distributor.TLS.KeyLoc)
-	if err != nil {
-		return nil, fmt.Errorf("[node.InitNode] Failed to load TLS cert and key: %s\n", err.Error())
-	}
-
-	// Build Common Name (CN) and Subject Alternate
-	// Name (SAN) from tlsConfig.Certificates.
-	tlsConfig.BuildNameToCertificate()
-
-	// Start to listen on defined IP and port.
-	node.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", node.IP, node.Port), tlsConfig)
-	if err != nil {
-		return nil, fmt.Errorf("[node.InitNode] Listening for TLS connections on port failed with: %s\n", err.Error())
-	}
-
-	log.Printf("[node.InitNode] Listening for incoming IMAP requests on %s.\n", node.Socket.Addr())
+	// Set remaining general elements.
+	node.Config = config
 
 	return node, nil
 }
@@ -135,6 +175,4 @@ func (node *Node) RunNode(greeting string) error {
 		// Dispatch to goroutine.
 		go node.HandleRequest(conn, greeting)
 	}
-
-	return nil
 }
