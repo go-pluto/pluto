@@ -25,7 +25,7 @@ func TestLoadConfig(t *testing.T) {
 	}
 
 	// Check for test success.
-	if config.TLS.CertLoc != "/very/complicated/test/directory/certificate.test" {
-		t.Fatalf("[config.TestLoadConfig] Expected '%s' but received '%s'\n", "/very/complicated/test/directory/certificate.test", config.TLS.CertLoc)
+	if config.Distributor.TLS.CertLoc != "/very/complicated/test/directory/certificate.test" {
+		t.Fatalf("[config.TestLoadConfig] Expected '%s' but received '%s'\n", "/very/complicated/test/directory/certificate.test", config.Distributor.TLS.CertLoc)
 	}
 }

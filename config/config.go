@@ -11,10 +11,36 @@ import (
 // Config holds all information parsed from
 // supplied config file.
 type Config struct {
+	Distributor Distributor
+	Workers     map[string]Worker
+	Storage     Storage
+}
+
+// Distributor describes the configuration of
+// the first entry point of a pluto setup, the
+// IMAP request authenticator and distributor.
+type Distributor struct {
 	IP   string
 	Port string
 	TLS  TLS
 	IMAP IMAP
+	Auth Auth
+}
+
+// Worker contains the connection and user sharding
+// information for an individual IMAP worker node.
+type Worker struct {
+	IP        string
+	Port      string
+	UserStart int
+	UserEnd   int
+}
+
+// Storage configures the global database node
+// storing all user data in a very safe manner.
+type Storage struct {
+	IP   string
+	Port string
 }
 
 // TLS contains Transport Layer Security relevant
@@ -29,7 +55,6 @@ type TLS struct {
 // of the TOML config file.
 type IMAP struct {
 	Greeting string
-	Auth     Auth
 }
 
 // Auth stores the system's facility to identify

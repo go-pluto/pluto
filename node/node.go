@@ -1,4 +1,4 @@
-package server
+package node
 
 import (
 	"fmt"
@@ -11,10 +11,23 @@ import (
 	"github.com/numbleroot/pluto/imap"
 )
 
+// Constants
+
+// Integer counter for defining node types.
+const (
+	DISTRIBUTOR Type = iota
+	WORKER
+	STORAGE
+)
+
 // Structs
 
-// Server struct bundles information of one server instance.
-type Server struct {
+// Type declares what role a node takes in the system.
+type Type int
+
+// Node struct bundles information of one node instance.
+type Node struct {
+	Type   Type
 	IP     string
 	Port   string
 	Socket net.Listener
@@ -22,17 +35,22 @@ type Server struct {
 
 // Functions
 
-// InitServer listens for TLS connections on a TCP socket
+// InitNode listens for TLS connections on a TCP socket
 // opened up on supplied IP address and port. It returns
-// those information bundeled in above Server struct.
-func InitServer(config *config.Config) *Server {
+// those information bundeled in above Node struct.
+func InitNode(config *config.Config, distributor bool, worker string, storage bool) *Node {
 
 	var err error
-	server := new(Server)
+	node := new(Node)
 
 	// Place arguments in corresponding struct members.
-	server.IP = config.IP
-	server.Port = config.Port
+	node.IP = config.Distributor.IP
+	node.Port = config.Distributor.Port
+
+	// TODO: Keep on going here.
+	if distributor {
+		log.Println("Distributor")
+	}
 
 	// TLS config is taken from the excellent blog post
 	// "Achieving a Perfect SSL Labs Score with Go":
@@ -51,9 +69,9 @@ func InitServer(config *config.Config) *Server {
 	}
 
 	// Put in supplied TLS cert and key.
-	tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(config.TLS.CertLoc, config.TLS.KeyLoc)
+	tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(config.Distributor.TLS.CertLoc, config.Distributor.TLS.KeyLoc)
 	if err != nil {
-		log.Fatalf("[server.InitServer] Failed to load TLS cert and key: %s\n", err.Error())
+		log.Fatalf("[node.InitNode] Failed to load TLS cert and key: %s\n", err.Error())
 	}
 
 	// Build Common Name (CN) and Subject Alternate
@@ -61,14 +79,14 @@ func InitServer(config *config.Config) *Server {
 	tlsConfig.BuildNameToCertificate()
 
 	// Start to listen on defined IP and port.
-	server.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", server.IP, server.Port), tlsConfig)
+	node.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", node.IP, node.Port), tlsConfig)
 	if err != nil {
-		log.Fatalf("[server.InitServer] Listening for TLS connections on port failed with: %s\n", err.Error())
+		log.Fatalf("[node.InitNode] Listening for TLS connections on port failed with: %s\n", err.Error())
 	}
 
-	log.Printf("[server.InitServer] Listening for incoming IMAP requests on %s.\n", server.Socket.Addr())
+	log.Printf("[node.InitNode] Listening for incoming IMAP requests on %s.\n", node.Socket.Addr())
 
-	return server
+	return node
 }
 
 // HandleRequest acts as the jump start for any new
@@ -76,7 +94,7 @@ func InitServer(config *config.Config) *Server {
 // control structure, sends out the initial server
 // greeting and after that hands over control to the
 // IMAP state machine.
-func (server *Server) HandleRequest(conn net.Conn, greeting string) {
+func (node *Node) HandleRequest(conn net.Conn, greeting string) {
 
 	// Create a new connection struct for incoming request.
 	c := imap.NewConnection(conn)
@@ -87,7 +105,7 @@ func (server *Server) HandleRequest(conn net.Conn, greeting string) {
 
 		// If send returned a problem, the connection seems to be broken.
 		// Log error and terminate this connection.
-		log.Printf("[server.HandleRequest] Request terminated due to received Send error: %s\n", err.Error())
+		log.Printf("[node.HandleRequest] Request terminated due to received Send error: %s\n", err.Error())
 
 		return
 	}
@@ -96,20 +114,20 @@ func (server *Server) HandleRequest(conn net.Conn, greeting string) {
 	c.Transition(imap.NOT_AUTHENTICATED)
 }
 
-// RunServer loops over incoming requests and
+// RunNode loops over incoming requests and
 // dispatches each one to a goroutine taking
 // care of the commands supplied.
-func (server *Server) RunServer(greeting string) {
+func (node *Node) RunNode(greeting string) {
 
 	for {
 
 		// Accept request or fail on error.
-		conn, err := server.Socket.Accept()
+		conn, err := node.Socket.Accept()
 		if err != nil {
-			log.Fatalf("[server.RunServer] Accepting incoming request failed with: %s\n", err.Error())
+			log.Fatalf("[node.RunNode] Accepting incoming request failed with: %s\n", err.Error())
 		}
 
 		// Dispatch to goroutine.
-		go server.HandleRequest(conn, greeting)
+		go node.HandleRequest(conn, greeting)
 	}
 }

@@ -12,7 +12,7 @@ import (
 
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/imap"
-	"github.com/numbleroot/pluto/server"
+	"github.com/numbleroot/pluto/node"
 )
 
 // Structs

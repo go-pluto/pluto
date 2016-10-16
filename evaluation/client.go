@@ -1,13 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"log"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
 )
 
@@ -57,7 +57,7 @@ func main() {
 	msg = msg + "yolo\r\n"
 
 	date := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
-	literal := imap.NewLiteral([]byte(msg))
+	literal := bytes.NewBufferString(msg)
 
 	log.Println("Appending Items")
 
