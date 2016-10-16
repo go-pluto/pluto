@@ -32,4 +32,3 @@ config.toml
 
 # Pluto specific includes
 !config/.env
-!config/config.toml

@@ -1,0 +1,59 @@
+[Distributor]
+IP = "127.0.0.1"
+Port = "19933"
+
+    [Distributor.TLS]
+    CertLoc = "/very/complicated/and/long/path/to/your/distributor-cert.pem"
+    KeyLoc = "/very/complicated/and/long/path/to/your/distributor-key.pem"
+
+    [Distributor.IMAP]
+    Greeting = "Pluto ready."
+
+    [Distributor.Auth]
+    Adaptor = "postgres"
+    IP = "127.0.0.1"
+    Port = "5432"
+    Database = "pluto"
+    User = "pluto"
+
+
+[Workers]
+
+    [worker-01]
+    IP = "127.0.0.1"
+    Port = "20001"
+    # The first ID of the user database table entry
+    # that this worker node is responsible for.
+    UserStart = 1
+    # The last ID of the user database table entry that
+    # this worker node is responsible for.
+    UserEnd = 10
+
+    [worker-02]
+    IP = "127.0.0.1"
+    Port = "20002"
+    UserStart = 11
+    UserEnd = 20
+
+    [worker-03]
+    IP = "127.0.0.1"
+    Port = "20003"
+    UserStart = 21
+    UserEnd = 30
+
+    [worker-04]
+    IP = "127.0.0.1"
+    Port = "20004"
+    UserStart = 31
+    UserEnd = 40
+
+    [worker-05]
+    IP = "127.0.0.1"
+    Port = "20005"
+    UserStart = 41
+    UserEnd = 50
+
+
+[Storage]
+IP = "127.0.0.1"
+Port = "21000"

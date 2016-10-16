@@ -47,9 +47,8 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 	node.IP = config.Distributor.IP
 	node.Port = config.Distributor.Port
 
-	// TODO: Keep on going here.
 	if distributor {
-		log.Println("Distributor")
+		// TODO: Continue working here.
 	}
 
 	// TLS config is taken from the excellent blog post

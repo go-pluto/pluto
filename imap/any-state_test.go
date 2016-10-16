@@ -52,7 +52,7 @@ var logoutTests = []struct {
 // Variables
 
 var Config *config.Config
-var Server *server.Server
+var Node *node.Node
 var TLSConfig *tls.Config
 
 // Functions
@@ -67,10 +67,10 @@ func TestMain(m *testing.M) {
 		log.Fatalf("[imap.TestMain] Failed to load config file with: '%s'\n", err.Error())
 	}
 
-	// Initialize a server instance.
-	Server = server.InitServer(Config)
+	// Initialize a distributor node.
+	Node = node.InitNode(Config, true, "", false)
 
-	// Read in server certificate and create x509 cert pool.
+	// Read in distributor certificate and create x509 cert pool.
 	TLSConfig = &tls.Config{
 		MinVersion:               tls.VersionTLS12,
 		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
@@ -84,14 +84,14 @@ func TestMain(m *testing.M) {
 		},
 	}
 
-	// Create new certificate pool to hold server certificate.
+	// Create new certificate pool to hold distributor certificate.
 	rootCerts := x509.NewCertPool()
 
-	// Read server certificate specified in pluto's main
+	// Read distributor certificate specified in pluto's main
 	// config file into memory.
-	rootCert, err := ioutil.ReadFile(Config.TLS.CertLoc)
+	rootCert, err := ioutil.ReadFile(Config.Distributor.TLS.CertLoc)
 	if err != nil {
-		log.Fatalf("[imap.TestMain] Reading server certificate into memory failed with: %s\n", err.Error())
+		log.Fatalf("[imap.TestMain] Reading distributor certificate into memory failed with: %s\n", err.Error())
 	}
 
 	// Append certificate in PEM form to pool.
@@ -104,8 +104,8 @@ func TestMain(m *testing.M) {
 	// of above global TLS config.
 	TLSConfig.RootCAs = rootCerts
 
-	// Start test server in background.
-	go Server.RunServer(Config.IMAP.Greeting)
+	// Start test distributor in background.
+	go Node.RunNode(Config.Distributor.IMAP.Greeting)
 
 	// Start main tests.
 	os.Exit(m.Run())
@@ -115,10 +115,10 @@ func TestMain(m *testing.M) {
 // implemented Capability() function.
 func TestCapability(t *testing.T) {
 
-	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (Config.IP + ":" + Config.Port), TLSConfig)
+	// Connect to IMAP distributor.
+	conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
 	if err != nil {
-		t.Fatalf("[imap.TestCapability] Error during connection attempt to IMAP server: %s\n", err.Error())
+		t.Fatalf("[imap.TestCapability] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
@@ -127,7 +127,7 @@ func TestCapability(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestCapability] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Errorf("[imap.TestCapability] Error during receiving initial distributor greeting: %s\n", err.Error())
 	}
 
 	for i, tt := range capabilityTests {
@@ -137,7 +137,7 @@ func TestCapability(t *testing.T) {
 		// Table test: send 'in' part of each line.
 		err = c.Send(tt.in)
 		if err != nil {
-			t.Fatalf("[imap.TestCapability] Sending message to server failed with: %s\n", err.Error())
+			t.Fatalf("[imap.TestCapability] Sending message to distributor failed with: %s\n", err.Error())
 		}
 
 		// Receive options listed in CAPABILITY command.
@@ -148,7 +148,7 @@ func TestCapability(t *testing.T) {
 
 		if i < 2 {
 
-			// Receive command termination message from server.
+			// Receive command termination message from distributor.
 			okAnswer, err := c.Receive()
 			if err != nil {
 				t.Errorf("[imap.TestCapability] Error during receiving table test CAPABILITY: %s\n", err.Error())
@@ -172,10 +172,10 @@ func TestCapability(t *testing.T) {
 // implemented Login() function.
 func TestLogin(t *testing.T) {
 
-	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (Config.IP + ":" + Config.Port), TLSConfig)
+	// Connect to IMAP distributor.
+	conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
 	if err != nil {
-		t.Fatalf("[imap.TestLogin] Error during connection attempt to IMAP server: %s\n", err.Error())
+		t.Fatalf("[imap.TestLogin] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
@@ -184,7 +184,7 @@ func TestLogin(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestLogin] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Errorf("[imap.TestLogin] Error during receiving initial distributor greeting: %s\n", err.Error())
 	}
 
 	for _, tt := range loginTests {
@@ -192,7 +192,7 @@ func TestLogin(t *testing.T) {
 		// Table test: send 'in' part of each line.
 		err = c.Send(tt.in)
 		if err != nil {
-			t.Fatalf("[imap.TestLogin] Sending message to server failed with: %s\n", err.Error())
+			t.Fatalf("[imap.TestLogin] Sending message to distributor failed with: %s\n", err.Error())
 		}
 
 		// Receive LOGINDISABLED answer.
@@ -218,10 +218,10 @@ func TestLogout(t *testing.T) {
 
 		var answer string
 
-		// Connect to IMAP server.
-		conn, err := tls.Dial("tcp", (Config.IP + ":" + Config.Port), TLSConfig)
+		// Connect to IMAP distributor.
+		conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
 		if err != nil {
-			t.Fatalf("[imap.TestLogout] Error during connection attempt to IMAP server: %s\n", err.Error())
+			t.Fatalf("[imap.TestLogout] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 		}
 
 		// Create new connection struct.
@@ -230,13 +230,13 @@ func TestLogout(t *testing.T) {
 		// Consume mandatory IMAP greeting.
 		_, err = c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestLogout] Error during receiving initial server greeting: %s\n", err.Error())
+			t.Errorf("[imap.TestLogout] Error during receiving initial distributor greeting: %s\n", err.Error())
 		}
 
 		// Table test: send 'in' part of each line.
 		err = c.Send(tt.in)
 		if err != nil {
-			t.Fatalf("[imap.TestLogout] Sending message to server failed with: %s\n", err.Error())
+			t.Fatalf("[imap.TestLogout] Sending message to distributor failed with: %s\n", err.Error())
 		}
 
 		// Receive logout response.
@@ -247,7 +247,7 @@ func TestLogout(t *testing.T) {
 
 		if i < 2 {
 
-			// Receive command termination message from server.
+			// Receive command termination message from distributor.
 			okAnswer, err := c.Receive()
 			if err != nil {
 				t.Errorf("[imap.TestLogout] Error during receiving table test LOGOUT: %s\n", err.Error())

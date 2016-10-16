@@ -18,8 +18,10 @@ func main() {
 	mailUser := flag.String("user", "", "username (required)")
 	mailPassword := flag.String("pass", "", "password (required)")
 	mailOutput := flag.String("output", "", "output file (required)")
-	mailSSL := flag.Bool("ssl", false, "boolean")                   //optional
-	mailMessages := flag.Int("messages", 100, "number of messages") //optional
+	// Optional.
+	mailSSL := flag.Bool("ssl", false, "boolean")
+	// Optional.
+	mailMessages := flag.Int("messages", 100, "number of messages")
 
 	flag.Parse()
 

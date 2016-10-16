@@ -1,14 +1,15 @@
+[Distributor]
 IP = "127.0.0.1"
-Port = "1993"
+Port = "19933"
 
-[TLS]
-CertLoc = "../private/cert.pem"
-KeyLoc = "../private/key.pem"
+    [Distributor.TLS]
+    CertLoc = "../private/cert.pem"
+    KeyLoc = "../private/key.pem"
 
-[IMAP]
-Greeting = "Pluto ready."
+    [Distributor.IMAP]
+    Greeting = "Pluto ready."
 
-    [IMAP.Auth]
+    [Distributor.Auth]
     Adaptor = "postgres"
     IP = "127.0.0.1"
     Port = "5432"

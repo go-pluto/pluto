@@ -27,7 +27,7 @@ var starttlsTests = []struct {
 func TestStartTLS(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (Config.IP + ":" + Config.Port), TLSConfig)
+	conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestStartTLS] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
