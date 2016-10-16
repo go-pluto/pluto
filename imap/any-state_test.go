@@ -111,7 +111,7 @@ func TestMain(m *testing.M) {
 	// Start test distributor in background.
 	go func() {
 
-		if err := Node.RunNode(Config.Distributor.IMAP.Greeting); err != nil {
+		if err := Node.RunNode(); err != nil {
 			log.Fatal(err)
 		}
 	}()

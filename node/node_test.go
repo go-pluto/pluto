@@ -177,7 +177,7 @@ func TestRunNode(t *testing.T) {
 	// Call RunNode in background.
 	go func() {
 
-		err := Node.RunNode("Very special custom greeting.")
+		err := Node.RunNode()
 		if err.Error() != "[node.RunNode] Accepting incoming request failed with: accept tcp 127.0.0.1:19933: use of closed network connection\n" {
 			t.Fatalf("[node.RunNode] Expected '%s' but received '%s'\n", "[node.RunNode] Accepting incoming request failed with: accept tcp 127.0.0.1:19933: use of closed network connection\n", err.Error())
 		}
@@ -203,7 +203,7 @@ func TestRunNode(t *testing.T) {
 	}
 
 	// Check if greeting is the one we expect.
-	if imapGreeting != "* OK IMAP4rev1 Very special custom greeting." {
-		t.Fatalf("[node.TestRunNode] Expected '%s' but received '%s'\n", "* OK IMAP4rev1 Very special custom greeting.", imapGreeting)
+	if imapGreeting != "* OK IMAP4rev1 Pluto ready." {
+		t.Fatalf("[node.TestRunNode] Expected '%s' but received '%s'\n", "* OK IMAP4rev1 Pluto ready.", imapGreeting)
 	}
 }

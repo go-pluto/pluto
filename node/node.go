@@ -138,31 +138,40 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 	return node, nil
 }
 
-// HandleRequest acts as the jump start for any new
-// incoming connection to pluto. It creates the needed
-// control structure, sends out the initial server
-// greeting and after that hands over control to the
-// IMAP state machine.
-func (node *Node) HandleRequest(conn net.Conn, greeting string) {
+// HandleRequest acts as the jump start for any new incoming
+// connection to this node in a pluto system. It creates the
+// needed connection structure and if appropriate to its type
+// sends out an IMAP greeting. After that hand-off to the IMAP
+// state machine is performed.
+func (node *Node) HandleRequest(conn net.Conn) {
 
 	// Create a new connection struct for incoming request.
 	c := imap.NewConnection(conn)
 
-	// Send initial server greeting.
-	err := c.Send("* OK IMAP4rev1 " + greeting)
-	if err != nil {
-		c.Error("Encountered send error", err)
-		return
-	}
+	// If this node is a distributor, send initial server greeting.
+	if node.Type == DISTRIBUTOR {
 
-	// Dispatch to not-authenticated state.
-	c.Transition(imap.NOT_AUTHENTICATED)
+		err := c.Send("* OK IMAP4rev1 " + node.Config.Distributor.IMAP.Greeting)
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return
+		}
+
+		// Dispatch to not-authenticated state.
+		c.Transition(imap.NOT_AUTHENTICATED)
+	} else if node.Type == WORKER {
+
+		// Connections to IMAP worker nodes contain
+		// already authenticated requests.
+		// Dispatch to authenticated state.
+		c.Transition(imap.NOT_AUTHENTICATED)
+	}
 }
 
 // RunNode loops over incoming requests and
 // dispatches each one to a goroutine taking
 // care of the commands supplied.
-func (node *Node) RunNode(greeting string) error {
+func (node *Node) RunNode() error {
 
 	for {
 
@@ -173,6 +182,6 @@ func (node *Node) RunNode(greeting string) error {
 		}
 
 		// Dispatch to goroutine.
-		go node.HandleRequest(conn, greeting)
+		go node.HandleRequest(conn)
 	}
 }
