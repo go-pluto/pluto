@@ -155,27 +155,24 @@ func TestInitNode(t *testing.T) {
 	Node.Socket.Close()
 }
 
-// TestHandleRequest executes a white-box unit test on the
-// implemented HandleRequest() function.
-func TestHandleRequest(t *testing.T) {
+// TestRunNode executes a white-box unit test on the
+// implemented RunNode() and HandleRequest() functions.
+func TestRunNode(t *testing.T) {
 
 	// Initialize a correct node.
 	Node, err := InitNode(Config, true, "", false)
 	if err != nil {
-		t.Fatalf("[node.TestHandleRequest] Error during initializing node with correct config: %s\n", err.Error())
+		t.Fatalf("[node.TestRunNode] Error during initializing node with correct config: %s\n", err.Error())
 	}
 	defer Node.Socket.Close()
 
+	// Call RunNode in background.
 	go func() {
 
-		// Try to accept the incoming request.
-		conn, err := Node.Socket.Accept()
-		if err != nil {
-			t.Fatalf("[node.TestHandleRequest] Accepting incoming request failed with: %s\n", err.Error())
+		err := Node.RunNode("Very special custom greeting.")
+		if err.Error() != "[node.RunNode] Accepting incoming request failed with: accept tcp 127.0.0.1:19933: use of closed network connection\n" {
+			t.Fatalf("[node.RunNode] Expected '%s' but received '%s'\n", "[node.RunNode] Accepting incoming request failed with: accept tcp 127.0.0.1:19933: use of closed network connection\n", err.Error())
 		}
-
-		// Let funtion to-be-tested handle the initial greeting.
-		Node.HandleRequest(conn, Config.Distributor.IMAP.Greeting)
 	}()
 
 	// Wait shortly for backend before sending request.
@@ -184,7 +181,7 @@ func TestHandleRequest(t *testing.T) {
 	// Connect to IMAP distributor.
 	conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
 	if err != nil {
-		t.Fatalf("[node.TestHandleRequest] Error during connection attempt to IMAP distributor: %s\n", err.Error())
+		t.Fatalf("[node.TestRunNode] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 	}
 	defer conn.Close()
 
@@ -194,11 +191,11 @@ func TestHandleRequest(t *testing.T) {
 	// Expect to receive IMAP greeting.
 	imapGreeting, err := c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestHandleRequest] Error during receiving initial distributor greeting: %s\n", err.Error())
+		t.Errorf("[imap.TestRunNode] Error during receiving initial distributor greeting: %s\n", err.Error())
 	}
 
 	// Check if greeting is the one we expect.
-	if imapGreeting != "* OK IMAP4rev1 Pluto ready." {
-		t.Fatalf("[node.TestHandleRequest] Expected '%s' but received '%s'\n", "* OK IMAP4rev1 Pluto ready.", imapGreeting)
+	if imapGreeting != "* OK IMAP4rev1 Very special custom greeting." {
+		t.Fatalf("[node.TestRunNode] Expected '%s' but received '%s'\n", "* OK IMAP4rev1 Very special custom greeting.", imapGreeting)
 	}
 }

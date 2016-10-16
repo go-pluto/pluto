@@ -43,5 +43,7 @@ func main() {
 	defer Node.Socket.Close()
 
 	// Loop on incoming requests.
-	Node.RunNode(Config.Distributor.IMAP.Greeting)
+	if err := Node.RunNode(Config.Distributor.IMAP.Greeting); err != nil {
+		log.Fatal(err)
+	}
 }

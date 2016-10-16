@@ -122,17 +122,19 @@ func (node *Node) HandleRequest(conn net.Conn, greeting string) {
 // RunNode loops over incoming requests and
 // dispatches each one to a goroutine taking
 // care of the commands supplied.
-func (node *Node) RunNode(greeting string) {
+func (node *Node) RunNode(greeting string) error {
 
 	for {
 
 		// Accept request or fail on error.
 		conn, err := node.Socket.Accept()
 		if err != nil {
-			log.Fatalf("[node.RunNode] Accepting incoming request failed with: %s\n", err.Error())
+			return fmt.Errorf("[node.RunNode] Accepting incoming request failed with: %s\n", err.Error())
 		}
 
 		// Dispatch to goroutine.
 		go node.HandleRequest(conn, greeting)
 	}
+
+	return nil
 }

@@ -13,7 +13,7 @@ import (
 
 func main() {
 
-	mailHost := flag.String("host", "", "name or ip adress (required)")
+	mailHost := flag.String("host", "", "name or ip address (required)")
 	mailPort := flag.Int("port", 0, "port (required)")
 	mailUser := flag.String("user", "", "username (required)")
 	mailPassword := flag.String("pass", "", "password (required)")
@@ -31,8 +31,8 @@ func main() {
 
 	log.Println("Connecting to server...")
 
-	var c *client.Client = nil
-	var err error = nil
+	var c *client.Client
+	var err error
 
 	if *mailSSL {
 		c, err = client.DialTLS(*mailHost+":"+strconv.Itoa(*mailPort), nil)

@@ -109,7 +109,12 @@ func TestMain(m *testing.M) {
 	TLSConfig.RootCAs = rootCerts
 
 	// Start test distributor in background.
-	go Node.RunNode(Config.Distributor.IMAP.Greeting)
+	go func() {
+
+		if err := Node.RunNode(Config.Distributor.IMAP.Greeting); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	// Start main tests.
 	os.Exit(m.Run())
