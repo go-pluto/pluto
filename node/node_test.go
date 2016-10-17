@@ -30,8 +30,8 @@ func TestMain(m *testing.M) {
 			IP:   "127.0.0.1",
 			Port: "19933",
 			TLS: config.TLS{
-				CertLoc: "../private/cert.pem",
-				KeyLoc:  "../private/key.pem",
+				CertLoc: "../private/distributor-cert.pem",
+				KeyLoc:  "../private/distributor-key.pem",
 			},
 			IMAP: config.IMAP{
 				Greeting: "Pluto ready.",
@@ -45,16 +45,24 @@ func TestMain(m *testing.M) {
 			},
 		},
 		Workers: map[string]config.Worker{
-			"worker-01": {
+			"worker-1": {
 				IP:        "127.0.0.1",
 				Port:      "20001",
 				UserStart: 1,
 				UserEnd:   10,
+				TLS: config.TLS{
+					CertLoc: "../private/worker-1-cert.pem",
+					KeyLoc:  "../private/worker-1-key.pem",
+				},
 			},
 		},
 		Storage: config.Storage{
 			IP:   "127.0.0.1",
 			Port: "21000",
+			TLS: config.TLS{
+				CertLoc: "../private/storage-cert.pem",
+				KeyLoc:  "../private/storage-key.pem",
+			},
 		},
 	}
 
@@ -103,7 +111,7 @@ func TestInitNode(t *testing.T) {
 	var err error
 
 	// All types indicated.
-	_, err = InitNode(Config, true, "worker-01", true)
+	_, err = InitNode(Config, true, "worker-1", true)
 	if err.Error() != "[node.InitNode] One node can not be of multiple types, please provide exclusively '-distributor' or '-worker WORKER-ID' or '-storage'.\n" {
 		t.Fatalf("[node.TestInitNode] Expected '%s' but received '%s'\n", "[node.InitNode] One node can not be of multiple types, please provide exclusively '-distributor' or '-worker WORKER-ID' or '-storage'.\n", err.Error())
 	}
@@ -121,7 +129,7 @@ func TestInitNode(t *testing.T) {
 	}
 
 	// Two types indicated.
-	_, err = InitNode(Config, false, "worker-01", true)
+	_, err = InitNode(Config, false, "worker-1", true)
 	if err.Error() != "[node.InitNode] One node can not be of multiple types, please provide exclusively '-distributor' or '-worker WORKER-ID' or '-storage'.\n" {
 		t.Fatalf("[node.TestInitNode] Expected '%s' but received '%s'\n", "[node.InitNode] One node can not be of multiple types, please provide exclusively '-distributor' or '-worker WORKER-ID' or '-storage'.\n", err.Error())
 	}
@@ -134,8 +142,8 @@ func TestInitNode(t *testing.T) {
 
 	// Non-existent worker ID.
 	_, err = InitNode(Config, false, "abc", false)
-	if err.Error() != "[node.InitNode] Specified worker ID does not exist in config file. Please provide a valid one, for example 'worker-01'.\n" {
-		t.Fatalf("[node.TestInitNode] Expected '%s' but received '%s'\n", "[node.InitNode] Specified worker ID does not exist in config file. Please provide a valid one, for example 'worker-01'.\n", err.Error())
+	if err.Error() != "[node.InitNode] Specified worker ID does not exist in config file. Please provide a valid one, for example 'worker-1'.\n" {
+		t.Fatalf("[node.TestInitNode] Expected '%s' but received '%s'\n", "[node.InitNode] Specified worker ID does not exist in config file. Please provide a valid one, for example 'worker-1'.\n", err.Error())
 	}
 
 	// Set certificate path in config to non-existent one.
@@ -143,19 +151,19 @@ func TestInitNode(t *testing.T) {
 
 	// Config error: non-existent certificate.
 	_, err = InitNode(Config, true, "", false)
-	if err.Error() != "[node.InitNode] Failed to load distributor TLS cert and key: open ../private/not-existing.cert: no such file or directory\n" {
-		t.Fatalf("[node.TestInitNode] Expected '%s' but received '%s'\n", "[node.InitNode] Failed to load distributor TLS cert and key: open ../private/not-existing.cert: no such file or directory\n", err.Error())
+	if err.Error() != "[node.InitNode] Failed to load DISTRIBUTOR TLS cert and key: open ../private/not-existing.cert: no such file or directory\n" {
+		t.Fatalf("[node.TestInitNode] Expected '%s' but received '%s'\n", "[node.InitNode] Failed to load DISTRIBUTOR TLS cert and key: open ../private/not-existing.cert: no such file or directory\n", err.Error())
 	}
 
 	// Set wrong certificate path back to correct one.
-	Config.Distributor.TLS.CertLoc = "../private/cert.pem"
+	Config.Distributor.TLS.CertLoc = "../private/distributor-cert.pem"
 
 	// Correct distributor initialization.
 	Node, err = InitNode(Config, true, "", false)
 	Node.Socket.Close()
 
 	// Correct worker initialization.
-	Node, err = InitNode(Config, false, "worker-01", false)
+	Node, err = InitNode(Config, false, "worker-1", false)
 	Node.Socket.Close()
 
 	// Correct storage initialization.

@@ -19,7 +19,7 @@ Port = "19933"
 
 [Workers]
 
-    [Workers.worker-01]
+    [Workers.worker-1]
     IP = "127.0.0.1"
     Port = "20001"
     # The first ID of the user database table entry
@@ -29,31 +29,55 @@ Port = "19933"
     # this worker node is responsible for.
     UserEnd = 10
 
-    [Workers.worker-02]
+        [Workers.worker-1.TLS]
+        CertLoc = "/very/complicated/and/long/path/to/your/worker-1-cert.pem"
+        KeyLoc = "/very/complicated/and/long/path/to/your/worker-1-key.pem"
+
+    [Workers.worker-2]
     IP = "127.0.0.1"
     Port = "20002"
     UserStart = 11
     UserEnd = 20
 
-    [Workers.worker-03]
+        [Workers.worker-2.TLS]
+        CertLoc = "/very/complicated/and/long/path/to/your/worker-2-cert.pem"
+        KeyLoc = "/very/complicated/and/long/path/to/your/worker-2-key.pem"
+
+    [Workers.worker-3]
     IP = "127.0.0.1"
     Port = "20003"
     UserStart = 21
     UserEnd = 30
 
-    [Workers.worker-04]
+        [Workers.worker-3.TLS]
+        CertLoc = "/very/complicated/and/long/path/to/your/worker-3-cert.pem"
+        KeyLoc = "/very/complicated/and/long/path/to/your/worker-3-key.pem"
+
+    [Workers.worker-4]
     IP = "127.0.0.1"
     Port = "20004"
     UserStart = 31
     UserEnd = 40
 
-    [Workers.worker-05]
+        [Workers.worker-4.TLS]
+        CertLoc = "/very/complicated/and/long/path/to/your/worker-4-cert.pem"
+        KeyLoc = "/very/complicated/and/long/path/to/your/worker-4-key.pem"
+
+    [Workers.worker-5]
     IP = "127.0.0.1"
     Port = "20005"
     UserStart = 41
     UserEnd = 50
 
+        [Workers.worker-5.TLS]
+        CertLoc = "/very/complicated/and/long/path/to/your/worker-5-cert.pem"
+        KeyLoc = "/very/complicated/and/long/path/to/your/worker-5-key.pem"
+
 
 [Storage]
 IP = "127.0.0.1"
 Port = "21000"
+
+    [Storage.TLS]
+    CertLoc = "/very/complicated/and/long/path/to/your/storage-cert.pem"
+    KeyLoc = "/very/complicated/and/long/path/to/your/storage-key.pem"

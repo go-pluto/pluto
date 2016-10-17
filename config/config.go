@@ -34,6 +34,7 @@ type Worker struct {
 	Port      string
 	UserStart int
 	UserEnd   int
+	TLS       TLS
 }
 
 // Storage configures the global database node
@@ -41,6 +42,7 @@ type Worker struct {
 type Storage struct {
 	IP   string
 	Port string
+	TLS  TLS
 }
 
 // TLS contains Transport Layer Security relevant

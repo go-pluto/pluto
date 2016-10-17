@@ -1,5 +1,9 @@
 .PHONY: all clean certs test
 
+# Set this to your number of configured worker
+# nodes, see your main configuration file.
+NUMBER_OF_WORKER_NODES=3
+
 PACKAGES = $(shell go list ./... | grep -v /vendor/)
 
 all: deps build
@@ -21,7 +25,10 @@ certs:
 	wget https://raw.githubusercontent.com/golang/go/master/src/crypto/tls/generate_cert.go
 	go build generate_cert.go
 	./generate_cert -ca -duration 2160h -host localhost,127.0.0.1 -rsa-bits 8192
-	mv cert.pem private/cert.pem && mv key.pem private/key.pem
+	mv cert.pem private/distributor-cert.pem && mv key.pem private/distributor-key.pem
+	@for ID in `seq 1 ${NUMBER_OF_WORKER_NODES}`; do ./generate_cert -ca -duration 2160h -host localhost,127.0.0.1 -rsa-bits 8192; mv cert.pem private/worker-$$ID-cert.pem && mv key.pem private/worker-$$ID-key.pem; done
+	./generate_cert -ca -duration 2160h -host localhost,127.0.0.1 -rsa-bits 8192
+	mv cert.pem private/storage-cert.pem && mv key.pem private/storage-key.pem
 	go clean
 	rm -f generate_cert.go
 
@@ -31,7 +38,10 @@ test-certs:
 	wget https://raw.githubusercontent.com/golang/go/master/src/crypto/tls/generate_cert.go
 	go build generate_cert.go
 	./generate_cert -ca -duration 1h -host localhost,127.0.0.1 -rsa-bits 1024
-	mv cert.pem private/cert.pem && mv key.pem private/key.pem
+	mv cert.pem private/distributor-cert.pem && mv key.pem private/distributor-key.pem
+	@for ID in `seq 1 ${NUMBER_OF_WORKER_NODES}`; do ./generate_cert -ca -duration 1h -host localhost,127.0.0.1 -rsa-bits 1024; mv cert.pem private/worker-$$ID-cert.pem && mv key.pem private/worker-$$ID-key.pem; done
+	./generate_cert -ca -duration 1h -host localhost,127.0.0.1 -rsa-bits 1024
+	mv cert.pem private/storage-cert.pem && mv key.pem private/storage-key.pem
 	go clean
 	rm -f generate_cert.go
 

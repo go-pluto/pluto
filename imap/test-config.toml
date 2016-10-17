@@ -3,8 +3,8 @@ IP = "127.0.0.1"
 Port = "19933"
 
     [Distributor.TLS]
-    CertLoc = "../private/cert.pem"
-    KeyLoc = "../private/key.pem"
+    CertLoc = "../private/distributor-cert.pem"
+    KeyLoc = "../private/distributor-key.pem"
 
     [Distributor.IMAP]
     Greeting = "Pluto ready."

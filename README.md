@@ -18,7 +18,7 @@ If you have a working [Go](https://golang.org/) setup, installation is as easy a
  $ go get github.com/numbleroot/pluto
 ```
 
-You need to provide a valid TLS certificate. Either you use your existing certificate or you could use the provided `certs` target with `make` to generate them, e.g.:
+You need to provide a valid TLS certificate. Either you use your existing certificate or you could use the provided `certs` target with `make` to generate them. Make sure to set the `NUMBER_OF_WORKER_NODES` variable to the correct amount of configured worker nodes in your system. After done that, run:
 
 ```bash
 $ make certs
@@ -32,7 +32,10 @@ $ chmod 0700 private
 $ wget https://raw.githubusercontent.com/golang/go/master/src/crypto/tls/generate_cert.go
 $ go build generate_cert.go
 $ ./generate_cert -ca -duration 2160h -host localhost,127.0.0.1 -rsa-bits 8192
-$ mv cert.pem private/cert.pem && mv key.pem private/key.pem
+$ mv cert.pem private/distributor-cert.pem && mv key.pem private/distributor-key.pem
+$ for ID in `seq 1 ${NUMBER_OF_WORKER_NODES}`; do ./generate_cert -ca -duration 2160h -host localhost,127.0.0.1 -rsa-bits 8192; mv cert.pem private/worker-${ID}-cert.pem && mv key.pem private/worker-${ID}-key.pem; done
+$ ./generate_cert -ca -duration 2160h -host localhost,127.0.0.1 -rsa-bits 8192
+$ mv cert.pem private/storage-cert.pem && mv key.pem private/storage-key.pem
 $ go clean
 $ rm -f generate_cert.go
 ```
