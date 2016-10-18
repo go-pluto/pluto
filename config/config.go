@@ -62,11 +62,12 @@ type IMAP struct {
 // Auth stores the system's facility to identify
 // user sessions, i.e. log in a user or deny access.
 type Auth struct {
-	Adaptor  string
+	Adapter  string
 	IP       string
 	Port     string
 	Database string
 	User     string
+	SSLMode  string
 }
 
 // Functions

@@ -13,6 +13,8 @@ import (
 
 func main() {
 
+	var err error
+
 	// Set CPUs usable by pluto to all available.
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -30,10 +32,10 @@ func main() {
 	}
 
 	// Load environment from .env file.
-	// Env, err := config.LoadEnv()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	err = config.LoadEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Initialize an IMAP node based on passed flags.
 	Node, err := imap.InitNode(Config, *distributorFlag, *workerFlag, *storageFlag)
@@ -43,7 +45,8 @@ func main() {
 	defer Node.Socket.Close()
 
 	// Loop on incoming requests.
-	if err := Node.RunNode(); err != nil {
+	err = Node.RunNode()
+	if err != nil {
 		log.Fatal(err)
 	}
 }

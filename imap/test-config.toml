@@ -10,11 +10,12 @@ Port = "19933"
     Greeting = "Pluto ready."
 
     [Distributor.Auth]
-    Adaptor = "postgres"
+    Adapter = "postgres"
     IP = "127.0.0.1"
     Port = "5432"
     Database = "pluto"
     User = "pluto"
+    SSLMode = "disable"
 
 
 [Workers]

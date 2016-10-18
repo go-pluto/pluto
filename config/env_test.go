@@ -13,14 +13,16 @@ import (
 // implemented functionalities to load a .env file.
 func TestLoadEnv(t *testing.T) {
 
+	var err error
+
 	// Rename provided .env file to .hidden.
-	err := os.Rename(".env", ".hidden")
+	err = os.Rename(".env", ".hidden")
 	if err != nil {
 		t.Errorf("[config.TestLoadEnv] Encountered error while renaming file '.env' => '.hidden': '%s'\n", err.Error())
 	}
 
 	// Try to load non-existent .env file.
-	_, err = config.LoadEnv()
+	err = config.LoadEnv()
 	if err == nil {
 		t.Fatalf("[config.TestLoadEnv] Expected fail while loading non-existent '.env' but received 'nil' error.")
 	}
@@ -32,13 +34,8 @@ func TestLoadEnv(t *testing.T) {
 	}
 
 	// Load an existing, valid .env file.
-	env, err := config.LoadEnv()
+	err = config.LoadEnv()
 	if err != nil {
 		t.Fatalf("[config.TestLoadEnv] Expected success while loading '.env' but received: '%s'\n", err.Error())
-	}
-
-	// Check for test success.
-	if env.Secret != "works" {
-		t.Fatalf("[config.TestLoadEnv] Expected '%s' but received '%s'\n", "works", env.Secret)
 	}
 }

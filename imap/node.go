@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 
 	"crypto/tls"
 
+	"github.com/numbleroot/pluto/auth"
 	"github.com/numbleroot/pluto/config"
 )
 
@@ -26,9 +28,10 @@ type Type int
 
 // Node struct bundles information of one node instance.
 type Node struct {
-	Type   Type
-	Config *config.Config
-	Socket net.Listener
+	Type        Type
+	Socket      net.Listener
+	AuthAdapter auth.PlainAuthenticator
+	Config      *config.Config
 }
 
 // Functions
@@ -82,6 +85,17 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 		keyPath = config.Distributor.TLS.KeyLoc
 		ip = config.Distributor.IP
 		port = config.Distributor.Port
+
+		// As the distributor is responsible for the authentication
+		// of incoming requests, connect to provided auth mechanism.
+		if config.Distributor.Auth.Adapter == "postgres" {
+
+			// Connect to a PostgreSQL database for authentication measures.
+			node.AuthAdapter, err = auth.NewPostgreSQLAuthenticator(config.Distributor.Auth.IP, config.Distributor.Auth.Port, config.Distributor.Auth.Database, config.Distributor.Auth.User, os.Getenv("IMAP_AUTH_POSTGRES_DATABASE_PASSWORD"), config.Distributor.Auth.SSLMode)
+			if err != nil {
+				return nil, err
+			}
+		}
 
 	} else if worker != "" {
 

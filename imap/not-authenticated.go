@@ -32,10 +32,10 @@ func (node *Node) StartTLS(c *Connection, req *Request) {
 	}
 }
 
-// AuthenticatePlain parses included base64 encoded user name
+// AuthPlain parses included base64 encoded user name
 // and password and tries to authenticate them against the
 // server's defined user database.
-func (node *Node) AuthenticatePlain(c *Connection, req *Request) {
+func (node *Node) AuthPlain(c *Connection, req *Request) {
 
 	// TODO: Implement this functionality.
 }
