@@ -8,7 +8,7 @@ import (
 
 // StartTLS states on IMAP STARTTLS command
 // that current connection is already encrypted.
-func (c *Connection) StartTLS(req *Request) {
+func (node *Node) StartTLS(c *Connection, req *Request) {
 
 	if len(req.Payload) > 0 {
 
@@ -35,7 +35,7 @@ func (c *Connection) StartTLS(req *Request) {
 // AuthenticatePlain parses included base64 encoded user name
 // and password and tries to authenticate them against the
 // server's defined user database.
-func (c *Connection) AuthenticatePlain(req *Request) {
+func (node *Node) AuthenticatePlain(c *Connection, req *Request) {
 
 	// TODO: Implement this functionality.
 }
@@ -44,7 +44,7 @@ func (c *Connection) AuthenticatePlain(req *Request) {
 // requests targeted at the IMAP not authenticated state.
 // It parses incoming requests and executes command
 // specific handlers matching the parsed data.
-func (c *Connection) AcceptNotAuthenticated() {
+func (node *Node) AcceptNotAuthenticated(c *Connection) {
 
 	// Set loop end condition initially to this state.
 	nextState := NOT_AUTHENTICATED
@@ -78,17 +78,17 @@ func (c *Connection) AcceptNotAuthenticated() {
 		switch req.Command {
 
 		case "CAPABILITY":
-			c.Capability(req)
+			node.Capability(c, req)
 
 		case "LOGIN":
-			c.Login(req)
+			node.Login(c, req)
 
 		case "LOGOUT":
-			c.Logout(req)
+			node.Logout(c, req)
 			nextState = LOGOUT
 
 		case "STARTTLS":
-			c.StartTLS(req)
+			node.StartTLS(c, req)
 
 		default:
 			// Client sent inappropriate command. Signal tagged error.
@@ -103,6 +103,6 @@ func (c *Connection) AcceptNotAuthenticated() {
 	switch nextState {
 
 	case AUTHENTICATED:
-		c.Transition(AUTHENTICATED)
+		c.Transition(node, AUTHENTICATED)
 	}
 }

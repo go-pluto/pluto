@@ -6,7 +6,7 @@ package imap
 // requests targeted at the IMAP authenticated state.
 // It parses incoming requests and executes command
 // specific handlers matching the parsed data.
-func (c *Connection) AcceptAuthenticated() {
+func (node *Node) AcceptAuthenticated(c *Connection) {
 
 	// TODO: Implement this function.
 }

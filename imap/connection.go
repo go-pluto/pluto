@@ -52,21 +52,21 @@ func NewConnection(c net.Conn) *Connection {
 // It is called to switch from one IMAP state to the
 // consecutive following one as instructed by received
 // IMAP commands.
-func (c *Connection) Transition(state IMAPState) {
+func (c *Connection) Transition(node *Node, state IMAPState) {
 
 	switch state {
 
 	case NOT_AUTHENTICATED:
 		c.State = NOT_AUTHENTICATED
-		go c.AcceptNotAuthenticated()
+		go node.AcceptNotAuthenticated(c)
 
 	case AUTHENTICATED:
 		c.State = AUTHENTICATED
-		go c.AcceptAuthenticated()
+		go node.AcceptAuthenticated(c)
 
 	case MAILBOX:
 		c.State = MAILBOX
-		go c.AcceptMailbox()
+		go node.AcceptMailbox(c)
 	}
 }
 

@@ -1,11 +1,14 @@
 package imap_test
 
 import (
+	"fmt"
+	"log"
 	"testing"
 
 	"crypto/tls"
 
 	"github.com/numbleroot/pluto/imap"
+	"github.com/numbleroot/pluto/utils"
 )
 
 // Structs
@@ -25,6 +28,30 @@ var starttlsTests = []struct {
 // TestStartTLS executes a black-box table test on the
 // implemented StartTLS() function.
 func TestStartTLS(t *testing.T) {
+
+	// Create needed test environment.
+	Config, TLSConfig := utils.CreateTestEnv()
+
+	// Initialize a distributor node.
+	Node, err := imap.InitNode(Config, true, "", false)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer Node.Socket.Close()
+
+	// Start test distributor in background.
+	go func() {
+
+		err := Node.RunNode()
+
+		// Define error message that will be sent when connection
+		// is closed in a proper way so that we can allow that one.
+		okError := fmt.Sprintf("[imap.RunNode] Accepting incoming request failed with: accept tcp %s:%s: use of closed network connection\n", Node.Config.Distributor.IP, Node.Config.Distributor.Port)
+
+		if err.Error() != okError {
+			t.Fatalf("[imap.RunNode] Expected '%s' but received '%s'\n", okError, err.Error())
+		}
+	}()
 
 	// Connect to IMAP server.
 	conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)

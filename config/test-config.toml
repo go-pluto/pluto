@@ -1,17 +1,4 @@
 [Distributor]
-IP = "127.0.0.1"
-Port = "19933"
 
     [Distributor.TLS]
     CertLoc = "/very/complicated/test/directory/certificate.test"
-    KeyLoc = "/very/complicated/test/directory/key.test"
-
-    [Distributor.IMAP]
-    Greeting = "Pluto ready."
-
-    [Distributor.Auth]
-    Adaptor = "postgres"
-    IP = "127.0.0.1"
-    Port = "5432"
-    Database = "pluto"
-    User = "pluto"

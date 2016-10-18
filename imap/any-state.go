@@ -8,7 +8,7 @@ import (
 
 // Capability handles the IMAP CAPABILITY command.
 // It outputs the supported actions in the current state.
-func (c *Connection) Capability(req *Request) {
+func (node *Node) Capability(c *Connection, req *Request) {
 
 	if len(req.Payload) > 0 {
 
@@ -36,7 +36,7 @@ func (c *Connection) Capability(req *Request) {
 
 // Login sends NO response to any LOGIN attempt
 // because LOGINDISABLED is advertised.
-func (c *Connection) Login(req *Request) {
+func (node *Node) Login(c *Connection, req *Request) {
 
 	err := c.Send(fmt.Sprintf("%s NO Command LOGIN is disabled", req.Tag))
 	if err != nil {
@@ -48,7 +48,7 @@ func (c *Connection) Login(req *Request) {
 // Logout correctly ends a connection with a client.
 // Also necessarily created management structures will
 // get shut down gracefully.
-func (c *Connection) Logout(req *Request) {
+func (node *Node) Logout(c *Connection, req *Request) {
 
 	if len(req.Payload) > 0 {
 

@@ -15,3 +15,45 @@ Port = "19933"
     Port = "5432"
     Database = "pluto"
     User = "pluto"
+
+
+[Workers]
+
+    [Workers.worker-1]
+    IP = "127.0.0.1"
+    Port = "20001"
+    UserStart = 1
+    UserEnd = 10
+
+        [Workers.worker-1.TLS]
+        CertLoc = "../private/worker-1-cert.pem"
+        KeyLoc = "../private/worker-1-key.pem"
+
+    [Workers.worker-2]
+    IP = "127.0.0.1"
+    Port = "20002"
+    UserStart = 11
+    UserEnd = 20
+
+        [Workers.worker-2.TLS]
+        CertLoc = "../private/worker-2-cert.pem"
+        KeyLoc = "../private/worker-2-key.pem"
+
+    [Workers.worker-3]
+    IP = "127.0.0.1"
+    Port = "20003"
+    UserStart = 21
+    UserEnd = 30
+
+        [Workers.worker-3.TLS]
+        CertLoc = "../private/worker-3-cert.pem"
+        KeyLoc = "../private/worker-3-key.pem"
+
+
+[Storage]
+IP = "127.0.0.1"
+Port = "21000"
+
+    [Storage.TLS]
+    CertLoc = "../private/storage-cert.pem"
+    KeyLoc = "../private/storage-key.pem"

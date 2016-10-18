@@ -1,4 +1,4 @@
-.PHONY: all clean certs test
+.PHONY: all clean deps build certs test-certs test
 
 # Set this to your number of configured worker
 # nodes, see your main configuration file.

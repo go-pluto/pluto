@@ -6,7 +6,7 @@ package imap
 // targeted at the IMAP mailbox state. It parses
 // incoming requests and executes command specific
 // handlers matching the parsed data.
-func (c *Connection) AcceptMailbox() {
+func (node *Node) AcceptMailbox(c *Connection) {
 
 	// TODO: Implement this function.
 }

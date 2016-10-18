@@ -6,7 +6,7 @@ import (
 	"runtime"
 
 	"github.com/numbleroot/pluto/config"
-	"github.com/numbleroot/pluto/node"
+	"github.com/numbleroot/pluto/imap"
 )
 
 // Functions
@@ -35,8 +35,8 @@ func main() {
 	// 	log.Fatal(err)
 	// }
 
-	// Initialize a server instance.
-	Node, err := node.InitNode(Config, *distributorFlag, *workerFlag, *storageFlag)
+	// Initialize an IMAP node based on passed flags.
+	Node, err := imap.InitNode(Config, *distributorFlag, *workerFlag, *storageFlag)
 	if err != nil {
 		log.Fatal(err)
 	}

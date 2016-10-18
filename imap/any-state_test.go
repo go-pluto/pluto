@@ -3,16 +3,12 @@ package imap_test
 import (
 	"fmt"
 	"log"
-	"os"
 	"testing"
 
 	"crypto/tls"
-	"crypto/x509"
-	"io/ioutil"
 
-	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/imap"
-	"github.com/numbleroot/pluto/node"
+	"github.com/numbleroot/pluto/utils"
 )
 
 // Structs
@@ -49,80 +45,34 @@ var logoutTests = []struct {
 	{"b01 LOGOUT some more parameters", "b01 BAD Command LOGOUT was sent with extra parameters"},
 }
 
-// Variables
-
-var Config *config.Config
-var Node *node.Node
-var TLSConfig *tls.Config
-
 // Functions
-
-// TestMain initializes structures and connections needed later on.
-func TestMain(m *testing.M) {
-
-	var err error
-
-	// Read configuration from file.
-	Config, err = config.LoadConfig("test-config.toml")
-	if err != nil {
-		log.Fatalf("[imap.TestMain] Failed to load config file with: '%s'\n", err.Error())
-	}
-
-	// Initialize a distributor node.
-	Node, err = node.InitNode(Config, true, "", false)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Read in distributor certificate and create x509 cert pool.
-	TLSConfig = &tls.Config{
-		MinVersion:               tls.VersionTLS12,
-		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-		InsecureSkipVerify:       false,
-		PreferServerCipherSuites: true,
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-		},
-	}
-
-	// Create new certificate pool to hold distributor certificate.
-	rootCerts := x509.NewCertPool()
-
-	// Read distributor certificate specified in pluto's main
-	// config file into memory.
-	rootCert, err := ioutil.ReadFile(Config.Distributor.TLS.CertLoc)
-	if err != nil {
-		log.Fatalf("[imap.TestMain] Reading distributor certificate into memory failed with: %s\n", err.Error())
-	}
-
-	// Append certificate in PEM form to pool.
-	ok := rootCerts.AppendCertsFromPEM(rootCert)
-	if !ok {
-		log.Fatalf("[imap.TestMain] Failed to append certificate to pool: %s\n", err.Error())
-	}
-
-	// Now make created pool the root pool
-	// of above global TLS config.
-	TLSConfig.RootCAs = rootCerts
-
-	// Start test distributor in background.
-	go func() {
-
-		if err := Node.RunNode(); err != nil {
-			log.Fatal(err)
-		}
-	}()
-
-	// Start main tests.
-	os.Exit(m.Run())
-}
 
 // TestCapability executes a black-box table test on the
 // implemented Capability() function.
 func TestCapability(t *testing.T) {
+
+	// Create needed test environment.
+	Config, TLSConfig := utils.CreateTestEnv()
+
+	// Initialize a distributor node.
+	Node, err := imap.InitNode(Config, true, "", false)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Start test distributor in background.
+	go func() {
+
+		err := Node.RunNode()
+
+		// Define error message that will be sent when connection
+		// is closed in a proper way so that we can allow that one.
+		okError := fmt.Sprintf("[imap.RunNode] Accepting incoming request failed with: accept tcp %s:%s: use of closed network connection\n", Node.Config.Distributor.IP, Node.Config.Distributor.Port)
+
+		if err.Error() != okError {
+			t.Fatalf("[imap.RunNode] Expected '%s' but received '%s'\n", okError, err.Error())
+		}
+	}()
 
 	// Connect to IMAP distributor.
 	conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
@@ -175,11 +125,38 @@ func TestCapability(t *testing.T) {
 
 	// At the end of each test, terminate connection.
 	c.Terminate()
+
+	Node.Socket.Close()
+	log.Println("done with capa")
 }
 
 // TestLogin executes a black-box table test on the
 // implemented Login() function.
 func TestLogin(t *testing.T) {
+
+	// Create needed test environment.
+	Config, TLSConfig := utils.CreateTestEnv()
+
+	// Initialize a distributor node.
+	Node, err := imap.InitNode(Config, true, "", false)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer Node.Socket.Close()
+
+	// Start test distributor in background.
+	go func() {
+
+		err := Node.RunNode()
+
+		// Define error message that will be sent when connection
+		// is closed in a proper way so that we can allow that one.
+		okError := fmt.Sprintf("[imap.RunNode] Accepting incoming request failed with: accept tcp %s:%s: use of closed network connection\n", Node.Config.Distributor.IP, Node.Config.Distributor.Port)
+
+		if err.Error() != okError {
+			t.Fatalf("[imap.RunNode] Expected '%s' but received '%s'\n", okError, err.Error())
+		}
+	}()
 
 	// Connect to IMAP distributor.
 	conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
@@ -222,6 +199,30 @@ func TestLogin(t *testing.T) {
 // TestLogout executes a black-box table test on the
 // implemented Logout() function.
 func TestLogout(t *testing.T) {
+
+	// Create needed test environment.
+	Config, TLSConfig := utils.CreateTestEnv()
+
+	// Initialize a distributor node.
+	Node, err := imap.InitNode(Config, true, "", false)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer Node.Socket.Close()
+
+	// Start test distributor in background.
+	go func() {
+
+		err := Node.RunNode()
+
+		// Define error message that will be sent when connection
+		// is closed in a proper way so that we can allow that one.
+		okError := fmt.Sprintf("[imap.RunNode] Accepting incoming request failed with: accept tcp %s:%s: use of closed network connection\n", Node.Config.Distributor.IP, Node.Config.Distributor.Port)
+
+		if err.Error() != okError {
+			t.Fatalf("[imap.RunNode] Expected '%s' but received '%s'\n", okError, err.Error())
+		}
+	}()
 
 	for i, tt := range logoutTests {
 
