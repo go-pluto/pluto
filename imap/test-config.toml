@@ -1,6 +1,7 @@
 [Distributor]
 IP = "127.0.0.1"
 Port = "19933"
+AuthAdapter = "AuthFile"
 
     [Distributor.TLS]
     CertLoc = "../private/distributor-cert.pem"
@@ -9,13 +10,9 @@ Port = "19933"
     [Distributor.IMAP]
     Greeting = "Pluto ready."
 
-    [Distributor.Auth]
-    Adapter = "postgres"
-    IP = "127.0.0.1"
-    Port = "5432"
-    Database = "pluto"
-    User = "pluto"
-    SSLMode = "disable"
+    [Distributor.AuthFile]
+    File = "test-users.txt"
+    Separator = ";"
 
 
 [Workers]

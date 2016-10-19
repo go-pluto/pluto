@@ -88,10 +88,17 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 
 		// As the distributor is responsible for the authentication
 		// of incoming requests, connect to provided auth mechanism.
-		if config.Distributor.Auth.Adapter == "postgres" {
+		if config.Distributor.AuthAdapter == "AuthFile" {
+
+			// Open authentication file and read user information.
+			node.AuthAdapter, err = auth.NewFileAuthenticator(config.Distributor.AuthFile.File, config.Distributor.AuthFile.Separator)
+			if err != nil {
+				return nil, err
+			}
+		} else if config.Distributor.AuthAdapter == "AuthPostgreSQL" {
 
 			// Connect to a PostgreSQL database for authentication measures.
-			node.AuthAdapter, err = auth.NewPostgreSQLAuthenticator(config.Distributor.Auth.IP, config.Distributor.Auth.Port, config.Distributor.Auth.Database, config.Distributor.Auth.User, os.Getenv("IMAP_AUTH_POSTGRES_DATABASE_PASSWORD"), config.Distributor.Auth.SSLMode)
+			node.AuthAdapter, err = auth.NewPostgreSQLAuthenticator(config.Distributor.AuthPostgreSQL.IP, config.Distributor.AuthPostgreSQL.Port, config.Distributor.AuthPostgreSQL.Database, config.Distributor.AuthPostgreSQL.User, os.Getenv("IMAP_AUTH_POSTGRES_DATABASE_PASSWORD"), config.Distributor.AuthPostgreSQL.SSLMode)
 			if err != nil {
 				return nil, err
 			}

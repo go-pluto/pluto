@@ -40,6 +40,22 @@ $ go clean
 $ rm -f generate_cert.go
 ```
 
+If you plan on using a PostgreSQL database for storing the user authorization information, you need to have a PostgreSQL running somewhere. If you need a new user that owns the database, you might use these commands on the PostgreSQL host:
+
+```bash
+user@system $ sudo -i -u postgres
+postgres@system $ createuser --encrypted --pwprompt --createdb --no-createrole --no-superuser pluto
+Enter password for new role:
+Enter it again:
+postgres@system $ exit
+```
+
+After that, you can create a new database `pluto` to hold the user information like so:
+
+```bash
+user@system $ createdb -U pluto pluto
+```
+
 
 ## Usage
 

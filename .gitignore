@@ -27,6 +27,7 @@ _testmain.go
 private/
 pluto
 config.toml
+users.txt
 .env
 *.out
 

@@ -20,11 +20,13 @@ type Config struct {
 // the first entry point of a pluto setup, the
 // IMAP request authenticator and distributor.
 type Distributor struct {
-	IP   string
-	Port string
-	TLS  TLS
-	IMAP IMAP
-	Auth Auth
+	IP             string
+	Port           string
+	AuthAdapter    string
+	TLS            TLS
+	IMAP           IMAP
+	AuthFile       *AuthFile
+	AuthPostgreSQL *AuthPostgreSQL
 }
 
 // Worker contains the connection and user sharding
@@ -59,15 +61,21 @@ type IMAP struct {
 	Greeting string
 }
 
-// Auth stores the system's facility to identify
-// user sessions, i.e. log in a user or deny access.
-type Auth struct {
-	Adapter  string
+// AuthPostgreSQL defines parameters for connecting
+// to a PostgreSQL database for authenticating users.
+type AuthPostgreSQL struct {
 	IP       string
 	Port     string
 	Database string
 	User     string
 	SSLMode  string
+}
+
+// AuthFile provides information on authenticating
+// user taken from a designated authorization text file.
+type AuthFile struct {
+	File      string
+	Separator string
 }
 
 // Functions
