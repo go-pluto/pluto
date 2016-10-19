@@ -70,7 +70,7 @@ func TestCapability(t *testing.T) {
 		okError := fmt.Sprintf("[imap.RunNode] Accepting incoming request failed with: accept tcp %s:%s: use of closed network connection\n", Node.Config.Distributor.IP, Node.Config.Distributor.Port)
 
 		if err.Error() != okError {
-			t.Fatalf("[imap.RunNode] Expected '%s' but received '%s'\n", okError, err.Error())
+			t.Fatalf("[imap.TestCapability] Expected '%s' but received '%s'\n", okError, err.Error())
 		}
 	}()
 
@@ -154,7 +154,7 @@ func TestLogin(t *testing.T) {
 		okError := fmt.Sprintf("[imap.RunNode] Accepting incoming request failed with: accept tcp %s:%s: use of closed network connection\n", Node.Config.Distributor.IP, Node.Config.Distributor.Port)
 
 		if err.Error() != okError {
-			t.Fatalf("[imap.RunNode] Expected '%s' but received '%s'\n", okError, err.Error())
+			t.Fatalf("[imap.TestLogin] Expected '%s' but received '%s'\n", okError, err.Error())
 		}
 	}()
 
@@ -220,7 +220,7 @@ func TestLogout(t *testing.T) {
 		okError := fmt.Sprintf("[imap.RunNode] Accepting incoming request failed with: accept tcp %s:%s: use of closed network connection\n", Node.Config.Distributor.IP, Node.Config.Distributor.Port)
 
 		if err.Error() != okError {
-			t.Fatalf("[imap.RunNode] Expected '%s' but received '%s'\n", okError, err.Error())
+			t.Fatalf("[imap.TestLogout] Expected '%s' but received '%s'\n", okError, err.Error())
 		}
 	}()
 

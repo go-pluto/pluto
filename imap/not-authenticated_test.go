@@ -23,6 +23,11 @@ var starttlsTests = []struct {
 	{"STARTTLS", "* BAD Received invalid IMAP command"},
 }
 
+var authPlainTests = []struct {
+	in  string
+	out string
+}{}
+
 // Functions
 
 // TestStartTLS executes a black-box table test on the
@@ -49,7 +54,7 @@ func TestStartTLS(t *testing.T) {
 		okError := fmt.Sprintf("[imap.RunNode] Accepting incoming request failed with: accept tcp %s:%s: use of closed network connection\n", Node.Config.Distributor.IP, Node.Config.Distributor.Port)
 
 		if err.Error() != okError {
-			t.Fatalf("[imap.RunNode] Expected '%s' but received '%s'\n", okError, err.Error())
+			t.Fatalf("[imap.TestStartTLS] Expected '%s' but received '%s'\n", okError, err.Error())
 		}
 	}()
 
@@ -84,6 +89,70 @@ func TestStartTLS(t *testing.T) {
 
 		if answer != tt.out {
 			t.Fatalf("[imap.TestStartTLS] Expected '%s' but received '%s'\n", tt.out, answer)
+		}
+	}
+
+	// At the end of each test, terminate connection.
+	c.Terminate()
+}
+
+func TestAuthPlain(t *testing.T) {
+
+	// Create needed test environment.
+	Config, TLSConfig := utils.CreateTestEnv()
+
+	// Initialize a distributor node.
+	Node, err := imap.InitNode(Config, true, "", false)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer Node.Socket.Close()
+
+	// Start test distributor in background.
+	go func() {
+
+		err := Node.RunNode()
+
+		// Define error message that will be sent when connection
+		// is closed in a proper way so that we can allow that one.
+		okError := fmt.Sprintf("[imap.RunNode] Accepting incoming request failed with: accept tcp %s:%s: use of closed network connection\n", Node.Config.Distributor.IP, Node.Config.Distributor.Port)
+
+		if err.Error() != okError {
+			t.Fatalf("[imap.TestAuthPlain] Expected '%s' but received '%s'\n", okError, err.Error())
+		}
+	}()
+
+	// Connect to IMAP server.
+	conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
+	if err != nil {
+		t.Fatalf("[imap.TestAuthPlain] Error during connection attempt to IMAP server: %s\n", err.Error())
+	}
+
+	// Create new connection struct.
+	c := imap.NewConnection(conn)
+
+	// Consume mandatory IMAP greeting.
+	_, err = c.Receive()
+	if err != nil {
+		t.Errorf("[imap.TestAuthPlain] Error during receiving initial server greeting: %s\n", err.Error())
+	}
+
+	for _, tt := range authPlainTests {
+
+		// Table test: send 'in' part of each line.
+		err = c.Send(tt.in)
+		if err != nil {
+			t.Fatalf("[imap.TestAuthPlain] Sending message to server failed with: %s\n", err.Error())
+		}
+
+		// Receive go ahead signal for TLS negotiation.
+		answer, err := c.Receive()
+		if err != nil {
+			t.Errorf("[imap.TestAuthPlain] Error during receiving table test LOGIN: %s\n", err.Error())
+		}
+
+		if answer != tt.out {
+			t.Fatalf("[imap.TestAuthPlain] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
 

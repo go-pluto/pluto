@@ -1,7 +1,7 @@
 [Distributor]
 IP = "127.0.0.1"
 Port = "19933"
-AuthAdapter = "PostgreSQL"
+AuthAdapter = "AuthPostgreSQL"
 
     [Distributor.TLS]
     CertLoc = "/very/complicated/and/long/path/to/your/distributor-cert.pem"
