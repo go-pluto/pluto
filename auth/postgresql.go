@@ -56,11 +56,30 @@ func NewPostgreSQLAuthenticator(ip string, port string, db string, user string, 
 	}, nil
 }
 
+// GetIDOfUser finds position of supplied user in users
+// table. It is assumed that existence check was already
+// performed, for example via AuthenticatePlain.
+func (p *PostgreSQLAuthenticator) GetOriginalIDOfUser(username string) int {
+
+	return -1
+}
+
+// GetTokenOfUser returns the currently assigned token as
+// a sign of a valid authentication for a supplied name.
+func (p *PostgreSQLAuthenticator) GetTokenOfUser(username string) string {
+
+	return ""
+}
+
+// DeleteTokenOfUser deletes the currently assigned token,
+// logging the user out of the system.
+func (p *PostgreSQLAuthenticator) DeleteTokenOfUser(id int) {}
+
 // AuthenticatePlain performs the actual authentication
 // process by taking supplied credentials and attempting
 // to find a matching entry in PostgreSQL database described
 // by a struct of above's layout.
-func (p *PostgreSQLAuthenticator) AuthenticatePlain(username string, password string) error {
+func (p *PostgreSQLAuthenticator) AuthenticatePlain(username string, password string) (*int, *string, error) {
 
-	return nil
+	return nil, nil, nil
 }

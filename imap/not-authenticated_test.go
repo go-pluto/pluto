@@ -88,5 +88,5 @@ func TestStartTLS(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	Node.Terminate(c)
 }

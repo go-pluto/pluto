@@ -9,7 +9,7 @@ import (
 
 // Capability handles the IMAP CAPABILITY command.
 // It outputs the supported actions in the current state.
-func (node *Node) Capability(c *Connection, req *Request) {
+func (node *Node) Capability(c *Connection, req *Request) (success bool) {
 
 	if len(req.Payload) > 0 {
 
@@ -17,11 +17,11 @@ func (node *Node) Capability(c *Connection, req *Request) {
 		// this is a client error. Return BAD statement.
 		err := c.Send(fmt.Sprintf("%s BAD Command CAPABILITY was sent with extra parameters", req.Tag))
 		if err != nil {
-			c.Error("Encountered send error", err)
-			return
+			node.Error(c, "Encountered send error", err)
+			return false
 		}
 
-		return
+		return false
 	}
 
 	// Send mandatory capability options.
@@ -30,15 +30,18 @@ func (node *Node) Capability(c *Connection, req *Request) {
 	// each connection already is a TLS connection.
 	err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 AUTH=PLAIN\n%s OK CAPABILITY completed", req.Tag))
 	if err != nil {
-		c.Error("Encountered send error", err)
-		return
+		node.Error(c, "Encountered send error", err)
+		return false
 	}
+
+	return true
 }
 
 // Login performs the authentication mechanism specified
 // as part of the distributor config.
-func (node *Node) Login(c *Connection, req *Request) {
+func (node *Node) Login(c *Connection, req *Request) (success bool) {
 
+	// Split payload on every space character.
 	userCredentials := strings.Split(req.Payload, " ")
 
 	if len(userCredentials) != 2 {
@@ -47,39 +50,46 @@ func (node *Node) Login(c *Connection, req *Request) {
 		// this is a client error. Return BAD statement.
 		err := c.Send(fmt.Sprintf("%s BAD Command LOGIN was not sent with exactly two parameters", req.Tag))
 		if err != nil {
-			c.Error("Encountered send error", err)
-			return
+			node.Error(c, "Encountered send error", err)
+			return false
 		}
 
-		return
+		return false
 	}
 
-	err := node.AuthAdapter.AuthenticatePlain(userCredentials[0], userCredentials[1])
+	id, token, err := node.AuthAdapter.AuthenticatePlain(userCredentials[0], userCredentials[1])
 	if err != nil {
 
 		// If supplied credentials failed to authenticate client,
 		// they are invalid. Return NO statement.
 		err := c.Send(fmt.Sprintf("%s NO Name and / or password wrong", req.Tag))
 		if err != nil {
-			c.Error("Encountered send error", err)
-			return
+			node.Error(c, "Encountered send error", err)
+			return false
 		}
 
-		return
+		return false
 	}
+
+	// Set connection elements concerning user
+	// to values retrieved above.
+	c.UserID = id
+	c.UserToken = token
 
 	// Signal success to client.
 	err = c.Send(fmt.Sprintf("%s OK Logged in", req.Tag))
 	if err != nil {
-		c.Error("Encountered send error", err)
-		return
+		node.Error(c, "Encountered send error", err)
+		return false
 	}
+
+	return true
 }
 
 // Logout correctly ends a connection with a client.
 // Also necessarily created management structures will
 // get shut down gracefully.
-func (node *Node) Logout(c *Connection, req *Request) {
+func (node *Node) Logout(c *Connection, req *Request) (success bool) {
 
 	if len(req.Payload) > 0 {
 
@@ -87,22 +97,22 @@ func (node *Node) Logout(c *Connection, req *Request) {
 		// this is a client error. Return BAD statement.
 		err := c.Send(fmt.Sprintf("%s BAD Command LOGOUT was sent with extra parameters", req.Tag))
 		if err != nil {
-			c.Error("Encountered send error", err)
-			return
+			node.Error(c, "Encountered send error", err)
+			return false
 		}
 
-		return
+		return false
 	}
-
-	// TODO: Implement state change in user database.
 
 	// Signal success to client.
 	err := c.Send(fmt.Sprintf("* BYE Terminating connection\n%s OK LOGOUT completed", req.Tag))
 	if err != nil {
-		c.Error("Encountered send error", err)
-		return
+		node.Error(c, "Encountered send error", err)
+		return false
 	}
 
 	// Terminate connection.
-	c.Terminate()
+	node.Terminate(c)
+
+	return true
 }

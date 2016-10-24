@@ -180,7 +180,7 @@ func (node *Node) HandleRequest(conn net.Conn) {
 		// If this node is a distributor, send initial server greeting.
 		err := c.Send("* OK IMAP4rev1 " + node.Config.Distributor.IMAP.Greeting)
 		if err != nil {
-			c.Error("Encountered send error", err)
+			node.Error(c, "Encountered send error", err)
 			return
 		}
 

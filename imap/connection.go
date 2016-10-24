@@ -30,9 +30,11 @@ type IMAPState int
 // to one observed connection on its way through
 // the IMAP server.
 type Connection struct {
-	Conn   net.Conn
-	Reader *bufio.Reader
-	State  IMAPState
+	Conn      net.Conn
+	Reader    *bufio.Reader
+	State     IMAPState
+	UserID    *int
+	UserToken *string
 }
 
 // Functions
@@ -100,7 +102,12 @@ func (c *Connection) Send(text string) error {
 // Terminate tears down the state of a connection.
 // This includes closing contained connection items.
 // It returns nil or eventual errors.
-func (c *Connection) Terminate() error {
+func (node *Node) Terminate(c *Connection) error {
+
+	// Delete token if user was already logged in.
+	if c.UserID != nil {
+		node.AuthAdapter.DeleteTokenOfUser(*c.UserID)
+	}
 
 	if err := c.Conn.Close(); err != nil {
 		return err
@@ -111,13 +118,13 @@ func (c *Connection) Terminate() error {
 
 // Error makes use of Terminate but provides an additional
 // error message before terminating.
-func (c *Connection) Error(msg string, err error) {
+func (node *Node) Error(c *Connection, msg string, err error) {
 
 	// Log error.
 	log.Printf("%s: %s. Terminating connection to %s\n", msg, err.Error(), c.Conn.RemoteAddr().String())
 
 	// Terminate connection.
-	err = c.Terminate()
+	err = node.Terminate(c)
 	if err != nil {
 		log.Fatal(err)
 	}

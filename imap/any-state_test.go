@@ -127,7 +127,7 @@ func TestCapability(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	Node.Terminate(c)
 
 	Node.Socket.Close()
 }
@@ -195,7 +195,7 @@ func TestLogin(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	Node.Terminate(c)
 }
 
 // TestLogout executes a black-box table test on the
@@ -275,7 +275,7 @@ func TestLogout(t *testing.T) {
 		}
 
 		// At the end of each test, terminate connection.
-		err = c.Terminate()
+		err = Node.Terminate(c)
 		if err != nil {
 			log.Fatal(err)
 		}
