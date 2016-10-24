@@ -130,7 +130,6 @@ func TestCapability(t *testing.T) {
 	c.Terminate()
 
 	Node.Socket.Close()
-	log.Println("done with capa")
 }
 
 // TestLogin executes a black-box table test on the
