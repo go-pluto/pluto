@@ -17,8 +17,8 @@ var capabilityTests = []struct {
 	in  string
 	out string
 }{
-	{"a001 CAPABILITY", "* CAPABILITY IMAP4rev1 LOGINDISABLED AUTH=PLAIN\na001 OK CAPABILITY completed"},
-	{"1337 capability", "* CAPABILITY IMAP4rev1 LOGINDISABLED AUTH=PLAIN\n1337 OK CAPABILITY completed"},
+	{"a001 CAPABILITY", "* CAPABILITY IMAP4rev1 AUTH=PLAIN\na001 OK CAPABILITY completed"},
+	{"1337 capability", "* CAPABILITY IMAP4rev1 AUTH=PLAIN\n1337 OK CAPABILITY completed"},
 	{"tag CAPABILITY   ", "tag BAD Command CAPABILITY was sent with extra parameters"},
 	{"CAPABILITY", "* BAD Received invalid IMAP command"},
 }
@@ -27,11 +27,14 @@ var loginTests = []struct {
 	in  string
 	out string
 }{
-	{"xyz LOGIN smith sesame", "xyz NO Command LOGIN is disabled"},
-	{"zyx login smith sesame", "zyx NO Command LOGIN is disabled"},
+	{"blub LOGIN TestUser TestPassword", "blub OK Logged in"},
+	{"blargh login TestUser TestPassword", "blargh OK Logged in"},
+	{"xyz LOGIN smith sesame", "xyz NO Name and / or password wrong"},
+	{"zyx login smith sesame", "zyx NO Name and / or password wrong"},
 	{"a1b2c3   LOGIN    smith sesame", "a1b2c3 BAD Received invalid IMAP command"},
 	{"LOGIN ernie bert", "* BAD Received invalid IMAP command"},
 	{"12345 LOL ernie bert", "12345 BAD Received invalid IMAP command"},
+	{"uuu LOGIN let me in please", "uuu BAD Command LOGIN was not sent with exactly two parameters"},
 }
 
 var logoutTests = []struct {

@@ -2,6 +2,7 @@ package imap
 
 import (
 	"fmt"
+	"strings"
 )
 
 // Functions
@@ -27,18 +28,48 @@ func (node *Node) Capability(c *Connection, req *Request) {
 	// This means, AUTH=PLAIN is allowed and nothing else.
 	// STARTTLS will be answered but is not listed as
 	// each connection already is a TLS connection.
-	err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 LOGINDISABLED AUTH=PLAIN\n%s OK CAPABILITY completed", req.Tag))
+	err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 AUTH=PLAIN\n%s OK CAPABILITY completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return
 	}
 }
 
-// Login sends NO response to any LOGIN attempt
-// because LOGINDISABLED is advertised.
+// Login performs the authentication mechanism specified
+// as part of the distributor config.
 func (node *Node) Login(c *Connection, req *Request) {
 
-	err := c.Send(fmt.Sprintf("%s NO Command LOGIN is disabled", req.Tag))
+	userCredentials := strings.Split(req.Payload, " ")
+
+	if len(userCredentials) != 2 {
+
+		// If payload did not contain exactly two elements,
+		// this is a client error. Return BAD statement.
+		err := c.Send(fmt.Sprintf("%s BAD Command LOGIN was not sent with exactly two parameters", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return
+		}
+
+		return
+	}
+
+	err := node.AuthAdapter.AuthenticatePlain(userCredentials[0], userCredentials[1])
+	if err != nil {
+
+		// If supplied credentials failed to authenticate client,
+		// they are invalid. Return NO statement.
+		err := c.Send(fmt.Sprintf("%s NO Name and / or password wrong", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return
+		}
+
+		return
+	}
+
+	// Signal success to client.
+	err = c.Send(fmt.Sprintf("%s OK Logged in", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return

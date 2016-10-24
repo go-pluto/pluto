@@ -32,14 +32,6 @@ func (node *Node) StartTLS(c *Connection, req *Request) {
 	}
 }
 
-// AuthPlain parses included base64 encoded user name
-// and password and tries to authenticate them against the
-// server's defined user database.
-func (node *Node) AuthPlain(c *Connection, req *Request) {
-
-	// TODO: Implement this functionality.
-}
-
 // AcceptNotAuthenticated acts as the main loop for
 // requests targeted at the IMAP not authenticated state.
 // It parses incoming requests and executes command
