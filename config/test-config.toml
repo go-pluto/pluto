@@ -1,4 +1,4 @@
 [Distributor]
 
-    [Distributor.TLS]
+    [Distributor.PublicTLS]
     CertLoc = "/very/complicated/test/directory/certificate.test"

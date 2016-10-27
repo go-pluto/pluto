@@ -81,8 +81,8 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 		node.Type = DISTRIBUTOR
 
 		// Set config values to type specific values.
-		certPath = config.Distributor.TLS.CertLoc
-		keyPath = config.Distributor.TLS.KeyLoc
+		certPath = config.Distributor.PublicTLS.CertLoc
+		keyPath = config.Distributor.PublicTLS.KeyLoc
 		ip = config.Distributor.IP
 		port = config.Distributor.Port
 

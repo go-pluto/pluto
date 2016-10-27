@@ -59,7 +59,7 @@ func TestInitNode(t *testing.T) {
 	}
 
 	// Set certificate path in config to non-existent one.
-	Config.Distributor.TLS.CertLoc = "../private/not-existing.cert"
+	Config.Distributor.PublicTLS.CertLoc = "../private/not-existing.cert"
 
 	// Config error: non-existent certificate.
 	_, err = InitNode(Config, true, "", false)
@@ -68,18 +68,27 @@ func TestInitNode(t *testing.T) {
 	}
 
 	// Set wrong certificate path back to correct one.
-	Config.Distributor.TLS.CertLoc = "../private/distributor-cert.pem"
+	Config.Distributor.PublicTLS.CertLoc = "../private/public-distributor-cert.pem"
 
 	// Correct distributor initialization.
 	Node, err = InitNode(Config, true, "", false)
+	if err != nil {
+		t.Fatalf("[imap.TestInitNode] Expected correct distributor initialization but failed with: '%s'\n", err.Error())
+	}
 	Node.Socket.Close()
 
 	// Correct worker initialization.
 	Node, err = InitNode(Config, false, "worker-1", false)
+	if err != nil {
+		t.Fatalf("[imap.TestInitNode] Expected correct worker-1 initialization but failed with: '%s'\n", err.Error())
+	}
 	Node.Socket.Close()
 
 	// Correct storage initialization.
 	Node, err = InitNode(Config, false, "", true)
+	if err != nil {
+		t.Fatalf("[imap.TestInitNode] Expected correct storage initialization but failed with: '%s'\n", err.Error())
+	}
 	Node.Socket.Close()
 }
 

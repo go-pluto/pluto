@@ -3,9 +3,13 @@ IP = "127.0.0.1"
 Port = "19933"
 AuthAdapter = "AuthFile"
 
-    [Distributor.TLS]
-    CertLoc = "../private/distributor-cert.pem"
-    KeyLoc = "../private/distributor-key.pem"
+    [Distributor.PublicTLS]
+    CertLoc = "../private/public-distributor-cert.pem"
+    KeyLoc = "../private/public-distributor-key.pem"
+
+    [Distributor.InternalTLS]
+    CertLoc = "../private/internal-distributor-cert.pem"
+    KeyLoc = "../private/internal-distributor-key.pem"
 
     [Distributor.IMAP]
     Greeting = "Pluto ready."
@@ -24,8 +28,8 @@ AuthAdapter = "AuthFile"
     UserEnd = 10
 
         [Workers.worker-1.TLS]
-        CertLoc = "../private/worker-1-cert.pem"
-        KeyLoc = "../private/worker-1-key.pem"
+        CertLoc = "../private/internal-worker-1-cert.pem"
+        KeyLoc = "../private/internal-worker-1-key.pem"
 
     [Workers.worker-2]
     IP = "127.0.0.1"
@@ -34,8 +38,8 @@ AuthAdapter = "AuthFile"
     UserEnd = 20
 
         [Workers.worker-2.TLS]
-        CertLoc = "../private/worker-2-cert.pem"
-        KeyLoc = "../private/worker-2-key.pem"
+        CertLoc = "../private/internal-worker-2-cert.pem"
+        KeyLoc = "../private/internal-worker-2-key.pem"
 
     [Workers.worker-3]
     IP = "127.0.0.1"
@@ -44,8 +48,8 @@ AuthAdapter = "AuthFile"
     UserEnd = 30
 
         [Workers.worker-3.TLS]
-        CertLoc = "../private/worker-3-cert.pem"
-        KeyLoc = "../private/worker-3-key.pem"
+        CertLoc = "../private/internal-worker-3-cert.pem"
+        KeyLoc = "../private/internal-worker-3-key.pem"
 
 
 [Storage]
@@ -53,5 +57,5 @@ IP = "127.0.0.1"
 Port = "21000"
 
     [Storage.TLS]
-    CertLoc = "../private/storage-cert.pem"
-    KeyLoc = "../private/storage-key.pem"
+    CertLoc = "../private/internal-storage-cert.pem"
+    KeyLoc = "../private/internal-storage-key.pem"

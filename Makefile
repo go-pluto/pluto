@@ -1,4 +1,4 @@
-.PHONY: all clean deps build certs test-certs test
+.PHONY: all clean deps build pki test-certs test
 
 # Set this to your number of configured worker
 # nodes, see your main configuration file.
@@ -11,7 +11,7 @@ all: deps build
 clean:
 	go clean -i ./...
 	find . -name \*.out -type f -delete
-	rm -f generate_cert generate_cert.go
+	rm -f generate_pki
 
 deps:
 	go get -t ./...
@@ -19,31 +19,19 @@ deps:
 build:
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'
 
-certs:
-	mkdir private
+pki:
+	if [ ! -d "private" ]; then mkdir private; fi
 	chmod 0700 private
-	wget https://raw.githubusercontent.com/golang/go/master/src/crypto/tls/generate_cert.go
-	go build generate_cert.go
-	./generate_cert -ca -duration 2160h -host localhost,127.0.0.1 -rsa-bits 8192
-	mv cert.pem private/distributor-cert.pem && mv key.pem private/distributor-key.pem
-	@for ID in `seq 1 ${NUMBER_OF_WORKER_NODES}`; do ./generate_cert -ca -duration 2160h -host localhost,127.0.0.1 -rsa-bits 8192; mv cert.pem private/worker-$$ID-cert.pem && mv key.pem private/worker-$$ID-key.pem; done
-	./generate_cert -ca -duration 2160h -host localhost,127.0.0.1 -rsa-bits 8192
-	mv cert.pem private/storage-cert.pem && mv key.pem private/storage-key.pem
-	go clean
-	rm -f generate_cert.go
+	go build crypto/generate_pki.go
+	./generate_pki -path-prefix ./
+	rm generate_pki
 
 test-certs:
-	mkdir private
+	if [ ! -d "private" ]; then mkdir private; fi
 	chmod 0700 private
-	wget https://raw.githubusercontent.com/golang/go/master/src/crypto/tls/generate_cert.go
-	go build generate_cert.go
-	./generate_cert -ca -duration 1h -host localhost,127.0.0.1 -rsa-bits 1024
-	mv cert.pem private/distributor-cert.pem && mv key.pem private/distributor-key.pem
-	@for ID in `seq 1 ${NUMBER_OF_WORKER_NODES}`; do ./generate_cert -ca -duration 1h -host localhost,127.0.0.1 -rsa-bits 1024; mv cert.pem private/worker-$$ID-cert.pem && mv key.pem private/worker-$$ID-key.pem; done
-	./generate_cert -ca -duration 1h -host localhost,127.0.0.1 -rsa-bits 1024
-	mv cert.pem private/storage-cert.pem && mv key.pem private/storage-key.pem
-	go clean
-	rm -f generate_cert.go
+	go build crypto/generate_pki.go
+	./generate_pki -path-prefix ./ -rsa-bits 1024
+	rm generate_pki
 
 test:
 	echo "mode: atomic" > coverage.out;

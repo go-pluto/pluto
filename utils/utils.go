@@ -55,11 +55,11 @@ func CreateTestEnv() (*config.Config, *tls.Config) {
 	// Create new certificate pool to hold distributor certificate.
 	rootCerts := x509.NewCertPool()
 
-	// Read distributor certificate specified in pluto's main
-	// config file into memory.
-	rootCert, err := ioutil.ReadFile(Config.Distributor.TLS.CertLoc)
+	// Read distributor's public certificate specified in
+	// pluto's main config file into memory.
+	rootCert, err := ioutil.ReadFile(Config.Distributor.PublicTLS.CertLoc)
 	if err != nil {
-		log.Fatalf("[imap.testEnv] Reading distributor certificate into memory failed with: %s\n", err.Error())
+		log.Fatalf("[imap.testEnv] Reading distributor's public certificate into memory failed with: %s\n", err.Error())
 	}
 
 	// Append certificate in PEM form to pool.

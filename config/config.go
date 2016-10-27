@@ -23,7 +23,8 @@ type Distributor struct {
 	IP             string
 	Port           string
 	AuthAdapter    string
-	TLS            TLS
+	PublicTLS      TLS
+	InternalTLS    TLS
 	IMAP           IMAP
 	AuthFile       *AuthFile
 	AuthPostgreSQL *AuthPostgreSQL

@@ -3,9 +3,19 @@ IP = "127.0.0.1"
 Port = "19933"
 AuthAdapter = "AuthPostgreSQL"
 
-    [Distributor.TLS]
-    CertLoc = "/very/complicated/and/long/path/to/your/distributor-cert.pem"
-    KeyLoc = "/very/complicated/and/long/path/to/your/distributor-key.pem"
+    [Distributor.PublicTLS]
+    # Use these locations to provide your externally
+    # signed certificates so that normal clients will
+    # be able to verify them via their system's ca list.
+    CertLoc = "/very/complicated/and/long/path/to/your/public-distributor-cert.pem"
+    KeyLoc = "/very/complicated/and/long/path/to/your/public-distributor-key.pem"
+
+    [Distributor.InternalTLS]
+    # Use these locations to specify the paths to pluto's
+    # internally-only used certificates built with the
+    # script dedicated to setting up the PKI.
+    CertLoc = "/very/complicated/and/long/path/to/your/internal-distributor-cert.pem"
+    KeyLoc = "/very/complicated/and/long/path/to/your/internal-distributor-key.pem"
 
     [Distributor.IMAP]
     Greeting = "Pluto ready."
@@ -35,8 +45,8 @@ AuthAdapter = "AuthPostgreSQL"
     UserEnd = 10
 
         [Workers.worker-1.TLS]
-        CertLoc = "/very/complicated/and/long/path/to/your/worker-1-cert.pem"
-        KeyLoc = "/very/complicated/and/long/path/to/your/worker-1-key.pem"
+        CertLoc = "/very/complicated/and/long/path/to/your/internal-worker-1-cert.pem"
+        KeyLoc = "/very/complicated/and/long/path/to/your/internal-worker-1-key.pem"
 
     [Workers.worker-2]
     IP = "127.0.0.1"
@@ -45,8 +55,8 @@ AuthAdapter = "AuthPostgreSQL"
     UserEnd = 20
 
         [Workers.worker-2.TLS]
-        CertLoc = "/very/complicated/and/long/path/to/your/worker-2-cert.pem"
-        KeyLoc = "/very/complicated/and/long/path/to/your/worker-2-key.pem"
+        CertLoc = "/very/complicated/and/long/path/to/your/internal-worker-2-cert.pem"
+        KeyLoc = "/very/complicated/and/long/path/to/your/internal-worker-2-key.pem"
 
     [Workers.worker-3]
     IP = "127.0.0.1"
@@ -55,8 +65,8 @@ AuthAdapter = "AuthPostgreSQL"
     UserEnd = 30
 
         [Workers.worker-3.TLS]
-        CertLoc = "/very/complicated/and/long/path/to/your/worker-3-cert.pem"
-        KeyLoc = "/very/complicated/and/long/path/to/your/worker-3-key.pem"
+        CertLoc = "/very/complicated/and/long/path/to/your/internal-worker-3-cert.pem"
+        KeyLoc = "/very/complicated/and/long/path/to/your/internal-worker-3-key.pem"
 
 
 [Storage]
@@ -64,5 +74,5 @@ IP = "127.0.0.1"
 Port = "21000"
 
     [Storage.TLS]
-    CertLoc = "/very/complicated/and/long/path/to/your/storage-cert.pem"
-    KeyLoc = "/very/complicated/and/long/path/to/your/storage-key.pem"
+    CertLoc = "/very/complicated/and/long/path/to/your/internal-storage-cert.pem"
+    KeyLoc = "/very/complicated/and/long/path/to/your/internal-storage-key.pem"
