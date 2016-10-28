@@ -55,7 +55,10 @@ var logoutTests = []struct {
 func TestCapability(t *testing.T) {
 
 	// Create needed test environment.
-	Config, TLSConfig := utils.CreateTestEnv()
+	Config, TLSConfig, err := utils.CreateTestEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Initialize a distributor node.
 	Node, err := imap.InitNode(Config, true, "", false)
@@ -137,7 +140,10 @@ func TestCapability(t *testing.T) {
 func TestLogin(t *testing.T) {
 
 	// Create needed test environment.
-	Config, TLSConfig := utils.CreateTestEnv()
+	Config, TLSConfig, err := utils.CreateTestEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Initialize a distributor node.
 	Node, err := imap.InitNode(Config, true, "", false)
@@ -203,7 +209,10 @@ func TestLogin(t *testing.T) {
 func TestLogout(t *testing.T) {
 
 	// Create needed test environment.
-	Config, TLSConfig := utils.CreateTestEnv()
+	Config, TLSConfig, err := utils.CreateTestEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Initialize a distributor node.
 	Node, err := imap.InitNode(Config, true, "", false)

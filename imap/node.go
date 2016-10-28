@@ -10,6 +10,7 @@ import (
 
 	"github.com/numbleroot/pluto/auth"
 	"github.com/numbleroot/pluto/config"
+	"github.com/numbleroot/pluto/crypto"
 )
 
 // Constants
@@ -31,6 +32,7 @@ type Node struct {
 	Type        Type
 	Socket      net.Listener
 	AuthAdapter auth.PlainAuthenticator
+	Connections map[string]*tls.Conn
 	Config      *config.Config
 }
 
@@ -42,10 +44,6 @@ type Node struct {
 func InitNode(config *config.Config, distributor bool, worker string, storage bool) (*Node, error) {
 
 	var err error
-	var certPath string
-	var keyPath string
-	var ip string
-	var port string
 
 	node := new(Node)
 
@@ -59,32 +57,11 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 		return nil, fmt.Errorf("[imap.InitNode] One node can not be of multiple types, please provide exclusively '-distributor' or '-worker WORKER-ID' or '-storage'.\n")
 	}
 
-	// TLS config is taken from the excellent blog post
-	// "Achieving a Perfect SSL Labs Score with Go":
-	// https://blog.bracelab.com/achieving-perfect-ssl-labs-score-with-go
-	tlsConfig := &tls.Config{
-		Certificates:             make([]tls.Certificate, 1),
-		MinVersion:               tls.VersionTLS12,
-		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-		PreferServerCipherSuites: true,
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-		},
-	}
-
 	if distributor {
 
 		// Set struct type to distributor.
 		node.Type = DISTRIBUTOR
-
-		// Set config values to type specific values.
-		certPath = config.Distributor.PublicTLS.CertLoc
-		keyPath = config.Distributor.PublicTLS.KeyLoc
-		ip = config.Distributor.IP
-		port = config.Distributor.Port
+		node.Connections = make(map[string]*tls.Conn)
 
 		// As the distributor is responsible for the authentication
 		// of incoming requests, connect to provided auth mechanism.
@@ -104,6 +81,40 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 			}
 		}
 
+		// Load internal TLS config.
+		internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Distributor.InternalTLS.CertLoc, config.Distributor.InternalTLS.KeyLoc, config.RootCertLoc)
+		if err != nil {
+			return nil, err
+		}
+
+		// Connect to all worker nodes in order to already
+		// have established TLS connections later on.
+		for name, worker := range config.Workers {
+
+			// Try to connect to worker node with internal TLS config.
+			c, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", worker.IP, worker.Port), internalTLSConfig)
+			if err != nil {
+				return nil, fmt.Errorf("[imap.InitNode] Node %s could not connect to %s because of: %s\n", node.Type.String(), name, err.Error())
+			}
+
+			// Save connection for later use.
+			node.Connections[name] = c
+		}
+
+		// Load public TLS config based on config values.
+		publicTLSConfig, err := crypto.NewPublicTLSConfig(config.Distributor.PublicTLS.CertLoc, config.Distributor.PublicTLS.KeyLoc)
+		if err != nil {
+			return nil, err
+		}
+
+		// Start to listen for incoming public connections on defined IP and port.
+		node.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Distributor.IP, config.Distributor.Port), publicTLSConfig)
+		if err != nil {
+			return nil, fmt.Errorf("[imap.InitNode] Listening for public TLS connections as %s failed with: %s\n", node.Type.String(), err.Error())
+		}
+
+		log.Printf("[imap.InitNode] Listening as %s node for incoming IMAP requests on %s.\n", node.Type.String(), node.Socket.Addr())
+
 	} else if worker != "" {
 
 		// Check if supplied worker ID actually is configured.
@@ -121,43 +132,51 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 
 		// Set struct type to worker.
 		node.Type = WORKER
+		node.Connections = make(map[string]*tls.Conn)
 
-		// Set config values to type specific values.
-		certPath = config.Workers[worker].TLS.CertLoc
-		keyPath = config.Workers[worker].TLS.KeyLoc
-		ip = config.Workers[worker].IP
-		port = config.Workers[worker].Port
+		// Load internal TLS config.
+		internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Workers[worker].TLS.CertLoc, config.Workers[worker].TLS.KeyLoc, config.RootCertLoc)
+		if err != nil {
+			return nil, err
+		}
+
+		// Try to connect to storage node with internal TLS config.
+		c, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.Port), internalTLSConfig)
+		if err != nil {
+			return nil, fmt.Errorf("[imap.InitNode] Node %s could not connect to STORAGE because of: %s\n", node.Type.String(), err.Error())
+		}
+
+		// Save connection for later use.
+		node.Connections["storage"] = c
+
+		// Start to listen for incoming internal connections on defined IP and port.
+		node.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker].IP, config.Workers[worker].Port), internalTLSConfig)
+		if err != nil {
+			return nil, fmt.Errorf("[imap.InitNode] Listening for public TLS connections as %s failed with: %s\n", node.Type.String(), err.Error())
+		}
+
+		log.Printf("[imap.InitNode] Listening as %s node for incoming IMAP requests on %s.\n", node.Type.String(), node.Socket.Addr())
 
 	} else if storage {
 
 		// Set struct type to storage.
 		node.Type = STORAGE
 
-		// Set config values to type specific values.
-		certPath = config.Storage.TLS.CertLoc
-		keyPath = config.Storage.TLS.KeyLoc
-		ip = config.Storage.IP
-		port = config.Storage.Port
+		// Load internal TLS config.
+		internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Storage.TLS.CertLoc, config.Storage.TLS.KeyLoc, config.RootCertLoc)
+		if err != nil {
+			return nil, err
+		}
+
+		// Start to listen for incoming internal connections on defined IP and port.
+		node.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.Port), internalTLSConfig)
+		if err != nil {
+			return nil, fmt.Errorf("[imap.InitNode] Listening for public TLS connections as %s failed with: %s\n", node.Type.String(), err.Error())
+		}
+
+		log.Printf("[imap.InitNode] Listening as %s node for incoming IMAP requests on %s.\n", node.Type.String(), node.Socket.Addr())
 
 	}
-
-	// Put in supplied TLS cert and key.
-	tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(certPath, keyPath)
-	if err != nil {
-		return nil, fmt.Errorf("[imap.InitNode] Failed to load %s TLS cert and key: %s\n", node.Type.String(), err.Error())
-	}
-
-	// Build Common Name (CN) and Subject Alternate
-	// Name (SAN) from tlsConfig.Certificates.
-	tlsConfig.BuildNameToCertificate()
-
-	// Start to listen on defined IP and port.
-	node.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", ip, port), tlsConfig)
-	if err != nil {
-		return nil, fmt.Errorf("[imap.InitNode] Listening for TLS connections failed with: %s\n", err.Error())
-	}
-
-	log.Printf("[imap.InitNode] Listening as %s node for incoming IMAP requests on %s.\n", node.Type.String(), node.Socket.Addr())
 
 	// Set remaining general elements.
 	node.Config = config
@@ -194,6 +213,9 @@ func (node *Node) HandleRequest(conn net.Conn) {
 		// Dispatch to authenticated state.
 		c.Transition(node, AUTHENTICATED)
 
+	} else if node.Type == STORAGE {
+
+		c.Transition(node, NOT_AUTHENTICATED)
 	}
 }
 

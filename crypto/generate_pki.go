@@ -1,3 +1,5 @@
+// +build ignore
+
 // Go script to generate PKI infrastructure for pluto.
 // Heavily inspired by:
 // - https://raw.githubusercontent.com/golang/go/master/src/crypto/tls/generate_cert.go
@@ -64,7 +66,7 @@ func BootstrapCertTempl(nBef time.Time, nAft time.Time) (*x509.Certificate, erro
 // CreateNodeCert performs all needed actions in order
 // to obtain a node's key pair and certificate signed by
 // the root certificate.
-func CreateNodeCert(pathPrefix string, fileName string, rsaBits int, nBef time.Time, nAft time.Time, ipAdresses []string, rootCert *x509.Certificate) error {
+func CreateNodeCert(pathPrefix string, fileName string, rsaBits int, nBef time.Time, nAft time.Time, ipAdresses []string, rootCert *x509.Certificate, rootKey *rsa.PrivateKey) error {
 
 	log.Printf("[crypto.GeneratePKI] === Generating for %s ===\n", fileName)
 
@@ -92,7 +94,7 @@ func CreateNodeCert(pathPrefix string, fileName string, rsaBits int, nBef time.T
 	}
 
 	// Create the actual node certificate.
-	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	certDER, err := x509.CreateCertificate(rand.Reader, template, rootCert, &key.PublicKey, rootKey)
 	if err != nil {
 		return fmt.Errorf("[crypto.GeneratePKI] Failed to create DER byte representation of certificate for %s: %s\n", fileName, err.Error())
 	}
@@ -162,7 +164,7 @@ func main() {
 	// Load pluto config.
 	config, err := config.LoadConfig(fmt.Sprintf("%s%s", *pathPrefix, *plutoConfig))
 	if err != nil {
-		log.Fatalf("[crypto.GeneratePKI] Failed to load config file with: %s\n", err.Error())
+		log.Fatal(err)
 	}
 
 	log.Println("[crypto.GeneratePKI] === Generating root certificate ===")
@@ -230,7 +232,7 @@ func main() {
 	log.Println("[crypto.GeneratePKI] === Done generating root certificate ===\n")
 
 	// Generate distributor's internal key and signed certificate.
-	err = CreateNodeCert(*pathPrefix, "internal-distributor", *rsaBits, notBefore, notAfter, []string{config.Distributor.IP}, rootCert)
+	err = CreateNodeCert(*pathPrefix, "internal-distributor", *rsaBits, notBefore, notAfter, []string{config.Distributor.IP}, rootCert, rootKey)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -239,7 +241,7 @@ func main() {
 
 		// For each worker node, generate an internal key pair
 		// and a signed certificate.
-		err = CreateNodeCert(*pathPrefix, fmt.Sprintf("internal-%s", name), *rsaBits, notBefore, notAfter, []string{worker.IP}, rootCert)
+		err = CreateNodeCert(*pathPrefix, fmt.Sprintf("internal-%s", name), *rsaBits, notBefore, notAfter, []string{worker.IP}, rootCert, rootKey)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -247,7 +249,7 @@ func main() {
 
 	// Generate the storage's internal key pair
 	// and signed certificate.
-	err = CreateNodeCert(*pathPrefix, "internal-storage", *rsaBits, notBefore, notAfter, []string{config.Storage.IP}, rootCert)
+	err = CreateNodeCert(*pathPrefix, "internal-storage", *rsaBits, notBefore, notAfter, []string{config.Storage.IP}, rootCert, rootKey)
 	if err != nil {
 		log.Fatal(err)
 	}

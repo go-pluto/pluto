@@ -11,6 +11,7 @@ import (
 // Config holds all information parsed from
 // supplied config file.
 type Config struct {
+	RootCertLoc string
 	Distributor Distributor
 	Workers     map[string]Worker
 	Storage     Storage

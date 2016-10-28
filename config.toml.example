@@ -1,3 +1,8 @@
+# Point to the root certificate that was used
+# by the PKI generation script to sign all other
+# node certificates.
+RootCertLoc = "/very/complicated/and/long/path/to/your/root-cert.pem"
+
 [Distributor]
 IP = "127.0.0.1"
 Port = "19933"

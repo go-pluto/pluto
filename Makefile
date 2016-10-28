@@ -1,4 +1,4 @@
-.PHONY: all clean deps build pki test-certs test
+.PHONY: all clean deps build pki test-pki test
 
 # Set this to your number of configured worker
 # nodes, see your main configuration file.
@@ -11,7 +11,7 @@ all: deps build
 clean:
 	go clean -i ./...
 	find . -name \*.out -type f -delete
-	rm -f generate_pki
+	rm -f generate_pki generate_cert generate_cert.go
 
 deps:
 	go get -t ./...
@@ -26,12 +26,22 @@ pki:
 	./generate_pki -path-prefix ./
 	rm generate_pki
 
-test-certs:
+test-pki:
 	if [ ! -d "private" ]; then mkdir private; fi
 	chmod 0700 private
 	go build crypto/generate_pki.go
-	./generate_pki -path-prefix ./ -rsa-bits 1024
+	./generate_pki -path-prefix ./ -pluto-config imap/test-config.toml -rsa-bits 1024
 	rm generate_pki
+
+test-public:
+	if [ ! -d "private" ]; then mkdir private; fi
+	chmod 0700 private
+	wget https://raw.githubusercontent.com/golang/go/master/src/crypto/tls/generate_cert.go
+	go build generate_cert.go
+	./generate_cert -duration 2160h -host localhost,127.0.0.1,::1 -rsa-bits 1024
+	mv cert.pem private/public-distributor-cert.pem && mv key.pem private/public-distributor-key.pem
+	go clean
+	rm -f generate_cert.go
 
 test:
 	echo "mode: atomic" > coverage.out;

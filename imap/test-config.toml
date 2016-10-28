@@ -1,3 +1,5 @@
+RootCertLoc = "../private/root-cert.pem"
+
 [Distributor]
 IP = "127.0.0.1"
 Port = "19933"
@@ -30,26 +32,6 @@ AuthAdapter = "AuthFile"
         [Workers.worker-1.TLS]
         CertLoc = "../private/internal-worker-1-cert.pem"
         KeyLoc = "../private/internal-worker-1-key.pem"
-
-    [Workers.worker-2]
-    IP = "127.0.0.1"
-    Port = "20002"
-    UserStart = 11
-    UserEnd = 20
-
-        [Workers.worker-2.TLS]
-        CertLoc = "../private/internal-worker-2-cert.pem"
-        KeyLoc = "../private/internal-worker-2-key.pem"
-
-    [Workers.worker-3]
-    IP = "127.0.0.1"
-    Port = "20003"
-    UserStart = 21
-    UserEnd = 30
-
-        [Workers.worker-3.TLS]
-        CertLoc = "../private/internal-worker-3-cert.pem"
-        KeyLoc = "../private/internal-worker-3-key.pem"
 
 
 [Storage]

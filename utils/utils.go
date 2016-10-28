@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"log"
+	"fmt"
 	"time"
 
 	"crypto/tls"
@@ -10,6 +10,7 @@ import (
 	"math/rand"
 
 	"github.com/numbleroot/pluto/config"
+	"github.com/numbleroot/pluto/crypto"
 )
 
 // Constants
@@ -26,53 +27,40 @@ const (
 // CreateTestEnv initializes the needed environment
 // for performing various tests against parts of
 // the pluto system.
-func CreateTestEnv() (*config.Config, *tls.Config) {
+func CreateTestEnv() (*config.Config, *tls.Config, error) {
 
 	var err error
-	var Config *config.Config
-	var TLSConfig *tls.Config
 
 	// Read configuration from file.
-	Config, err = config.LoadConfig("test-config.toml")
+	config, err := config.LoadConfig("test-config.toml")
 	if err != nil {
-		log.Fatalf("[imap.testEnv] Failed to load config file with: '%s'\n", err.Error())
+		return nil, nil, err
 	}
 
-	// Read in distributor certificate and create x509 cert pool.
-	TLSConfig = &tls.Config{
-		MinVersion:               tls.VersionTLS12,
-		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-		InsecureSkipVerify:       false,
-		PreferServerCipherSuites: true,
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-		},
-	}
-
-	// Create new certificate pool to hold distributor certificate.
-	rootCerts := x509.NewCertPool()
-
-	// Read distributor's public certificate specified in
-	// pluto's main config file into memory.
-	rootCert, err := ioutil.ReadFile(Config.Distributor.PublicTLS.CertLoc)
+	// Create public TLS config (distributor).
+	tlsConfig, err := crypto.NewPublicTLSConfig(config.Distributor.PublicTLS.CertLoc, config.Distributor.PublicTLS.KeyLoc)
 	if err != nil {
-		log.Fatalf("[imap.testEnv] Reading distributor's public certificate into memory failed with: %s\n", err.Error())
+		return nil, nil, err
 	}
 
-	// Append certificate in PEM form to pool.
-	ok := rootCerts.AppendCertsFromPEM(rootCert)
-	if !ok {
-		log.Fatalf("[imap.testEnv] Failed to append certificate to pool: %s\n", err.Error())
+	// For tests, we currently need to build a custom
+	// x509 cert pool to accept the self-signed public
+	// distributor certificate.
+	tlsConfig.RootCAs = x509.NewCertPool()
+
+	// Read distributor's public certificate in PEM format
+	// specified in pluto's main config file into memory.
+	rootCert, err := ioutil.ReadFile(config.Distributor.PublicTLS.CertLoc)
+	if err != nil {
+		return nil, nil, fmt.Errorf("[utils.CreateTestEnv] Reading distributor's public certificate into memory failed with: %s\n", err.Error())
 	}
 
-	// Now make created pool the root pool
-	// of above global TLS config.
-	TLSConfig.RootCAs = rootCerts
+	// Append certificate to test client's root CA pool.
+	if ok := tlsConfig.RootCAs.AppendCertsFromPEM(rootCert); !ok {
+		return nil, nil, fmt.Errorf("[utils.CreateTestEnv] Failed to append certificate to pool: %s\n", err.Error())
+	}
 
-	return Config, TLSConfig
+	return config, tlsConfig, nil
 }
 
 // GenerateRandomString returns a string of random

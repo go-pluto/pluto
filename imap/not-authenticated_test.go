@@ -30,7 +30,10 @@ var starttlsTests = []struct {
 func TestStartTLS(t *testing.T) {
 
 	// Create needed test environment.
-	Config, TLSConfig := utils.CreateTestEnv()
+	Config, TLSConfig, err := utils.CreateTestEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Initialize a distributor node.
 	Node, err := imap.InitNode(Config, true, "", false)
