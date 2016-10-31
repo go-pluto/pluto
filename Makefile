@@ -1,9 +1,5 @@
 .PHONY: all clean deps build pki test-pki test
 
-# Set this to your number of configured worker
-# nodes, see your main configuration file.
-NUMBER_OF_WORKER_NODES=3
-
 PACKAGES = $(shell go list ./... | grep -v /vendor/)
 
 all: deps build
