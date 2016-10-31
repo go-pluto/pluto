@@ -3,7 +3,6 @@ package imap
 import (
 	"log"
 	"testing"
-	"time"
 
 	"github.com/numbleroot/pluto/utils"
 )
@@ -15,6 +14,9 @@ import (
 func TestInitNode(t *testing.T) {
 
 	var err error
+
+	// Synchronization channel.
+	ready := make(chan bool)
 
 	// Create needed test environment.
 	Config, _, err := utils.CreateTestEnv()
@@ -58,33 +60,59 @@ func TestInitNode(t *testing.T) {
 		t.Fatalf("[imap.TestInitNode] Expected '%s' but received '%s'\n", "[imap.InitNode] Specified worker ID does not exist in config file. Please provide a valid one, for example 'worker-1'.\n", err.Error())
 	}
 
-	go func() {
+	go func(ready chan bool) {
 
 		// Correct storage initialization.
-		_, errStorage := InitNode(Config, false, "", true)
+		nodeStorage, errStorage := InitNode(Config, false, "", true)
 		if errStorage != nil {
 			t.Fatalf("[imap.TestInitNode] Expected correct storage initialization but failed with: '%s'\n", errStorage.Error())
 		}
-	}()
 
-	// Wait shortly for node to spawn.
-	time.Sleep(500 * time.Millisecond)
+		// Signal readiness to next goroutine.
+		ready <- true
 
-	go func() {
+		// Run the storage node.
+		errStorage = nodeStorage.RunNode()
+		if errStorage != nil {
+			t.Fatalf("[imap.TestInitNode] Expected correct storage run but failed with: '%s'\n", errStorage.Error())
+		}
+
+		// Close the socket.
+		nodeStorage.Socket.Close()
+	}(ready)
+
+	// Wait for storage node to have started.
+	<-ready
+
+	go func(ready chan bool) {
 
 		// Correct worker initialization.
-		_, errWorker := InitNode(Config, false, "worker-1", false)
+		nodeWorker, errWorker := InitNode(Config, false, "worker-1", false)
 		if errWorker != nil {
 			t.Fatalf("[imap.TestInitNode] Expected correct worker-1 initialization but failed with: '%s'\n", errWorker.Error())
 		}
-	}()
 
-	// Wait shortly for nodes to spawn.
-	time.Sleep(500 * time.Millisecond)
+		// Signal readiness to next goroutine.
+		ready <- true
+
+		// Run the worker.
+		errWorker = nodeWorker.RunNode()
+		if errWorker != nil {
+			t.Fatalf("[imap.TestInitNode] Expected correct worker-1 run but failed with: '%s'\n", errWorker.Error())
+		}
+
+		// Close the socket.
+		nodeWorker.Socket.Close()
+	}(ready)
+
+	// Wait for worker nodes to have started.
+	<-ready
 
 	// Correct distributor initialization.
-	_, errDistributor := InitNode(Config, true, "", false)
+	nodeDistributor, errDistributor := InitNode(Config, true, "", false)
 	if errDistributor != nil {
 		t.Fatalf("[imap.TestInitNode] Expected correct distributor initialization but failed with: '%s'\n", errDistributor.Error())
 	}
+
+	nodeDistributor.Socket.Close()
 }

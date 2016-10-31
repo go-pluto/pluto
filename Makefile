@@ -38,7 +38,7 @@ test-public:
 	chmod 0700 private
 	wget https://raw.githubusercontent.com/golang/go/master/src/crypto/tls/generate_cert.go
 	go build generate_cert.go
-	./generate_cert -duration 2160h -host localhost,127.0.0.1,::1 -rsa-bits 1024
+	./generate_cert -ca -duration 2160h -host localhost,127.0.0.1,::1 -rsa-bits 1024
 	mv cert.pem private/public-distributor-cert.pem && mv key.pem private/public-distributor-key.pem
 	go clean
 	rm -f generate_cert.go

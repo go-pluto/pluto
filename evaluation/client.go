@@ -3,39 +3,48 @@ package main
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/emersion/go-imap/client"
+	"github.com/numbleroot/pluto/utils"
 )
 
 func main() {
+
+	var err error
+	var c *client.Client
+
+	// Create environment we need in order to test
+	// against public part of pluto.
+	_, tlsConfig, err := utils.CreateTestEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	mailHost := flag.String("host", "", "name or ip address (required)")
 	mailPort := flag.Int("port", 0, "port (required)")
 	mailUser := flag.String("user", "", "username (required)")
 	mailPassword := flag.String("pass", "", "password (required)")
 	mailOutput := flag.String("output", "", "output file (required)")
-	// Optional.
+
+	// Following two are optional.
 	mailSSL := flag.Bool("ssl", false, "boolean")
-	// Optional.
 	mailMessages := flag.Int("messages", 100, "number of messages")
 
 	flag.Parse()
 
 	if len(*mailHost) == 0 || len(*mailUser) == 0 || len(*mailOutput) == 0 || len(*mailPassword) == 0 || *mailPort == 0 {
-		log.Fatal("not enough arguments, try -h")
+		log.Fatal("Not enough arguments, see -h. Exiting.")
 	}
 
 	log.Println("Connecting to server...")
 
-	var c *client.Client
-	var err error
-
 	if *mailSSL {
-		c, err = client.DialTLS(*mailHost+":"+strconv.Itoa(*mailPort), nil)
+		c, err = client.DialTLS(fmt.Sprintf("%s:%d", *mailHost, *mailPort), tlsConfig)
 	} else {
 		c, err = client.Dial(*mailHost + ":" + strconv.Itoa(*mailPort))
 	}

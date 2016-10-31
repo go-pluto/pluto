@@ -1,0 +1,43 @@
+RootCertLoc = "../private/root-cert.pem"
+
+[Distributor]
+IP = "127.0.0.1"
+Port = "19933"
+AuthAdapter = "AuthFile"
+
+    [Distributor.PublicTLS]
+    CertLoc = "../private/public-distributor-cert.pem"
+    KeyLoc = "../private/public-distributor-key.pem"
+
+    [Distributor.InternalTLS]
+    CertLoc = "../private/internal-distributor-cert.pem"
+    KeyLoc = "../private/internal-distributor-key.pem"
+
+    [Distributor.IMAP]
+    Greeting = "Pluto ready."
+
+    [Distributor.AuthFile]
+    File = "test-users.txt"
+    Separator = ";"
+
+
+[Workers]
+
+    [Workers.worker-1]
+    IP = "127.0.0.1"
+    Port = "20001"
+    UserStart = 1
+    UserEnd = 10
+
+        [Workers.worker-1.TLS]
+        CertLoc = "../private/internal-worker-1-cert.pem"
+        KeyLoc = "../private/internal-worker-1-key.pem"
+
+
+[Storage]
+IP = "127.0.0.1"
+Port = "21000"
+
+    [Storage.TLS]
+    CertLoc = "../private/internal-storage-cert.pem"
+    KeyLoc = "../private/internal-storage-key.pem"
