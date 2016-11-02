@@ -2,13 +2,16 @@ package imap
 
 import (
 	"fmt"
+	"log"
+
+	"github.com/numbleroot/pluto/conn"
 )
 
 // Functions
 
 // StartTLS states on IMAP STARTTLS command
 // that current connection is already encrypted.
-func (node *Node) StartTLS(c *Connection, req *Request) (success bool) {
+func (node *Node) StartTLS(c *conn.Connection, req *Request) bool {
 
 	if len(req.Payload) > 0 {
 
@@ -16,7 +19,7 @@ func (node *Node) StartTLS(c *Connection, req *Request) (success bool) {
 		// this is a client error. Return BAD statement.
 		err := c.Send(fmt.Sprintf("%s BAD Command STARTTLS was sent with extra parameters", req.Tag))
 		if err != nil {
-			node.Error(c, "Encountered send error", err)
+			c.Error("Encountered send error", err)
 			return false
 		}
 
@@ -27,7 +30,7 @@ func (node *Node) StartTLS(c *Connection, req *Request) (success bool) {
 	// tell client that a TLS session is active.
 	err := c.Send(fmt.Sprintf("%s BAD TLS is already active", req.Tag))
 	if err != nil {
-		node.Error(c, "Encountered send error", err)
+		c.Error("Encountered send error", err)
 		return false
 	}
 
@@ -38,21 +41,39 @@ func (node *Node) StartTLS(c *Connection, req *Request) (success bool) {
 // requests targeted at the IMAP not authenticated state.
 // It parses incoming requests and executes command
 // specific handlers matching the parsed data.
-func (node *Node) AcceptNotAuthenticated(c *Connection) {
+func (node *Node) AcceptNotAuthenticated(c *conn.Connection) {
 
-	// fmt.Println("Incoming NOT_AUTHENTICATED!")
+	// Connections in this state are only possible against
+	// a node of type DISTRIBUTOR, none else.
+	if (node.Type == WORKER) || (node.Type == STORAGE) {
+		log.Println("[imap.AcceptNotAuthenticated] WORKER or STORAGE node tried to run this function. Not allowed.")
+		return
+	}
+
+	// Handle traffic as write-through if responsible
+	// worker field is not empty.
+	if c.Worker != nil {
+
+		err := node.Proxy(c)
+		if err != nil {
+			c.Error("NOT_AUTHENTICATED Proxy mode error", err)
+			return
+		}
+
+		return
+	}
 
 	// Set loop end condition initially to this state.
-	nextState := NOT_AUTHENTICATED
+	nextState := conn.NOT_AUTHENTICATED
 
 	// As long as no transition to next consecutive IMAP state
 	// took place, wait in loop for incoming requests.
-	for nextState == NOT_AUTHENTICATED {
+	for nextState == conn.NOT_AUTHENTICATED {
 
 		// Receive incoming client command.
 		rawReq, err := c.Receive()
 		if err != nil {
-			node.Error(c, "Encountered receive error", err)
+			c.Error("Encountered receive error", err)
 			return
 		}
 
@@ -63,7 +84,7 @@ func (node *Node) AcceptNotAuthenticated(c *Connection) {
 			// Signal error to client.
 			err := c.Send(err.Error())
 			if err != nil {
-				node.Error(c, "Encountered send error", err)
+				c.Error("Encountered send error", err)
 				return
 			}
 
@@ -80,13 +101,13 @@ func (node *Node) AcceptNotAuthenticated(c *Connection) {
 			if ok := node.Login(c, req); ok {
 				// If LOGIN was successful, we switch
 				// to AUTHENTICATED state.
-				nextState = AUTHENTICATED
+				nextState = conn.AUTHENTICATED
 			}
 
 		case "LOGOUT":
 			if ok := node.Logout(c, req); ok {
 				// After an LOGOUT, return via LOGOUT state.
-				nextState = LOGOUT
+				nextState = conn.LOGOUT
 			}
 
 		case "STARTTLS":
@@ -96,7 +117,7 @@ func (node *Node) AcceptNotAuthenticated(c *Connection) {
 			// Client sent inappropriate command. Signal tagged error.
 			err := c.Send(fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
 			if err != nil {
-				node.Error(c, "Encountered send error", err)
+				c.Error("Encountered send error", err)
 				return
 			}
 		}
@@ -104,10 +125,10 @@ func (node *Node) AcceptNotAuthenticated(c *Connection) {
 
 	switch nextState {
 
-	case AUTHENTICATED:
-		c.Transition(node, AUTHENTICATED)
+	case conn.AUTHENTICATED:
+		node.Transition(c, conn.AUTHENTICATED)
 
-	case LOGOUT:
+	case conn.LOGOUT:
 		return
 	}
 }

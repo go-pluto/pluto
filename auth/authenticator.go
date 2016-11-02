@@ -1,5 +1,9 @@
 package auth
 
+import (
+	"github.com/numbleroot/pluto/config"
+)
+
 // Interfaces
 
 // PlainAuthenticator defines the methods required to
@@ -11,16 +15,12 @@ type PlainAuthenticator interface {
 	// a function that returns an ID notion for a given user.
 	GetOriginalIDOfUser(username string) int
 
-	// Using this function, we can look up the random token
-	// assigned to the user's session.
-	GetTokenOfUser(username string) string
-
-	// With this function an exisiting token gets set to the
-	// empty string again, effectively logging the user out.
-	DeleteTokenOfUser(id int)
+	// To be able to route an IMAP request to the responsible
+	// worker node we need to be able to tell which of them it is.
+	GetWorkerForUser(workers map[string]config.Worker, id int) (*string, error)
 
 	// AuthenticatePlain will be implemented by each of the
 	// authentication methods of type PLAIN to perform the
 	// actual part of checking supplied credentials.
-	AuthenticatePlain(username string, password string) (*int, *string, error)
+	AuthenticatePlain(username string, password string) (int, error)
 }

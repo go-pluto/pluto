@@ -2,12 +2,10 @@ package utils
 
 import (
 	"fmt"
-	"time"
 
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
-	"math/rand"
 
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crypto"
@@ -61,32 +59,4 @@ func CreateTestEnv() (*config.Config, *tls.Config, error) {
 	}
 
 	return config, tlsConfig, nil
-}
-
-// GenerateRandomString returns a string of random
-// characters of length n.
-// Kudos to author icza, see his incredible post:
-// http://stackoverflow.com/a/31832326
-func GenerateRandomString(n int) string {
-
-	b := make([]byte, n)
-	src := rand.NewSource(time.Now().UnixNano())
-
-	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
-
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
-		}
-
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			b[i] = letterBytes[idx]
-			i--
-		}
-
-		cache >>= letterIdxBits
-		remain--
-	}
-
-	return string(b)
 }

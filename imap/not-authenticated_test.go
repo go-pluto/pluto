@@ -7,6 +7,7 @@ import (
 
 	"crypto/tls"
 
+	"github.com/numbleroot/pluto/conn"
 	"github.com/numbleroot/pluto/imap"
 	"github.com/numbleroot/pluto/utils"
 )
@@ -57,13 +58,13 @@ func TestStartTLS(t *testing.T) {
 	}()
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
+	connection, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestStartTLS] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := conn.NewConnection(connection)
 
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
@@ -91,5 +92,5 @@ func TestStartTLS(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	Node.Terminate(c)
+	c.Terminate()
 }

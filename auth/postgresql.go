@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/jinzhu/gorm"
+	"github.com/numbleroot/pluto/config"
 
 	// We need fitting PostgreSQL drivers for gorm.
 	_ "github.com/jinzhu/gorm/dialects/postgres"
@@ -64,22 +65,18 @@ func (p *PostgreSQLAuthenticator) GetOriginalIDOfUser(username string) int {
 	return -1
 }
 
-// GetTokenOfUser returns the currently assigned token as
-// a sign of a valid authentication for a supplied name.
-func (p *PostgreSQLAuthenticator) GetTokenOfUser(username string) string {
+// GetWorkerForUser returns the name of the worker node
+// that is responsible for handling the user's mailbox.
+func (p *PostgreSQLAuthenticator) GetWorkerForUser(workers map[string]config.Worker, id int) (*string, error) {
 
-	return ""
+	return nil, fmt.Errorf("No worker responsible for user ID %d", id)
 }
-
-// DeleteTokenOfUser deletes the currently assigned token,
-// logging the user out of the system.
-func (p *PostgreSQLAuthenticator) DeleteTokenOfUser(id int) {}
 
 // AuthenticatePlain performs the actual authentication
 // process by taking supplied credentials and attempting
 // to find a matching entry in PostgreSQL database described
 // by a struct of above's layout.
-func (p *PostgreSQLAuthenticator) AuthenticatePlain(username string, password string) (*int, *string, error) {
+func (p *PostgreSQLAuthenticator) AuthenticatePlain(username string, password string) (int, error) {
 
-	return nil, nil, nil
+	return -1, nil
 }

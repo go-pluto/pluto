@@ -7,6 +7,7 @@ import (
 
 	"crypto/tls"
 
+	"github.com/numbleroot/pluto/conn"
 	"github.com/numbleroot/pluto/imap"
 	"github.com/numbleroot/pluto/utils"
 )
@@ -81,13 +82,13 @@ func TestCapability(t *testing.T) {
 	}()
 
 	// Connect to IMAP distributor.
-	conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
+	connection, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestCapability] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := conn.NewConnection(connection)
 
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
@@ -130,7 +131,7 @@ func TestCapability(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	Node.Terminate(c)
+	c.Terminate()
 
 	Node.Socket.Close()
 }
@@ -167,13 +168,13 @@ func TestLogin(t *testing.T) {
 	}()
 
 	// Connect to IMAP distributor.
-	conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
+	connection, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestLogin] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := conn.NewConnection(connection)
 
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
@@ -201,7 +202,7 @@ func TestLogin(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	Node.Terminate(c)
+	c.Terminate()
 }
 
 // TestLogout executes a black-box table test on the
@@ -240,13 +241,13 @@ func TestLogout(t *testing.T) {
 		var answer string
 
 		// Connect to IMAP distributor.
-		conn, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
+		connection, err := tls.Dial("tcp", (Config.Distributor.IP + ":" + Config.Distributor.Port), TLSConfig)
 		if err != nil {
 			t.Fatalf("[imap.TestLogout] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 		}
 
 		// Create new connection struct.
-		c := imap.NewConnection(conn)
+		c := conn.NewConnection(connection)
 
 		// Consume mandatory IMAP greeting.
 		_, err = c.Receive()
@@ -284,7 +285,7 @@ func TestLogout(t *testing.T) {
 		}
 
 		// At the end of each test, terminate connection.
-		err = Node.Terminate(c)
+		err = c.Terminate()
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -1,4 +1,4 @@
-package imap
+package conn
 
 import (
 	"bufio"
@@ -30,11 +30,10 @@ type IMAPState int
 // to one observed connection on its way through
 // the IMAP server.
 type Connection struct {
-	Conn      net.Conn
-	Reader    *bufio.Reader
-	State     IMAPState
-	UserID    *int
-	UserToken *string
+	Conn   net.Conn
+	Reader *bufio.Reader
+	State  IMAPState
+	Worker *string
 }
 
 // Functions
@@ -47,28 +46,7 @@ func NewConnection(c net.Conn) *Connection {
 	return &Connection{
 		Conn:   c,
 		Reader: bufio.NewReader(c),
-	}
-}
-
-// Transition is the broker between the IMAP states.
-// It is called to switch from one IMAP state to the
-// consecutive following one as instructed by received
-// IMAP commands.
-func (c *Connection) Transition(node *Node, state IMAPState) {
-
-	switch state {
-
-	case NOT_AUTHENTICATED:
-		c.State = NOT_AUTHENTICATED
-		go node.AcceptNotAuthenticated(c)
-
-	case AUTHENTICATED:
-		c.State = AUTHENTICATED
-		go node.AcceptAuthenticated(c)
-
-	case MAILBOX:
-		c.State = MAILBOX
-		go node.AcceptMailbox(c)
+		Worker: nil,
 	}
 }
 
@@ -99,15 +77,21 @@ func (c *Connection) Send(text string) error {
 	return nil
 }
 
+// SignalWorkerDone is used by workers to signal end
+// of current operation to distributor node.
+func (c *Connection) SignalWorkerDone() error {
+
+	if _, err := fmt.Fprint(c.Conn, "> done <\n"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Terminate tears down the state of a connection.
 // This includes closing contained connection items.
 // It returns nil or eventual errors.
-func (node *Node) Terminate(c *Connection) error {
-
-	// Delete token if user was already logged in.
-	if c.UserID != nil {
-		node.AuthAdapter.DeleteTokenOfUser(*c.UserID)
-	}
+func (c *Connection) Terminate() error {
 
 	if err := c.Conn.Close(); err != nil {
 		return err
@@ -118,13 +102,13 @@ func (node *Node) Terminate(c *Connection) error {
 
 // Error makes use of Terminate but provides an additional
 // error message before terminating.
-func (node *Node) Error(c *Connection, msg string, err error) {
+func (c *Connection) Error(msg string, err error) {
 
 	// Log error.
 	log.Printf("%s: %s. Terminating connection to %s\n", msg, err.Error(), c.Conn.RemoteAddr().String())
 
 	// Terminate connection.
-	err = node.Terminate(c)
+	err = c.Terminate()
 	if err != nil {
 		log.Fatal(err)
 	}
