@@ -30,7 +30,7 @@ type User struct {
 	Password string
 }
 
-// Define list type of users to search efficiently.
+// UsersByName defines a list type of users to search efficiently.
 type UsersByName []User
 
 // Functions
@@ -101,9 +101,9 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 	}, nil
 }
 
-// GetIDOfUser finds position of supplied user in users
-// list. It is assumed that existence check was already
-// performed, for example via AuthenticatePlain.
+// GetOriginalIDOfUser finds position of supplied user in users
+// list. It is assumed that existence check was already performed,
+// for example via AuthenticatePlain.
 func (f *FileAuthenticator) GetOriginalIDOfUser(username string) int {
 
 	// This routine has to be safe for concurrent usage,

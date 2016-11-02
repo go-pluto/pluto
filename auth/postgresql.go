@@ -57,9 +57,9 @@ func NewPostgreSQLAuthenticator(ip string, port string, db string, user string, 
 	}, nil
 }
 
-// GetIDOfUser finds position of supplied user in users
-// table. It is assumed that existence check was already
-// performed, for example via AuthenticatePlain.
+// GetOriginalIDOfUser finds position of supplied user in users
+// table. It is assumed that existence check was already performed,
+// for example via AuthenticatePlain.
 func (p *PostgreSQLAuthenticator) GetOriginalIDOfUser(username string) int {
 
 	return -1
