@@ -17,7 +17,7 @@ type PlainAuthenticator interface {
 
 	// To be able to route an IMAP request to the responsible
 	// worker node we need to be able to tell which of them it is.
-	GetWorkerForUser(workers map[string]config.Worker, id int) (*string, error)
+	GetWorkerForUser(workers map[string]config.Worker, id int) (string, error)
 
 	// AuthenticatePlain will be implemented by each of the
 	// authentication methods of type PLAIN to perform the

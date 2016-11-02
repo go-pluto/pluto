@@ -121,7 +121,7 @@ func (f *FileAuthenticator) GetOriginalIDOfUser(username string) int {
 
 // GetWorkerForUser returns the name of the worker node
 // that is responsible for handling the user's mailbox.
-func (f *FileAuthenticator) GetWorkerForUser(workers map[string]config.Worker, id int) (*string, error) {
+func (f *FileAuthenticator) GetWorkerForUser(workers map[string]config.Worker, id int) (string, error) {
 
 	for name, worker := range workers {
 
@@ -129,11 +129,11 @@ func (f *FileAuthenticator) GetWorkerForUser(workers map[string]config.Worker, i
 		// is responsible for the range of user IDs that contains
 		// the supplied user ID.
 		if id >= worker.UserStart && id <= worker.UserEnd {
-			return &name, nil
+			return name, nil
 		}
 	}
 
-	return nil, fmt.Errorf("No worker responsible for user ID %d", id)
+	return "", fmt.Errorf("no worker responsible for user ID %d", id)
 }
 
 // AuthenticatePlain performs the actual authentication
@@ -154,12 +154,12 @@ func (f *FileAuthenticator) AuthenticatePlain(username string, password string) 
 
 	// If that user does not exist, throw an error.
 	if !((i < len(f.Users)) && (f.Users[i].Name == username)) {
-		return -1, fmt.Errorf("Username not found in list of users")
+		return -1, fmt.Errorf("username not found in list of users")
 	}
 
 	// Otherwise, check if passwords match.
 	if f.Users[i].Password != password {
-		return -1, fmt.Errorf("Passwords did not match")
+		return -1, fmt.Errorf("passwords did not match")
 	}
 
 	return f.Users[i].ID, nil

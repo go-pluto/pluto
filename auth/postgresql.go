@@ -67,9 +67,9 @@ func (p *PostgreSQLAuthenticator) GetOriginalIDOfUser(username string) int {
 
 // GetWorkerForUser returns the name of the worker node
 // that is responsible for handling the user's mailbox.
-func (p *PostgreSQLAuthenticator) GetWorkerForUser(workers map[string]config.Worker, id int) (*string, error) {
+func (p *PostgreSQLAuthenticator) GetWorkerForUser(workers map[string]config.Worker, id int) (string, error) {
 
-	return nil, fmt.Errorf("No worker responsible for user ID %d", id)
+	return "", fmt.Errorf("no worker responsible for user ID %d", id)
 }
 
 // AuthenticatePlain performs the actual authentication

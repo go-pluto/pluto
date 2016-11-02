@@ -10,7 +10,6 @@ import (
 
 	"github.com/numbleroot/pluto/auth"
 	"github.com/numbleroot/pluto/config"
-	"github.com/numbleroot/pluto/conn"
 	"github.com/numbleroot/pluto/crypto"
 )
 
@@ -38,28 +37,6 @@ type Node struct {
 }
 
 // Functions
-
-// Transition is the broker between the IMAP states.
-// It is called to switch from one IMAP state to the
-// consecutive following one as instructed by received
-// IMAP commands.
-func (node *Node) Transition(c *conn.Connection, state conn.IMAPState) {
-
-	switch state {
-
-	case conn.NOT_AUTHENTICATED:
-		c.State = conn.NOT_AUTHENTICATED
-		go node.AcceptNotAuthenticated(c)
-
-	case conn.AUTHENTICATED:
-		c.State = conn.AUTHENTICATED
-		go node.AcceptAuthenticated(c)
-
-	case conn.MAILBOX:
-		c.State = conn.MAILBOX
-		go node.AcceptMailbox(c)
-	}
-}
 
 // InitNode listens for TLS connections on a TCP socket
 // opened up on supplied IP address and port. It returns
@@ -212,10 +189,10 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 // needed connection structure and if appropriate to its type
 // sends out an IMAP greeting. After that hand-off to the IMAP
 // state machine is performed.
-func (node *Node) HandleRequest(connection net.Conn) {
+func (node *Node) HandleRequest(conn net.Conn) {
 
 	// Create a new connection struct for incoming request.
-	c := conn.NewConnection(connection)
+	c := NewConnection(conn)
 
 	if node.Type == DISTRIBUTOR {
 
@@ -226,19 +203,22 @@ func (node *Node) HandleRequest(connection net.Conn) {
 			return
 		}
 
-		// Dispatch to not-authenticated state.
-		node.Transition(c, conn.NOT_AUTHENTICATED)
+		// Dispatch to distributor state.
+		node.AcceptDistributor(c)
 
 	} else if node.Type == WORKER {
 
 		// Connections to IMAP worker nodes contain
 		// already authenticated requests.
-		// Dispatch to authenticated state.
-		node.Transition(c, conn.AUTHENTICATED)
+		// Dispatch to worker state.
+		node.AcceptWorker(c)
 
 	} else if node.Type == STORAGE {
 
-		node.Transition(c, conn.AUTHENTICATED)
+		// The storage node only acts as a storage
+		// location for replicas.
+		// Dispatch to own state.
+		node.AcceptStorage(c)
 	}
 }
 

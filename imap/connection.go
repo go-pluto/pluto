@@ -1,4 +1,4 @@
-package conn
+package imap
 
 import (
 	"bufio"
@@ -6,34 +6,19 @@ import (
 	"log"
 	"net"
 	"strings"
-)
 
-// Constants
-
-// Integer counter for IMAP states.
-const (
-	ANY IMAPState = iota
-	NOT_AUTHENTICATED
-	AUTHENTICATED
-	MAILBOX
-	LOGOUT
+	"crypto/tls"
 )
 
 // Structs
-
-// IMAPState represents the integer value associated
-// with one of the implemented IMAP states a connection
-// can be in.
-type IMAPState int
 
 // Connection carries all information specific
 // to one observed connection on its way through
 // the IMAP server.
 type Connection struct {
 	Conn   net.Conn
+	Worker string
 	Reader *bufio.Reader
-	State  IMAPState
-	Worker *string
 }
 
 // Functions
@@ -46,7 +31,6 @@ func NewConnection(c net.Conn) *Connection {
 	return &Connection{
 		Conn:   c,
 		Reader: bufio.NewReader(c),
-		Worker: nil,
 	}
 }
 
@@ -71,6 +55,19 @@ func (c *Connection) Receive() (string, error) {
 func (c *Connection) Send(text string) error {
 
 	if _, err := fmt.Fprintf(c.Conn, "%s\n", text); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SignalDistributorDone is used by the distributor node
+// to signal an involved worker node that the client logged out.
+func (c *Connection) SignalDistributorDone(worker *tls.Conn) error {
+
+	log.Printf("%v\n", worker)
+
+	if _, err := fmt.Fprint(worker, "> done <\n"); err != nil {
 		return err
 	}
 
