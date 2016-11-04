@@ -76,7 +76,7 @@ func (p *PostgreSQLAuthenticator) GetWorkerForUser(workers map[string]config.Wor
 // process by taking supplied credentials and attempting
 // to find a matching entry in PostgreSQL database described
 // by a struct of above's layout.
-func (p *PostgreSQLAuthenticator) AuthenticatePlain(username string, password string) (int, error) {
+func (p *PostgreSQLAuthenticator) AuthenticatePlain(username string, password string) (int, string, error) {
 
-	return -1, nil
+	return -1, "", nil
 }

@@ -210,6 +210,25 @@ func (node *Node) HandleRequest(conn net.Conn) {
 
 		// Connections to IMAP worker nodes contain
 		// already authenticated requests.
+
+		// Receive context about client that opened this
+		// connection to distributor.
+		context, err := c.Receive()
+		if err != nil {
+			c.Error("Encountered receive error waiting for DISTRIBUTOR to send context", err)
+			return
+		}
+
+		log.Printf("Received context: %s\n", context)
+
+		// Extract important parts and inject them into struct.
+		err = c.InjectContext(context)
+		if err != nil {
+			// TODO: Alter c.Error for nodes of type WORKER (do not close connection!)
+			c.Error("Context information was invalid", err)
+			return
+		}
+
 		// Dispatch to worker state.
 		node.AcceptWorker(c)
 

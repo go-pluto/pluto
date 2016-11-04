@@ -16,9 +16,11 @@ import (
 // to one observed connection on its way through
 // the IMAP server.
 type Connection struct {
-	Conn   net.Conn
-	Worker string
-	Reader *bufio.Reader
+	Conn      net.Conn
+	Worker    string
+	Reader    *bufio.Reader
+	UserToken string
+	UserName  string
 }
 
 // Functions
@@ -61,11 +63,51 @@ func (c *Connection) Send(text string) error {
 	return nil
 }
 
+// InjectContext takes in received raw context string,
+// verifies and parses it and if successful, injects
+// context information about client into connection struct.
+func (c *Connection) InjectContext(contextRaw string) error {
+
+	// Split received context at white spaces and check
+	// for correct amount of found fields.
+	contexts := strings.Fields(contextRaw)
+	if len(contexts) != 6 {
+		return fmt.Errorf("A received an invalid context information")
+	}
+
+	// Check if structure is correct.
+	if contexts[0] != ">" || contexts[1] != "token:" || contexts[3] != "name:" || contexts[5] != "<" {
+		return fmt.Errorf("B received an invalid context information")
+	}
+
+	// Extract token and name of client and store it
+	// in connection context.
+	c.UserToken = contexts[2]
+	c.UserName = contexts[4]
+
+	log.Printf("contexts[2]: %s, contexts[4]: %s\n", contexts[2], contexts[4])
+
+	return nil
+}
+
+// SignalDistributorStart is used by the distributor node to signal
+// an involved worker node context about future requests.
+func (c *Connection) SignalDistributorStart(worker *tls.Conn) error {
+
+	log.Println("DISTRIBUTOR: 'START' to WORKER")
+
+	if _, err := fmt.Fprintf(worker, "> token: %s name: %s <\n", c.UserToken, c.UserName); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // SignalDistributorDone is used by the distributor node
 // to signal an involved worker node that the client logged out.
 func (c *Connection) SignalDistributorDone(worker *tls.Conn) error {
 
-	log.Printf("%v\n", worker)
+	log.Println("DISTRIBUTOR: 'END'   to WORKER")
 
 	if _, err := fmt.Fprint(worker, "> done <\n"); err != nil {
 		return err

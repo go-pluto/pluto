@@ -23,6 +23,7 @@ var capabilityTests = []struct {
 	{"CAPABILITY", "* BAD Received invalid IMAP command"},
 }
 
+// TODO: Add test cases for consecutive LOGIN attempts of same and different person!
 var loginTests = []struct {
 	in  string
 	out string

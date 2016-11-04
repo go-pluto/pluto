@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/numbleroot/pluto/config"
+	"github.com/numbleroot/pluto/utils"
 )
 
 // Structs
@@ -28,6 +29,7 @@ type User struct {
 	ID       int
 	Name     string
 	Password string
+	Token    string
 }
 
 // UsersByName defines a list type of users to search efficiently.
@@ -76,6 +78,7 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 			ID:       i,
 			Name:     userData[0],
 			Password: userData[1],
+			Token:    "",
 		}
 
 		// Append new user element to slice.
@@ -140,7 +143,7 @@ func (f *FileAuthenticator) GetWorkerForUser(workers map[string]config.Worker, i
 // process by taking supplied credentials and attempting
 // to find a matching entry the in-memory list taken from
 // the authentication file.
-func (f *FileAuthenticator) AuthenticatePlain(username string, password string) (int, error) {
+func (f *FileAuthenticator) AuthenticatePlain(username string, password string) (int, string, error) {
 
 	// This routine has to be safe for concurrent usage,
 	// therefore lock the struct on entry.
@@ -154,13 +157,17 @@ func (f *FileAuthenticator) AuthenticatePlain(username string, password string) 
 
 	// If that user does not exist, throw an error.
 	if !((i < len(f.Users)) && (f.Users[i].Name == username)) {
-		return -1, fmt.Errorf("username not found in list of users")
+		return -1, "", fmt.Errorf("username not found in list of users")
 	}
 
-	// Otherwise, check if passwords match.
+	// Check if passwords match.
 	if f.Users[i].Password != password {
-		return -1, fmt.Errorf("passwords did not match")
+		return -1, "", fmt.Errorf("passwords did not match")
 	}
 
-	return f.Users[i].ID, nil
+	// Generate a random session token and save it
+	// in user's entry of in-memory list.
+	f.Users[i].Token = utils.GenerateRandomString(16)
+
+	return f.Users[i].ID, f.Users[i].Token, nil
 }

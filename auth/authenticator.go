@@ -22,5 +22,5 @@ type PlainAuthenticator interface {
 	// AuthenticatePlain will be implemented by each of the
 	// authentication methods of type PLAIN to perform the
 	// actual part of checking supplied credentials.
-	AuthenticatePlain(username string, password string) (int, error)
+	AuthenticatePlain(username string, password string) (int, string, error)
 }

@@ -63,7 +63,7 @@ func (node *Node) Login(c *Connection, req *Request) bool {
 		return false
 	}
 
-	id, err := node.AuthAdapter.AuthenticatePlain(userCredentials[0], userCredentials[1])
+	id, token, err := node.AuthAdapter.AuthenticatePlain(userCredentials[0], userCredentials[1])
 	if err != nil {
 
 		// If supplied credentials failed to authenticate client,
@@ -84,14 +84,24 @@ func (node *Node) Login(c *Connection, req *Request) bool {
 		return false
 	}
 
-	// Find worker node responsible for this connection
-	// and put it into connection information struct.
+	// Find worker node responsible for this connection.
 	respWorker, err := node.AuthAdapter.GetWorkerForUser(node.Config.Workers, id)
 	if err != nil {
 		c.Error("Authentication error", err)
 	}
 
+	// Put obtained context into connection struct.
 	c.Worker = respWorker
+	c.UserName = userCredentials[0]
+	c.UserToken = token
+
+	// Inform worker node about context of future
+	// requests of this client.
+	err = c.SignalDistributorStart(node.Connections[c.Worker])
+	if err != nil {
+		c.Error("Encountered send error when distributor signaled start to worker", err)
+		return false
+	}
 
 	return true
 }
@@ -257,6 +267,8 @@ func (node *Node) AcceptDistributor(c *Connection) {
 			continue
 		}
 
+		log.Printf("COMMAND: %s\n", req.Command)
+
 		switch {
 
 		case req.Command == "CAPABILITY":
@@ -264,6 +276,9 @@ func (node *Node) AcceptDistributor(c *Connection) {
 
 		case req.Command == "LOGIN":
 			node.Login(c, req)
+			// TODO: If LOGIN is successful more than once per connection,
+			//       there needs to be some kind of prior-connection-termination
+			//       happening at responsible worker node.
 
 		case req.Command == "LOGOUT":
 			if ok := node.Logout(c, req); ok {
@@ -273,7 +288,7 @@ func (node *Node) AcceptDistributor(c *Connection) {
 				if c.Worker != "" {
 
 					if err := c.SignalDistributorDone(node.Connections[c.Worker]); err != nil {
-						c.Error("Encountered send error while signaling distributor is done", err)
+						c.Error("Encountered send error when distributor signaled end to worker", err)
 						return
 					}
 				}
