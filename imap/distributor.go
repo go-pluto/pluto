@@ -13,7 +13,7 @@ import (
 // It outputs the supported actions in the current state.
 func (node *Node) Capability(c *Connection, req *Request) bool {
 
-	log.Println("CAPABILITY served")
+	log.Printf("Serving CAPABILITY '%s'...\n", req.Tag)
 
 	if len(req.Payload) > 0 {
 
@@ -45,7 +45,7 @@ func (node *Node) Capability(c *Connection, req *Request) bool {
 // as part of the distributor config.
 func (node *Node) Login(c *Connection, req *Request) bool {
 
-	log.Println("LOGIN served")
+	log.Printf("Serving LOGIN '%s'...\n", req.Tag)
 
 	// Split payload on every space character.
 	userCredentials := strings.Split(req.Payload, " ")
@@ -88,20 +88,30 @@ func (node *Node) Login(c *Connection, req *Request) bool {
 	respWorker, err := node.AuthAdapter.GetWorkerForUser(node.Config.Workers, id)
 	if err != nil {
 		c.Error("Authentication error", err)
-	}
-
-	// Put obtained context into connection struct.
-	c.Worker = respWorker
-	c.UserName = userCredentials[0]
-	c.UserToken = token
-
-	// Inform worker node about context of future
-	// requests of this client.
-	err = c.SignalDistributorStart(node.Connections[c.Worker])
-	if err != nil {
-		c.Error("Encountered send error when distributor signaled start to worker", err)
 		return false
 	}
+
+	// If the client authenticated a second time during
+	// a connection and user names differ, send changed
+	// notice to worker and exchange user names.
+	if (c.Worker != "") && (userCredentials[0] != c.UserName) {
+
+		if err := c.SignalSessionPrefix(node.Connections[c.Worker]); err != nil {
+			c.Error("Encountered send error when distributor signalled context to worker", err)
+			return false
+		}
+
+		err = c.SignalSessionChanged(node.Connections[c.Worker])
+		if err != nil {
+			c.Error("Encountered send error when distributor signalled changed session to worker", err)
+			return false
+		}
+	}
+
+	// Save context to connection.
+	c.Worker = respWorker
+	c.UserToken = token
+	c.UserName = userCredentials[0]
 
 	return true
 }
@@ -111,7 +121,7 @@ func (node *Node) Login(c *Connection, req *Request) bool {
 // get shut down gracefully.
 func (node *Node) Logout(c *Connection, req *Request) bool {
 
-	log.Println("LOGOUT served")
+	log.Printf("Serving LOGOUT '%s'...\n", req.Tag)
 
 	if len(req.Payload) > 0 {
 
@@ -126,12 +136,36 @@ func (node *Node) Logout(c *Connection, req *Request) bool {
 		return false
 	}
 
+	// If already a worker was assigned, signal logout.
+	if c.Worker != "" {
+
+		// Inform worker node about which session will log out.
+		if err := c.SignalSessionPrefix(node.Connections[c.Worker]); err != nil {
+			c.Error("Encountered send error when distributor signalled context to worker", err)
+			return false
+		}
+
+		// Signal to worker node that session is done.
+		if err := c.SignalSessionDone(node.Connections[c.Worker]); err != nil {
+			c.Error("Encountered send error when distributor signalled end to worker", err)
+			return false
+		}
+	}
+
 	// Signal success to client.
 	err := c.Send(fmt.Sprintf("* BYE Terminating connection\n%s OK LOGOUT completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
 	}
+
+	// Delete token from user entry.
+	node.AuthAdapter.DeleteTokenForUser(c.UserName)
+
+	// Delete context information from connection struct.
+	c.Worker = ""
+	c.UserToken = ""
+	c.UserName = ""
 
 	// Terminate connection.
 	c.Terminate()
@@ -143,7 +177,7 @@ func (node *Node) Logout(c *Connection, req *Request) bool {
 // that current connection is already encrypted.
 func (node *Node) StartTLS(c *Connection, req *Request) bool {
 
-	log.Println("STARTTLS served")
+	log.Printf("Serving STARTTLS '%s'...\n", req.Tag)
 
 	if len(req.Payload) > 0 {
 
@@ -173,11 +207,17 @@ func (node *Node) StartTLS(c *Connection, req *Request) bool {
 // node and the responsible worker node.
 func (node *Node) Proxy(c *Connection, rawReq string) bool {
 
-	log.Println("PROXYing request...")
+	log.Printf("PROXYing request '%s'...\n", rawReq)
 
 	// We need proper auxiliary variables for later access.
 	connWorker := node.Connections[c.Worker]
 	readerWorker := bufio.NewReader(connWorker)
+
+	// Inform worker node about context of request of this client.
+	if err := c.SignalSessionPrefix(node.Connections[c.Worker]); err != nil {
+		c.Error("Encountered send error when distributor signalled context to worker", err)
+		return false
+	}
 
 	// Send received client command to worker node.
 	if _, err := fmt.Fprintf(connWorker, "%s\n", rawReq); err != nil {
@@ -199,7 +239,7 @@ func (node *Node) Proxy(c *Connection, rawReq string) bool {
 	// As long as the responsible worker has not
 	// indicated the end of the current operation,
 	// continue to buffer answers.
-	for curResp != "> done <" {
+	for (curResp != "> done <") && (curResp != "> error <") {
 
 		// Append it to answer buffer.
 		bufResp = append(bufResp, curResp)
@@ -215,11 +255,22 @@ func (node *Node) Proxy(c *Connection, rawReq string) bool {
 
 	for i := range bufResp {
 
+		log.Printf("Sending back: %s\n", bufResp[i])
+
 		// Send all buffered worker answers to client.
 		err = c.Send(bufResp[i])
 		if err != nil {
 			c.Error("Encountered send error to client", err)
 			return false
+		}
+	}
+
+	// If the involved worker node indicated that an error
+	// occurred, terminate connection to client.
+	if curResp == "> error <" {
+		err = c.Terminate()
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
@@ -248,7 +299,36 @@ func (node *Node) AcceptDistributor(c *Connection) {
 		// Receive next incoming client command.
 		rawReq, err := c.Receive()
 		if err != nil {
-			c.Error("Encountered receive error", err)
+
+			// Check if error was a simple disconnect.
+			if err.Error() == "EOF" {
+
+				// If so and if a worker was already assigned,
+				// inform the worker about the disconnect.
+				if c.Worker != "" {
+
+					// Prefix the information with context.
+					if err := c.SignalSessionPrefix(node.Connections[c.Worker]); err != nil {
+						c.Error("Encountered send error when distributor signalled context to worker", err)
+						return
+					}
+
+					// Now signal that client disconnected.
+					if err := c.SignalSessionDone(node.Connections[c.Worker]); err != nil {
+						c.Error("Encountered send error when distributor signalled end to worker", err)
+						return
+					}
+				}
+
+				// And terminate connection.
+				c.Terminate()
+
+			} else {
+				// If not a simple disconnect, log error and
+				// terminate connection to client.
+				c.Error("Encountered receive error", err)
+			}
+
 			return
 		}
 
@@ -267,8 +347,6 @@ func (node *Node) AcceptDistributor(c *Connection) {
 			continue
 		}
 
-		log.Printf("COMMAND: %s\n", req.Command)
-
 		switch {
 
 		case req.Command == "CAPABILITY":
@@ -276,25 +354,10 @@ func (node *Node) AcceptDistributor(c *Connection) {
 
 		case req.Command == "LOGIN":
 			node.Login(c, req)
-			// TODO: If LOGIN is successful more than once per connection,
-			//       there needs to be some kind of prior-connection-termination
-			//       happening at responsible worker node.
 
 		case req.Command == "LOGOUT":
 			if ok := node.Logout(c, req); ok {
-
-				// If a user logged in prior to logging out,
-				// tell involved worker node that user logged out.
-				if c.Worker != "" {
-
-					if err := c.SignalDistributorDone(node.Connections[c.Worker]); err != nil {
-						c.Error("Encountered send error when distributor signaled end to worker", err)
-						return
-					}
-				}
-
 				// A LOGOUT marks connection termination.
-				c.Worker = ""
 				recvUntil = "LOGOUT"
 			}
 
@@ -313,6 +376,4 @@ func (node *Node) AcceptDistributor(c *Connection) {
 			}
 		}
 	}
-
-	log.Println("User logged out")
 }

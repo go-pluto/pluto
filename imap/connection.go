@@ -63,38 +63,9 @@ func (c *Connection) Send(text string) error {
 	return nil
 }
 
-// InjectContext takes in received raw context string,
-// verifies and parses it and if successful, injects
-// context information about client into connection struct.
-func (c *Connection) InjectContext(contextRaw string) error {
-
-	// Split received context at white spaces and check
-	// for correct amount of found fields.
-	contexts := strings.Fields(contextRaw)
-	if len(contexts) != 6 {
-		return fmt.Errorf("A received an invalid context information")
-	}
-
-	// Check if structure is correct.
-	if contexts[0] != ">" || contexts[1] != "token:" || contexts[3] != "name:" || contexts[5] != "<" {
-		return fmt.Errorf("B received an invalid context information")
-	}
-
-	// Extract token and name of client and store it
-	// in connection context.
-	c.UserToken = contexts[2]
-	c.UserName = contexts[4]
-
-	log.Printf("contexts[2]: %s, contexts[4]: %s\n", contexts[2], contexts[4])
-
-	return nil
-}
-
-// SignalDistributorStart is used by the distributor node to signal
+// SignalSessionPrefix is used by the distributor node to signal
 // an involved worker node context about future requests.
-func (c *Connection) SignalDistributorStart(worker *tls.Conn) error {
-
-	log.Println("DISTRIBUTOR: 'START' to WORKER")
+func (c *Connection) SignalSessionPrefix(worker *tls.Conn) error {
 
 	if _, err := fmt.Fprintf(worker, "> token: %s name: %s <\n", c.UserToken, c.UserName); err != nil {
 		return err
@@ -103,24 +74,56 @@ func (c *Connection) SignalDistributorStart(worker *tls.Conn) error {
 	return nil
 }
 
-// SignalDistributorDone is used by the distributor node
-// to signal an involved worker node that the client logged out.
-func (c *Connection) SignalDistributorDone(worker *tls.Conn) error {
+// SignalSessionChanged indicates to worker node that a session
+// experienced a major change and therefore allows workers to take
+// corresponding actions such as closing IMAP state.
+func (c *Connection) SignalSessionChanged(worker *tls.Conn) error {
 
-	log.Println("DISTRIBUTOR: 'END'   to WORKER")
-
-	if _, err := fmt.Fprint(worker, "> done <\n"); err != nil {
+	if _, err := fmt.Fprintf(worker, "> changed <\n"); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// SignalWorkerDone is used by workers to signal end
-// of current operation to distributor node.
-func (c *Connection) SignalWorkerDone() error {
+// SignalSessionError can be used by distributor or worker nodes
+// to signal the other side that an fatal error occurred during
+// processing a request.
+func (c *Connection) SignalSessionError(worker *tls.Conn) error {
 
-	if _, err := fmt.Fprint(c.Conn, "> done <\n"); err != nil {
+	var err error
+
+	if worker != nil {
+		// Distributor: send error signal to worker.
+		_, err = fmt.Fprint(worker, "> error <\n")
+	} else {
+		// Worker: send error signal to distributor.
+		_, err = fmt.Fprint(c.Conn, "> error <\n")
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SignalDistributorDone is either used by the distributor to signal
+// the worker that a client logged out or by a worker to indicated
+// that the current operation is done.
+func (c *Connection) SignalSessionDone(worker *tls.Conn) error {
+
+	var err error
+
+	if worker != nil {
+		// Distributor: send done signal to worker.
+		_, err = fmt.Fprint(worker, "> done <\n")
+	} else {
+		// Worker: send done signal to distributor.
+		_, err = fmt.Fprint(c.Conn, "> done <\n")
+	}
+
+	if err != nil {
 		return err
 	}
 
@@ -148,6 +151,21 @@ func (c *Connection) Error(msg string, err error) {
 
 	// Terminate connection.
 	err = c.Terminate()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// ErrorLogOnly is used by worker nodes to log and indicate
+// fatal errors but without closing the permanent connection
+// to the distributor node.
+func (c *Connection) ErrorLogOnly(msg string, err error) {
+
+	// Log error.
+	log.Printf("%s: %s. Signalling error to DISTRIBUTOR.\n", msg, err.Error())
+
+	// Signal error to distributor node.
+	err = c.SignalSessionError(nil)
 	if err != nil {
 		log.Fatal(err)
 	}

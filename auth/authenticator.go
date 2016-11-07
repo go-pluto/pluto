@@ -19,6 +19,10 @@ type PlainAuthenticator interface {
 	// worker node we need to be able to tell which of them it is.
 	GetWorkerForUser(workers map[string]config.Worker, id int) (string, error)
 
+	// DeleteTokenForUser removes the token for an active
+	// session of a client.
+	DeleteTokenForUser(username string)
+
 	// AuthenticatePlain will be implemented by each of the
 	// authentication methods of type PLAIN to perform the
 	// actual part of checking supplied credentials.

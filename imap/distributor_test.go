@@ -23,16 +23,17 @@ var capabilityTests = []struct {
 	{"CAPABILITY", "* BAD Received invalid IMAP command"},
 }
 
-// TODO: Add test cases for consecutive LOGIN attempts of same and different person!
 var loginTests = []struct {
 	in  string
 	out string
 }{
-	{"blub LOGIN TestUser TestPassword", "blub OK Logged in"},
-	{"blargh login TestUser TestPassword", "blargh OK Logged in"},
+	{"blub1 LOGIN user1 password1", "blub1 OK Logged in"},
+	{"blub2 LOGIN user1 password1", "blub2 OK Logged in"},
+	{"blub3 LOGIN user1 password1", "blub3 OK Logged in"},
+	{"blargh login user2 password2", "blargh OK Logged in"},
 	{"xyz LOGIN smith sesame", "xyz NO Name and / or password wrong"},
 	{"zyx login smith sesame", "zyx NO Name and / or password wrong"},
-	{"a1b2c3   LOGIN    smith sesame", "a1b2c3 BAD Received invalid IMAP command"},
+	{"a1b2c3   LOGIN    user3 password3", "a1b2c3 BAD Received invalid IMAP command"},
 	{"LOGIN ernie bert", "* BAD Received invalid IMAP command"},
 	{"12345 LOL ernie bert", "12345 BAD Received invalid IMAP command"},
 	{"uuu LOGIN let me in please", "uuu BAD Command LOGIN was not sent with exactly two parameters"},
@@ -200,7 +201,7 @@ func TestLogin(t *testing.T) {
 			t.Fatalf("[imap.TestLogin] Sending message to distributor failed with: %s\n", err.Error())
 		}
 
-		// Receive LOGINDISABLED answer.
+		// Receive successful LOGIN message.
 		answer, err := c.Receive()
 		if err != nil {
 			t.Errorf("[imap.TestLogin] Error during receiving table test LOGIN: %s\n", err.Error())

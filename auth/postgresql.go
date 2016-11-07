@@ -72,6 +72,10 @@ func (p *PostgreSQLAuthenticator) GetWorkerForUser(workers map[string]config.Wor
 	return "", fmt.Errorf("no worker responsible for user ID %d", id)
 }
 
+// DeleteTokenForUser removes the token associated with
+// an active session of a client.
+func (p *PostgreSQLAuthenticator) DeleteTokenForUser(username string) {}
+
 // AuthenticatePlain performs the actual authentication
 // process by taking supplied credentials and attempting
 // to find a matching entry in PostgreSQL database described
