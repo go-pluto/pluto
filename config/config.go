@@ -34,11 +34,12 @@ type Distributor struct {
 // Worker contains the connection and user sharding
 // information for an individual IMAP worker node.
 type Worker struct {
-	IP        string
-	Port      string
-	UserStart int
-	UserEnd   int
-	TLS       TLS
+	IP          string
+	Port        string
+	UserStart   int
+	UserEnd     int
+	MaildirRoot string
+	TLS         TLS
 }
 
 // Storage configures the global database node

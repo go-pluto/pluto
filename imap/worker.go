@@ -84,6 +84,7 @@ func (node *Node) AcceptWorker(c *Connection) {
 		}
 
 		// TODO: Load user-specific environment.
+		//       Set current Maildir path variable to user one's.
 
 		switch {
 
