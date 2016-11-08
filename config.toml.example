@@ -50,7 +50,10 @@ AuthAdapter = "AuthPostgreSQL"
     UserEnd = 10
     # Point MaildirRoot to the file system location where
     # all Maildirs of the worker's users are located in.
-    MaildirRoot = "/for/example/home/"
+    MaildirRoot = "/for/example/home/worker-1/Maildir/"
+    # Location of CRDT representations of Maildirs to be
+    # saved on local hard disk.
+    CRDTLayerRoot = "/for/example/home/worker-1/crdt-layer/"
 
         [Workers.worker-1.TLS]
         CertLoc = "/very/complicated/and/long/path/to/your/internal-worker-1-cert.pem"
@@ -61,7 +64,8 @@ AuthAdapter = "AuthPostgreSQL"
     Port = "20002"
     UserStart = 11
     UserEnd = 20
-    MaildirRoot = "/for/example/var/mail/"
+    MaildirRoot = "/for/example/var/mail/Maildir/"
+    CRDTLayerRoot = "/for/example/var/crdt-layer/"
 
         [Workers.worker-2.TLS]
         CertLoc = "/very/complicated/and/long/path/to/your/internal-worker-2-cert.pem"
@@ -72,7 +76,8 @@ AuthAdapter = "AuthPostgreSQL"
     Port = "20003"
     UserStart = 21
     UserEnd = 30
-    MaildirRoot = "/for/example/some/very/unique/path/"
+    MaildirRoot = "/for/example/some/very/unique/path/Maildir/"
+    CRDTLayerRoot = "/for/example/some/very/unique/path/crdt-layer/"
 
         [Workers.worker-3.TLS]
         CertLoc = "/very/complicated/and/long/path/to/your/internal-worker-3-cert.pem"
