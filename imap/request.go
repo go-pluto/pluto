@@ -26,8 +26,10 @@ type Request struct {
 // Context carries session-identifying information sent
 // from distributor to worker node.
 type Context struct {
-	UserToken string
-	UserName  string
+	UserToken   string
+	UserName    string
+	UserMaildir string
+	UserCRDT    string
 }
 
 // Functions

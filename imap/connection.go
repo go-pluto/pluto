@@ -10,6 +10,24 @@ import (
 	"crypto/tls"
 )
 
+// Constants
+
+// Integer counter for IMAP states.
+const (
+	ANY IMAPState = iota
+	NOT_AUTHENTICATED
+	AUTHENTICATED
+	MAILBOX
+	LOGOUT
+)
+
+// Structs
+
+// IMAPState represents the integer value associated
+// with one of the implemented IMAP states a connection
+// can be in.
+type IMAPState int
+
 // Structs
 
 // Connection carries all information specific
@@ -17,6 +35,7 @@ import (
 // the IMAP server.
 type Connection struct {
 	Conn      net.Conn
+	IMAPState IMAPState
 	Worker    string
 	Reader    *bufio.Reader
 	UserToken string

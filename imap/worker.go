@@ -3,20 +3,75 @@ package imap
 import (
 	"fmt"
 	"log"
+	"strings"
 )
 
 // Functions
 
 // Select sets mailbox based on supplied payload to
 // current context.
-func (node *Node) Select(c *Connection, req *Request) bool {
+func (node *Node) Select(c *Connection, req *Request, ctx *Context) bool {
 
 	log.Printf("Serving SELECT '%s'...\n", req.Tag)
 
-	// TODO: Implement this function.
+	// Check if connection is in correct state.
+	if (c.IMAPState == ANY) || (c.IMAPState == NOT_AUTHENTICATED) || (c.IMAPState == LOGOUT) {
+		log.Printf("SELECT not correct state lol")
+		return false
+	}
 
-	// Temporary answer.
-	err := c.Send("Yep, works.")
+	if len(req.Payload) < 1 {
+
+		// If no mailbox to select was specified in payload,
+		// this is a client error. Return BAD statement.
+		err := c.Send(fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select", req.Tag))
+		if err != nil {
+			c.ErrorLogOnly("Encountered send error", err)
+			return false
+		}
+
+		return false
+	}
+
+	// Split payload on every space character.
+	mailboxes := strings.Split(req.Payload, " ")
+
+	if len(mailboxes) != 1 {
+
+		// If there were more than two names supplied to select,
+		// this is a client error. Return BAD statement.
+		err := c.Send(fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one", req.Tag))
+		if err != nil {
+			c.ErrorLogOnly("Encountered send error", err)
+			return false
+		}
+
+		return false
+	}
+
+	// Save selected mailbox.
+	mailbox := mailboxes[0]
+	log.Printf("selected mailbox: %s\n", mailbox)
+
+	// TODO: Check if mailbox exists as folder.
+
+	// TODO: Check if mailbox is a conformant maildir folder.
+
+	// TODO: Set selected mailbox in connection struct to supplied
+	//       one and advance IMAP state of connection to MAILBOX.
+
+	// Build up answer to client.
+	answer := ""
+
+	// Include part for standard flags.
+	answer = answer + "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)"
+
+	// TODO: Add all other required answer parts.
+
+	log.Printf("Answer: '%s'\n", answer)
+
+	// Send prepared answer to requesting client.
+	err := c.Send(answer)
 	if err != nil {
 		c.ErrorLogOnly("Encountered send error", err)
 		return false
@@ -83,8 +138,9 @@ func (node *Node) AcceptWorker(c *Connection) {
 			continue
 		}
 
-		// TODO: Load user-specific environment.
-		//       Set current Maildir path variable to user one's.
+		// Load user-specific environment.
+		context.UserMaildir = node.Config.Workers[node.Name].MaildirRoot + context.UserName + "/"
+		context.UserCRDT = node.Config.Workers[node.Name].CRDTLayerRoot + context.UserName + "/"
 
 		switch {
 
@@ -97,7 +153,7 @@ func (node *Node) AcceptWorker(c *Connection) {
 			log.Printf("%s: session changed.", context.UserName)
 
 		case req.Command == "SELECT":
-			if ok := node.Select(c, req); ok {
+			if ok := node.Select(c, req, context); ok {
 
 				// If successful, signal end of operation to distributor.
 				err := c.SignalSessionDone(nil)

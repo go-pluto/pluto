@@ -28,6 +28,8 @@ AuthAdapter = "AuthFile"
     Port = "20001"
     UserStart = 1
     UserEnd = 10
+    MaildirRoot = "../private/Maildirs/worker-test/"
+    CRDTLayerRoot = "../private/crdt-layers/worker-test/"
 
         [Workers.worker-1.TLS]
         CertLoc = "../private/internal-worker-1-cert.pem"

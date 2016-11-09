@@ -30,6 +30,7 @@ type Type int
 // Node struct bundles information of one node instance.
 type Node struct {
 	Type        Type
+	Name        string
 	Socket      net.Listener
 	AuthAdapter auth.PlainAuthenticator
 	Connections map[string]*tls.Conn
@@ -61,6 +62,7 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 
 		// Set struct type to distributor.
 		node.Type = DISTRIBUTOR
+		node.Name = "distributor"
 		node.Connections = make(map[string]*tls.Conn)
 
 		// As the distributor is responsible for the authentication
@@ -132,6 +134,7 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 
 		// Set struct type to worker.
 		node.Type = WORKER
+		node.Name = worker
 		node.Connections = make(map[string]*tls.Conn)
 
 		// Load internal TLS config.
@@ -161,6 +164,7 @@ func InitNode(config *config.Config, distributor bool, worker string, storage bo
 
 		// Set struct type to storage.
 		node.Type = STORAGE
+		node.Name = "storage"
 
 		// Load internal TLS config.
 		internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Storage.TLS.CertLoc, config.Storage.TLS.KeyLoc, config.RootCertLoc)
@@ -196,6 +200,10 @@ func (node *Node) HandleRequest(conn net.Conn) {
 
 	if node.Type == DISTRIBUTOR {
 
+		// Initially, each connection's state at distributor stage
+		// is set to not authenticated as it was just started.
+		c.IMAPState = NOT_AUTHENTICATED
+
 		// If this node is a distributor, send initial server greeting.
 		err := c.Send("* OK IMAP4rev1 " + node.Config.Distributor.IMAP.Greeting)
 		if err != nil {
@@ -207,6 +215,10 @@ func (node *Node) HandleRequest(conn net.Conn) {
 		node.AcceptDistributor(c)
 
 	} else if node.Type == WORKER {
+
+		// Initially, each connection's state at worker stage
+		// is set to authenticated as auth was performed at distributor.
+		c.IMAPState = AUTHENTICATED
 
 		// Dispatch to worker state.
 		node.AcceptWorker(c)
