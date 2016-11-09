@@ -77,6 +77,7 @@ func TestCapability(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer Node.Socket.Close()
 
 	// Start test distributor in background.
 	go func() {
@@ -143,8 +144,6 @@ func TestCapability(t *testing.T) {
 
 	// At the end of each test, terminate connection.
 	c.Terminate()
-
-	Node.Socket.Close()
 }
 
 // TestLogin executes a black-box table test on the

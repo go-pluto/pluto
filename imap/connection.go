@@ -127,7 +127,7 @@ func (c *Connection) SignalSessionError(worker *tls.Conn) error {
 	return nil
 }
 
-// SignalDistributorDone is either used by the distributor to signal
+// SignalSessionDone is either used by the distributor to signal
 // the worker that a client logged out or by a worker to indicated
 // that the current operation is done.
 func (c *Connection) SignalSessionDone(worker *tls.Conn) error {

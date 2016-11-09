@@ -8,8 +8,8 @@ import (
 
 // Functions
 
-// Select sets mailbox based on supplied payload to
-// current context.
+// Select sets the current mailbox based on supplied
+// payload to user-instructed value.
 func (node *Node) Select(c *Connection, req *Request, ctx *Context) bool {
 
 	log.Printf("Serving SELECT '%s'...\n", req.Tag)
@@ -57,6 +57,8 @@ func (node *Node) Select(c *Connection, req *Request, ctx *Context) bool {
 
 	// TODO: Check if mailbox is a conformant maildir folder.
 
+	// TODO: Deselect any prior selected mailbox in this connection.
+
 	// TODO: Set selected mailbox in connection struct to supplied
 	//       one and advance IMAP state of connection to MAILBOX.
 
@@ -64,7 +66,8 @@ func (node *Node) Select(c *Connection, req *Request, ctx *Context) bool {
 	answer := ""
 
 	// Include part for standard flags.
-	answer = answer + "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)"
+	answer = answer + "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n"
+	answer = answer + "* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]"
 
 	// TODO: Add all other required answer parts.
 
@@ -76,6 +79,41 @@ func (node *Node) Select(c *Connection, req *Request, ctx *Context) bool {
 		c.ErrorLogOnly("Encountered send error", err)
 		return false
 	}
+
+	return true
+}
+
+// Create attempts to create a mailbox with name
+// taken from payload of request.
+func (node *Node) Create(c *Connection, req *Request, ctx *Context) bool {
+
+	return true
+}
+
+// Append inserts a message built from further supplied
+// message literal in a mailbox specified in payload.
+func (node *Node) Append(c *Connection, req *Request, ctx *Context) bool {
+
+	return true
+}
+
+// Store updates meta data of specified messages and
+// returns the new meta data of those messages.
+func (node *Node) Store(c *Connection, req *Request, ctx *Context) bool {
+
+	return true
+}
+
+// Copy takes specified messages and inserts them again
+// into another stated mailbox.
+func (node *Node) Copy(c *Connection, req *Request, ctx *Context) bool {
+
+	return true
+}
+
+// Expunge deletes messages prior marked as to-be-deleted
+// via labelling them with the \Deleted flag.
+func (node *Node) Expunge(c *Connection, req *Request, ctx *Context) bool {
 
 	return true
 }
