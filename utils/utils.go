@@ -2,6 +2,8 @@ package utils
 
 import (
 	"fmt"
+	"log"
+	"time"
 
 	"crypto/tls"
 	"crypto/x509"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crypto"
+	"github.com/numbleroot/pluto/imap"
 )
 
 // Functions
@@ -50,4 +53,64 @@ func CreateTestEnv() (*config.Config, *tls.Config, error) {
 	}
 
 	return config, tlsConfig, nil
+}
+
+// RunStorageWithTimeout is supposed to be called in a goroutine
+// and initializes and runs a storage node and shuts it down
+// after waitMilliseconds of milliseconds.
+func RunStorageWithTimeout(conf *config.Config, waitMilliseconds int) {
+
+	// Initialize storage node.
+	storage, err := imap.InitStorage(conf)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Close the socket after 500ms.
+	time.AfterFunc((time.Duration(waitMilliseconds) * time.Millisecond), func() {
+		storage.Socket.Close()
+	})
+
+	// Run the storage node.
+	_ = storage.Run()
+}
+
+// RunWorkerWithTimeout is supposed to be called in a goroutine
+// and initializes and runs a worker node and shuts it down
+// after waitMilliseconds of milliseconds.
+func RunWorkerWithTimeout(conf *config.Config, workerName string, waitMilliseconds int) {
+
+	// Initialize workerName worker node.
+	worker, err := imap.InitWorker(conf, workerName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Close the socket after 500ms.
+	time.AfterFunc((time.Duration(waitMilliseconds) * time.Millisecond), func() {
+		worker.Socket.Close()
+	})
+
+	// Run the worker node.
+	_ = worker.Run()
+}
+
+// RunDistributorWithTimeout is supposed to be called in a goroutine
+// and initializes and runs a distributor node and shuts it down
+// after waitMilliseconds of milli seconds.
+func RunDistributorWithTimeout(conf *config.Config, waitMilliseconds int) {
+
+	// Initialize distributor node.
+	distr, err := imap.InitDistributor(conf)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Close the socket after 500ms.
+	time.AfterFunc((time.Duration(waitMilliseconds) * time.Millisecond), func() {
+		distr.Socket.Close()
+	})
+
+	// Run the distributor node.
+	_ = distr.Run()
 }

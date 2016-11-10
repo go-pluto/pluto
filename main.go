@@ -26,7 +26,7 @@ func main() {
 	flag.Parse()
 
 	// Read configuration from file.
-	Config, err := config.LoadConfig(*configFlag)
+	conf, err := config.LoadConfig(*configFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -37,16 +37,49 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Initialize an IMAP node based on passed flags.
-	Node, err := imap.InitNode(Config, *distributorFlag, *workerFlag, *storageFlag)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer Node.Socket.Close()
+	// Initialize and run a node of the pluto
+	// system based on passed command line flag.
+	if *distributorFlag {
 
-	// Loop on incoming requests.
-	err = Node.RunNode()
-	if err != nil {
-		log.Fatal(err)
+		// Initialize distributor.
+		distr, err := imap.InitDistributor(conf)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer distr.Socket.Close()
+
+		// Loop on incoming requests.
+		err = distr.Run()
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else if *workerFlag != "" {
+
+		// Initialize worker.
+		worker, err := imap.InitWorker(conf, *workerFlag)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer worker.Socket.Close()
+
+		// Loop on incoming requests.
+		err = worker.Run()
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else if *storageFlag {
+
+		// Initialize storage.
+		storage, err := imap.InitStorage(conf)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer storage.Socket.Close()
+
+		// Loop on incoming requests.
+		err = storage.Run()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }

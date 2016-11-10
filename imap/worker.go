@@ -3,161 +3,114 @@ package imap
 import (
 	"fmt"
 	"log"
-	"strings"
+	"net"
+
+	"crypto/tls"
 
 	"github.com/numbleroot/maildir"
+	"github.com/numbleroot/pluto/config"
+	"github.com/numbleroot/pluto/crypto"
 )
+
+// Worker struct bundles information needed in
+// operation of a worker node.
+type Worker struct {
+	Name        string
+	Socket      net.Listener
+	Connections map[string]*tls.Conn
+	Config      *config.Config
+}
 
 // Functions
 
-// Select sets the current mailbox based on supplied
-// payload to user-instructed value. A return value of
-// this function does not indicate whether the command
-// was successfully handled according to IMAP semantics,
-// but rather whether a fatal error occurred or a complete
-// answer could been sent. So, in case of an user error
-// (e.g. a missing mailbox to select) but otherwise correct
-// handling, this function would send a useful message to
-// the client and still return true.
-func (node *Node) Select(c *Connection, req *Request, ctx *Context) bool {
+// InitWorker listens for TLS connections on a TCP socket
+// opened up on supplied IP address and port as well as connects
+// to involved storage node. It returns those information bundeled
+// in above Worker struct.
+func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 
-	log.Printf("Serving SELECT '%s'...\n", req.Tag)
+	var err error
 
-	// Check if connection is in correct state.
-	if (c.IMAPState == ANY) || (c.IMAPState == NOT_AUTHENTICATED) || (c.IMAPState == LOGOUT) {
-		return false
+	// Initialize and set fields.
+	worker := &Worker{
+		Name:        workerName,
+		Connections: make(map[string]*tls.Conn),
+		Config:      config,
 	}
 
-	if len(req.Payload) < 1 {
+	// Check if supplied worker with workerName actually is configured.
+	if _, ok := config.Workers[worker.Name]; !ok {
 
-		// If no mailbox to select was specified in payload,
-		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select", req.Tag))
-		if err != nil {
-			c.ErrorLogOnly("Encountered send error", err)
-			return false
+		var workerID string
+
+		// Retrieve first valid worker ID to provide feedback.
+		for workerID = range config.Workers {
+			break
 		}
 
-		return true
+		return nil, fmt.Errorf("[imap.InitWorker] Specified worker ID does not exist in config file. Please provide a valid one, for example '%s'.\n", workerID)
 	}
 
-	// Split payload on every whitespace character.
-	mailboxes := strings.Split(req.Payload, " ")
-
-	if len(mailboxes) != 1 {
-
-		// If there were more than two names supplied to select,
-		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one", req.Tag))
-		if err != nil {
-			c.ErrorLogOnly("Encountered send error", err)
-			return false
-		}
-
-		return true
-	}
-
-	// Save supplied maildir.
-	mailbox := ctx.UserMaildir
-
-	// If any other mailbox than INBOX was specified,
-	// append it to mailbox in order to check it.
-	if mailboxes[0] != "INBOX" {
-		mailbox = maildir.Dir(fmt.Sprintf("%s%s", ctx.UserMaildir, mailboxes[0]))
-	}
-
-	// Check if mailbox is existing and a conformant maildir folder.
-	err := mailbox.Check()
+	// Load internal TLS config.
+	internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Workers[worker.Name].TLS.CertLoc, config.Workers[worker.Name].TLS.KeyLoc, config.RootCertLoc)
 	if err != nil {
+		return nil, err
+	}
 
-		// If specified maildir did not turn out to be a valid one,
-		// this is a client error. Return NO statement.
-		err := c.Send(fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder", req.Tag))
+	// Try to connect to storage node with internal TLS config.
+	c, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.Port), internalTLSConfig)
+	if err != nil {
+		return nil, fmt.Errorf("[imap.InitWorker] Could not connect to storage node because of: %s\n", err.Error())
+	}
+
+	// Save connection for later use.
+	worker.Connections["storage"] = c
+
+	// Start to listen for incoming internal connections on defined IP and port.
+	worker.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].IP, config.Workers[worker.Name].Port), internalTLSConfig)
+	if err != nil {
+		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal TLS connections failed with: %s\n", err.Error())
+	}
+
+	log.Printf("[imap.InitWorker] Listening for incoming IMAP requests on %s.\n", worker.Socket.Addr())
+
+	return worker, nil
+}
+
+// Run loops over incoming requests at worker and
+// dispatches each one to a goroutine taking care of
+// the commands supplied.
+func (worker *Worker) Run() error {
+
+	for {
+
+		// Accept request or fail on error.
+		conn, err := worker.Socket.Accept()
 		if err != nil {
-			c.ErrorLogOnly("Encountered send error", err)
-			return false
+			return fmt.Errorf("[imap.Run] Accepting incoming request at %s failed with: %s\n", worker.Name, err.Error())
 		}
 
-		return true
+		// Dispatch into own goroutine.
+		go worker.HandleConnection(conn)
 	}
-
-	// TODO: Set selected mailbox in connection struct to supplied
-	//       one and advance IMAP state of connection to MAILBOX.
-
-	// Build up answer to client.
-	answer := ""
-
-	// Include part for standard flags.
-	answer = answer + "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n"
-	answer = answer + "* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]"
-
-	// TODO: Add all other required answer parts.
-
-	// Send prepared answer to requesting client.
-	err = c.Send(answer)
-	if err != nil {
-		c.ErrorLogOnly("Encountered send error", err)
-		return false
-	}
-
-	return true
 }
 
-// Create attempts to create a mailbox with name
-// taken from payload of request.
-func (node *Node) Create(c *Connection, req *Request, ctx *Context) bool {
-
-	return true
-}
-
-// Append inserts a message built from further supplied
-// message literal in a mailbox specified in payload.
-func (node *Node) Append(c *Connection, req *Request, ctx *Context) bool {
-
-	return true
-}
-
-// Store updates meta data of specified messages and
-// returns the new meta data of those messages.
-func (node *Node) Store(c *Connection, req *Request, ctx *Context) bool {
-
-	return true
-}
-
-// Copy takes specified messages and inserts them again
-// into another stated mailbox.
-func (node *Node) Copy(c *Connection, req *Request, ctx *Context) bool {
-
-	return true
-}
-
-// Expunge deletes messages prior marked as to-be-deleted
-// via labelling them with the \Deleted flag.
-func (node *Node) Expunge(c *Connection, req *Request, ctx *Context) bool {
-
-	return true
-}
-
-// AcceptWorker is the main worker routine where all
+// HandleConnection is the main worker routine where all
 // incoming requests against worker nodes have to go through.
-func (node *Node) AcceptWorker(c *Connection) {
+func (worker *Worker) HandleConnection(conn net.Conn) {
 
-	// Connections in this state are only possible against
-	// a node of type WORKER, none else.
-	if node.Type != WORKER {
-		log.Println("[imap.AcceptWorker] DISTRIBUTOR or STORAGE node tried to run this function. Not allowed.")
-		return
-	}
+	// Create a new connection struct for incoming request.
+	c := NewConnection(conn)
 
-	// Receive next incoming client command.
+	// Receive opening information.
 	opening, err := c.Receive()
 	if err != nil {
 		c.ErrorLogOnly("Encountered receive error", err)
 		return
 	}
 
-	// As long as the distributor node did not indicate
-	// that the system is about to shut down, we accept requests.
+	// As long as the distributor node did not indicate that
+	// the system is about to shut down, we accept requests.
 	for opening != "> done <" {
 
 		// Extract important parts and inject them into struct.
@@ -197,8 +150,8 @@ func (node *Node) AcceptWorker(c *Connection) {
 		}
 
 		// Load user-specific environment.
-		context.UserMaildir = maildir.Dir(fmt.Sprintf("%s%s/", node.Config.Workers[node.Name].MaildirRoot, context.UserName))
-		context.UserCRDT = fmt.Sprintf("%s%s/", node.Config.Workers[node.Name].CRDTLayerRoot, context.UserName)
+		context.UserMaildir = maildir.Dir(fmt.Sprintf("%s%s/", worker.Config.Workers[worker.Name].MaildirRoot, context.UserName))
+		context.UserCRDT = fmt.Sprintf("%s%s/", worker.Config.Workers[worker.Name].CRDTLayerRoot, context.UserName)
 
 		switch {
 
@@ -211,7 +164,7 @@ func (node *Node) AcceptWorker(c *Connection) {
 			log.Printf("%s: session changed.", context.UserName)
 
 		case req.Command == "SELECT":
-			if ok := node.Select(c, req, context); ok {
+			if ok := worker.Select(c, req, context); ok {
 
 				// If successful, signal end of operation to distributor.
 				err := c.SignalSessionDone(nil)
