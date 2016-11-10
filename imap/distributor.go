@@ -13,6 +13,7 @@ import (
 // It outputs the supported actions in the current state.
 func (node *Node) Capability(c *Connection, req *Request) bool {
 
+	log.Println()
 	log.Printf("Serving CAPABILITY '%s'...\n", req.Tag)
 
 	if len(req.Payload) > 0 {
@@ -25,7 +26,7 @@ func (node *Node) Capability(c *Connection, req *Request) bool {
 			return false
 		}
 
-		return false
+		return true
 	}
 
 	// Send mandatory capability options.
@@ -45,6 +46,7 @@ func (node *Node) Capability(c *Connection, req *Request) bool {
 // as part of the distributor config.
 func (node *Node) Login(c *Connection, req *Request) bool {
 
+	log.Println()
 	log.Printf("Serving LOGIN '%s'...\n", req.Tag)
 
 	// Split payload on every space character.
@@ -60,7 +62,7 @@ func (node *Node) Login(c *Connection, req *Request) bool {
 			return false
 		}
 
-		return false
+		return true
 	}
 
 	id, token, err := node.AuthAdapter.AuthenticatePlain(userCredentials[0], userCredentials[1])
@@ -74,7 +76,7 @@ func (node *Node) Login(c *Connection, req *Request) bool {
 			return false
 		}
 
-		return false
+		return true
 	}
 
 	// Signal success to client.
@@ -121,6 +123,7 @@ func (node *Node) Login(c *Connection, req *Request) bool {
 // get shut down gracefully.
 func (node *Node) Logout(c *Connection, req *Request) bool {
 
+	log.Println()
 	log.Printf("Serving LOGOUT '%s'...\n", req.Tag)
 
 	if len(req.Payload) > 0 {
@@ -133,7 +136,7 @@ func (node *Node) Logout(c *Connection, req *Request) bool {
 			return false
 		}
 
-		return false
+		return true
 	}
 
 	// If already a worker was assigned, signal logout.
@@ -177,6 +180,7 @@ func (node *Node) Logout(c *Connection, req *Request) bool {
 // that current connection is already encrypted.
 func (node *Node) StartTLS(c *Connection, req *Request) bool {
 
+	log.Println()
 	log.Printf("Serving STARTTLS '%s'...\n", req.Tag)
 
 	if len(req.Payload) > 0 {
@@ -189,7 +193,7 @@ func (node *Node) StartTLS(c *Connection, req *Request) bool {
 			return false
 		}
 
-		return false
+		return true
 	}
 
 	// As the connection is already TLS encrypted,
@@ -207,6 +211,7 @@ func (node *Node) StartTLS(c *Connection, req *Request) bool {
 // node and the responsible worker node.
 func (node *Node) Proxy(c *Connection, rawReq string) bool {
 
+	log.Println()
 	log.Printf("PROXYing request '%s'...\n", rawReq)
 
 	// We need proper auxiliary variables for later access.

@@ -3,6 +3,8 @@ package imap
 import (
 	"fmt"
 	"strings"
+
+	"github.com/numbleroot/maildir"
 )
 
 // Variables
@@ -28,7 +30,7 @@ type Request struct {
 type Context struct {
 	UserToken   string
 	UserName    string
-	UserMaildir string
+	UserMaildir maildir.Dir
 	UserCRDT    string
 }
 

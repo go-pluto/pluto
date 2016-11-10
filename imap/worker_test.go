@@ -18,7 +18,12 @@ import (
 var selectTests = []struct {
 	in  string
 	out string
-}{}
+}{
+	{"a LOGIN user1 password1", "a OK Logged in"},
+	{"b SELECT INBOX", "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]"},
+	{"c SELECT", "c BAD Command SELECT was sent without a mailbox to select"},
+	{"d SELECT lol rofl nope", "d BAD Command SELECT was sent with multiple mailbox names instead of only one"},
+}
 
 // Functions
 
@@ -68,7 +73,9 @@ func TestSelect(t *testing.T) {
 		t.Errorf("[imap.TestSelect] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
-	for _, tt := range selectTests {
+	for i, tt := range selectTests {
+
+		var answer string
 
 		// Table test: send 'in' part of each line.
 		err = c.Send(tt.in)
@@ -77,9 +84,22 @@ func TestSelect(t *testing.T) {
 		}
 
 		// Receive answer to SELECT request.
-		answer, err := c.Receive()
+		selectAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestSelect] Error during receiving table test LOGIN: %s\n", err.Error())
+			t.Errorf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
+		}
+
+		if i == 1 {
+
+			// Receive command termination message from distributor.
+			okAnswer, err := c.Receive()
+			if err != nil {
+				t.Errorf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
+			}
+
+			answer = fmt.Sprintf("%s\n%s", selectAnswer, okAnswer)
+		} else {
+			answer = selectAnswer
 		}
 
 		if answer != tt.out {

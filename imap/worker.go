@@ -4,19 +4,27 @@ import (
 	"fmt"
 	"log"
 	"strings"
+
+	"github.com/numbleroot/maildir"
 )
 
 // Functions
 
 // Select sets the current mailbox based on supplied
-// payload to user-instructed value.
+// payload to user-instructed value. A return value of
+// this function does not indicate whether the command
+// was successfully handled according to IMAP semantics,
+// but rather whether a fatal error occurred or a complete
+// answer could been sent. So, in case of an user error
+// (e.g. a missing mailbox to select) but otherwise correct
+// handling, this function would send a useful message to
+// the client and still return true.
 func (node *Node) Select(c *Connection, req *Request, ctx *Context) bool {
 
 	log.Printf("Serving SELECT '%s'...\n", req.Tag)
 
 	// Check if connection is in correct state.
 	if (c.IMAPState == ANY) || (c.IMAPState == NOT_AUTHENTICATED) || (c.IMAPState == LOGOUT) {
-		log.Printf("SELECT not correct state lol")
 		return false
 	}
 
@@ -30,10 +38,10 @@ func (node *Node) Select(c *Connection, req *Request, ctx *Context) bool {
 			return false
 		}
 
-		return false
+		return true
 	}
 
-	// Split payload on every space character.
+	// Split payload on every whitespace character.
 	mailboxes := strings.Split(req.Payload, " ")
 
 	if len(mailboxes) != 1 {
@@ -46,21 +54,39 @@ func (node *Node) Select(c *Connection, req *Request, ctx *Context) bool {
 			return false
 		}
 
-		return false
+		return true
 	}
 
-	// Save selected mailbox.
-	mailbox := mailboxes[0]
-	log.Printf("selected mailbox: %s\n", mailbox)
+	// Save supplied maildir.
+	mailbox := ctx.UserMaildir
 
-	// TODO: Check if mailbox exists as folder.
+	// If any other mailbox than INBOX was specified,
+	// append it to mailbox in order to check it.
+	if mailboxes[0] != "INBOX" {
+		mailbox = maildir.Dir(fmt.Sprintf("%s%s", ctx.UserMaildir, mailboxes[0]))
+	}
 
-	// TODO: Check if mailbox is a conformant maildir folder.
+	// Check if mailbox is existing and a conformant maildir folder.
+	err := mailbox.Check()
+	if err != nil {
+
+		// If specified maildir did not turn out to be a valid one,
+		// this is a client error. Return NO statement.
+		err := c.Send(fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder", req.Tag))
+		if err != nil {
+			c.ErrorLogOnly("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
 
 	// TODO: Deselect any prior selected mailbox in this connection.
 
-	// TODO: Set selected mailbox in connection struct to supplied
-	//       one and advance IMAP state of connection to MAILBOX.
+	// Set selected mailbox in connection struct to supplied
+	// one and advance IMAP state of connection to MAILBOX.
+	c.CurrentMailbox = mailbox
+	c.IMAPState = MAILBOX
 
 	// Build up answer to client.
 	answer := ""
@@ -71,10 +97,8 @@ func (node *Node) Select(c *Connection, req *Request, ctx *Context) bool {
 
 	// TODO: Add all other required answer parts.
 
-	log.Printf("Answer: '%s'\n", answer)
-
 	// Send prepared answer to requesting client.
-	err := c.Send(answer)
+	err = c.Send(answer)
 	if err != nil {
 		c.ErrorLogOnly("Encountered send error", err)
 		return false
@@ -177,8 +201,8 @@ func (node *Node) AcceptWorker(c *Connection) {
 		}
 
 		// Load user-specific environment.
-		context.UserMaildir = node.Config.Workers[node.Name].MaildirRoot + context.UserName + "/"
-		context.UserCRDT = node.Config.Workers[node.Name].CRDTLayerRoot + context.UserName + "/"
+		context.UserMaildir = maildir.Dir(fmt.Sprintf("%s%s/", node.Config.Workers[node.Name].MaildirRoot, context.UserName))
+		context.UserCRDT = fmt.Sprintf("%s%s/", node.Config.Workers[node.Name].CRDTLayerRoot, context.UserName)
 
 		switch {
 

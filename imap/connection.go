@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"crypto/tls"
+
+	"github.com/numbleroot/maildir"
 )
 
 // Constants
@@ -34,12 +36,13 @@ type IMAPState int
 // to one observed connection on its way through
 // the IMAP server.
 type Connection struct {
-	Conn      net.Conn
-	IMAPState IMAPState
-	Worker    string
-	Reader    *bufio.Reader
-	UserToken string
-	UserName  string
+	Conn           net.Conn
+	IMAPState      IMAPState
+	Worker         string
+	Reader         *bufio.Reader
+	UserToken      string
+	UserName       string
+	CurrentMailbox maildir.Dir
 }
 
 // Functions
