@@ -39,16 +39,16 @@ func TestSelect(t *testing.T) {
 	}
 
 	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 800)
-	time.Sleep(200 * time.Millisecond)
+	go utils.RunStorageWithTimeout(config, 1800)
+	time.Sleep(400 * time.Millisecond)
 
 	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 800)
-	time.Sleep(200 * time.Millisecond)
+	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
+	time.Sleep(400 * time.Millisecond)
 
 	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 800)
-	time.Sleep(200 * time.Millisecond)
+	go utils.RunDistributorWithTimeout(config, 1800)
+	time.Sleep(400 * time.Millisecond)
 
 	// Connect to IMAP server.
 	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
@@ -102,5 +102,5 @@ func TestSelect(t *testing.T) {
 	// At the end of each test, terminate connection.
 	c.Terminate()
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 }
