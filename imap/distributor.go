@@ -65,7 +65,7 @@ func (node *Node) Login(c *Connection, req *Request) bool {
 		return true
 	}
 
-	id, token, err := node.AuthAdapter.AuthenticatePlain(userCredentials[0], userCredentials[1])
+	id, clientID, err := node.AuthAdapter.AuthenticatePlain(userCredentials[0], userCredentials[1], c.Conn.RemoteAddr().String())
 	if err != nil {
 
 		// If supplied credentials failed to authenticate client,
@@ -112,7 +112,7 @@ func (node *Node) Login(c *Connection, req *Request) bool {
 
 	// Save context to connection.
 	c.Worker = respWorker
-	c.UserToken = token
+	c.UserToken = clientID
 	c.UserName = userCredentials[0]
 
 	return true
@@ -161,9 +161,6 @@ func (node *Node) Logout(c *Connection, req *Request) bool {
 		c.Error("Encountered send error", err)
 		return false
 	}
-
-	// Delete token from user entry.
-	node.AuthAdapter.DeleteTokenForUser(c.UserName)
 
 	// Delete context information from connection struct.
 	c.Worker = ""

@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/numbleroot/pluto/config"
-	"github.com/numbleroot/pluto/utils"
 )
 
 // Structs
@@ -29,7 +28,6 @@ type User struct {
 	ID       int
 	Name     string
 	Password string
-	Token    string
 }
 
 // UsersByName defines a list type of users to search efficiently.
@@ -78,7 +76,6 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 			ID:       i,
 			Name:     userData[0],
 			Password: userData[1],
-			Token:    "",
 		}
 
 		// Append new user element to slice.
@@ -104,24 +101,6 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 	}, nil
 }
 
-// GetOriginalIDOfUser finds position of supplied user in users
-// list. It is assumed that existence check was already performed,
-// for example via AuthenticatePlain.
-func (f *FileAuthenticator) GetOriginalIDOfUser(username string) int {
-
-	// This routine has to be safe for concurrent usage,
-	// therefore lock the struct on entry.
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
-	// Search in user list for user matching supplied name.
-	i := sort.Search(len(f.Users), func(i int) bool {
-		return f.Users[i].Name >= username
-	})
-
-	return f.Users[i].ID
-}
-
 // GetWorkerForUser returns the name of the worker node
 // that is responsible for handling the user's mailbox.
 func (f *FileAuthenticator) GetWorkerForUser(workers map[string]config.Worker, id int) (string, error) {
@@ -139,31 +118,11 @@ func (f *FileAuthenticator) GetWorkerForUser(workers map[string]config.Worker, i
 	return "", fmt.Errorf("no worker responsible for user ID %d", id)
 }
 
-// DeleteTokenForUser removes the token from the in-memory
-// user list that marks an active session of an user.
-func (f *FileAuthenticator) DeleteTokenForUser(username string) {
-
-	// This routine has to be safe for concurrent usage,
-	// therefore lock the struct on entry.
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
-	// Search in user list for user matching supplied name.
-	i := sort.Search(len(f.Users), func(i int) bool {
-		return f.Users[i].Name >= username
-	})
-
-	// Remove the token if present.
-	if f.Users[i].Token != "" {
-		f.Users[i].Token = ""
-	}
-}
-
 // AuthenticatePlain performs the actual authentication
 // process by taking supplied credentials and attempting
 // to find a matching entry the in-memory list taken from
 // the authentication file.
-func (f *FileAuthenticator) AuthenticatePlain(username string, password string) (int, string, error) {
+func (f *FileAuthenticator) AuthenticatePlain(username string, password string, clientAddr string) (int, string, error) {
 
 	// This routine has to be safe for concurrent usage,
 	// therefore lock the struct on entry.
@@ -185,9 +144,8 @@ func (f *FileAuthenticator) AuthenticatePlain(username string, password string) 
 		return -1, "", fmt.Errorf("passwords did not match")
 	}
 
-	// Generate a random session token and save it
-	// in user's entry of in-memory list.
-	f.Users[i].Token = utils.GenerateRandomString(16)
+	// Build the deterministic client-specific session identifier.
+	clientID := fmt.Sprintf("%s:%s", clientAddr, username)
 
-	return f.Users[i].ID, f.Users[i].Token, nil
+	return f.Users[i].ID, clientID, nil
 }

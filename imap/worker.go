@@ -81,12 +81,8 @@ func (node *Node) Select(c *Connection, req *Request, ctx *Context) bool {
 		return true
 	}
 
-	// TODO: Deselect any prior selected mailbox in this connection.
-
-	// Set selected mailbox in connection struct to supplied
-	// one and advance IMAP state of connection to MAILBOX.
-	c.CurrentMailbox = mailbox
-	c.IMAPState = MAILBOX
+	// TODO: Set selected mailbox in connection struct to supplied
+	//       one and advance IMAP state of connection to MAILBOX.
 
 	// Build up answer to client.
 	answer := ""

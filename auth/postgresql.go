@@ -57,14 +57,6 @@ func NewPostgreSQLAuthenticator(ip string, port string, db string, user string, 
 	}, nil
 }
 
-// GetOriginalIDOfUser finds position of supplied user in users
-// table. It is assumed that existence check was already performed,
-// for example via AuthenticatePlain.
-func (p *PostgreSQLAuthenticator) GetOriginalIDOfUser(username string) int {
-
-	return -1
-}
-
 // GetWorkerForUser returns the name of the worker node
 // that is responsible for handling the user's mailbox.
 func (p *PostgreSQLAuthenticator) GetWorkerForUser(workers map[string]config.Worker, id int) (string, error) {
@@ -72,15 +64,11 @@ func (p *PostgreSQLAuthenticator) GetWorkerForUser(workers map[string]config.Wor
 	return "", fmt.Errorf("no worker responsible for user ID %d", id)
 }
 
-// DeleteTokenForUser removes the token associated with
-// an active session of a client.
-func (p *PostgreSQLAuthenticator) DeleteTokenForUser(username string) {}
-
 // AuthenticatePlain performs the actual authentication
 // process by taking supplied credentials and attempting
 // to find a matching entry in PostgreSQL database described
 // by a struct of above's layout.
-func (p *PostgreSQLAuthenticator) AuthenticatePlain(username string, password string) (int, string, error) {
+func (p *PostgreSQLAuthenticator) AuthenticatePlain(username string, password string, clientAddr string) (int, string, error) {
 
 	return -1, "", nil
 }
