@@ -15,13 +15,10 @@ deps:
 test-env:
 	if [ ! -d "private" ]; then mkdir private; fi
 	chmod 0700 private
-	mkdir -p private/Maildirs/worker-1/user{0,1,2,3,4,5,6,7,8,9}/{cur,new,tmp}
+	mkdir -p private/Maildirs/worker-1/
+	@for i in 0 1 2 3 4 5 6 7 8 9; do mkdir -p private/Maildirs/worker-1/user$$i/new && mkdir -p private/Maildirs/worker-1/user$$i/tmp && mkdir -p private/Maildirs/worker-1/user$$i/cur; done
 	chmod -R 0700 private/Maildirs/worker-1/*
 	mkdir -p private/crdt-layers/worker-1/
-	pwd
-	ls -lah
-	ls -lah private/
-	ls -lah private/Maildirs/
 	ls -lah private/Maildirs/worker-1/
 	ls -lah private/Maildirs/worker-1/user1/
 
