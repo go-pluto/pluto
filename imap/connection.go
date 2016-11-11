@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"crypto/tls"
-
-	"github.com/numbleroot/maildir"
 )
 
 // Constants
@@ -36,13 +34,11 @@ type IMAPState int
 // to one observed connection on its way through
 // the IMAP server.
 type Connection struct {
-	Conn           net.Conn
-	IMAPState      IMAPState
-	Worker         string
-	Reader         *bufio.Reader
-	UserToken      string
-	UserName       string
-	CurrentMailbox maildir.Dir
+	Conn      net.Conn
+	Worker    string
+	Reader    *bufio.Reader
+	UserToken string
+	UserName  string
 }
 
 // Functions
@@ -89,7 +85,7 @@ func (c *Connection) Send(text string) error {
 // an involved worker node context about future requests.
 func (c *Connection) SignalSessionPrefix(worker *tls.Conn) error {
 
-	if _, err := fmt.Fprintf(worker, "> token: %s name: %s <\n", c.UserToken, c.UserName); err != nil {
+	if _, err := fmt.Fprintf(worker, "> id: %s <\n", c.UserToken); err != nil {
 		return err
 	}
 

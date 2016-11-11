@@ -3,8 +3,6 @@ package imap
 import (
 	"fmt"
 	"strings"
-
-	"github.com/numbleroot/maildir"
 )
 
 // Variables
@@ -23,15 +21,6 @@ type Request struct {
 	Tag     string
 	Command string
 	Payload string
-}
-
-// Context carries session-identifying information sent
-// from distributor to worker node.
-type Context struct {
-	UserToken   string
-	UserName    string
-	UserMaildir maildir.Dir
-	UserCRDT    string
 }
 
 // Functions
@@ -88,29 +77,4 @@ func ParseRequest(req string) (*Request, error) {
 	}
 
 	return finalReq, nil
-}
-
-// ExtractContext takes in received raw context string,
-// verifies and parses it and if successful, returns
-// context information about session.
-func ExtractContext(contextRaw string) (*Context, error) {
-
-	// Split received context at white spaces and check
-	// for correct amount of found fields.
-	contexts := strings.Fields(contextRaw)
-	if len(contexts) != 6 {
-		return nil, fmt.Errorf("received an invalid context information")
-	}
-
-	// Check if structure is correct.
-	if contexts[0] != ">" || contexts[1] != "token:" || contexts[3] != "name:" || contexts[5] != "<" {
-		return nil, fmt.Errorf("received an invalid context information")
-	}
-
-	// Extract token and name of client and store it
-	// in connection context.
-	return &Context{
-		UserToken: contexts[2],
-		UserName:  contexts[4],
-	}, nil
 }

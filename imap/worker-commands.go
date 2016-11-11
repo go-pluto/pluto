@@ -19,11 +19,21 @@ import (
 // (e.g. a missing mailbox to select) but otherwise correct
 // handling, this function would send a useful message to
 // the client and still return true.
-func (worker *Worker) Select(c *Connection, req *Request, ctx *Context) bool {
+func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool {
 
 	log.Printf("Serving SELECT '%s'...\n", req.Tag)
 
-	// TODO: Check if connection is in correct state.
+	worker.lock.RLock()
+
+	// Check if connection is in correct state.
+	if (worker.Contexts[clientID].IMAPState != AUTHENTICATED) && (worker.Contexts[clientID].IMAPState != MAILBOX) {
+		return false
+	}
+
+	// Save maildir for later use.
+	mailbox := worker.Contexts[clientID].UserMaildir
+
+	worker.lock.RUnlock()
 
 	if len(req.Payload) < 1 {
 
@@ -54,13 +64,10 @@ func (worker *Worker) Select(c *Connection, req *Request, ctx *Context) bool {
 		return true
 	}
 
-	// Save supplied maildir.
-	mailbox := ctx.UserMaildir
-
 	// If any other mailbox than INBOX was specified,
 	// append it to mailbox in order to check it.
 	if mailboxes[0] != "INBOX" {
-		mailbox = maildir.Dir(fmt.Sprintf("%s%s", ctx.UserMaildir, mailboxes[0]))
+		mailbox = maildir.Dir(fmt.Sprintf("%s%s", mailbox, mailboxes[0]))
 	}
 
 	// Check if mailbox is existing and a conformant maildir folder.
@@ -78,8 +85,14 @@ func (worker *Worker) Select(c *Connection, req *Request, ctx *Context) bool {
 		return true
 	}
 
-	// TODO: Set selected mailbox in connection struct to supplied
-	//       one and advance IMAP state of connection to MAILBOX.
+	worker.lock.Lock()
+
+	// Set selected mailbox in context to supplied one
+	// and advance IMAP state of connection to MAILBOX.
+	worker.Contexts[clientID].IMAPState = MAILBOX
+	worker.Contexts[clientID].SelectedMailbox = mailbox
+
+	worker.lock.Unlock()
 
 	// Build up answer to client.
 	answer := ""

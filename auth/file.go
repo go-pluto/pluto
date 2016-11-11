@@ -17,7 +17,7 @@ import (
 // information including the in-memory map of username to
 // password mapping.
 type FileAuthenticator struct {
-	lock      sync.Mutex
+	lock      sync.RWMutex
 	File      string
 	Separator string
 	Users     []User
@@ -94,7 +94,7 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 	sort.Sort(UsersByName(Users))
 
 	return &FileAuthenticator{
-		lock:      sync.Mutex{},
+		lock:      sync.RWMutex{},
 		File:      file,
 		Separator: sep,
 		Users:     Users,
@@ -126,8 +126,8 @@ func (f *FileAuthenticator) AuthenticatePlain(username string, password string, 
 
 	// This routine has to be safe for concurrent usage,
 	// therefore lock the struct on entry.
-	f.lock.Lock()
-	defer f.lock.Unlock()
+	f.lock.RLock()
+	defer f.lock.RUnlock()
 
 	// Search in user list for user matching supplied name.
 	i := sort.Search(len(f.Users), func(i int) bool {

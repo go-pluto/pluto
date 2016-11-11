@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 
 	"crypto/tls"
 
-	"github.com/numbleroot/maildir"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crypto"
 )
@@ -15,9 +15,11 @@ import (
 // Worker struct bundles information needed in
 // operation of a worker node.
 type Worker struct {
+	lock        sync.RWMutex
 	Name        string
 	Socket      net.Listener
 	Connections map[string]*tls.Conn
+	Contexts    map[string]*Context
 	Config      *config.Config
 }
 
@@ -33,8 +35,10 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 
 	// Initialize and set fields.
 	worker := &Worker{
+		lock:        sync.RWMutex{},
 		Name:        workerName,
 		Connections: make(map[string]*tls.Conn),
+		Contexts:    make(map[string]*Context),
 		Config:      config,
 	}
 
@@ -113,8 +117,8 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 	// the system is about to shut down, we accept requests.
 	for opening != "> done <" {
 
-		// Extract important parts and inject them into struct.
-		context, err := ExtractContext(opening)
+		// Extract the prefixed clientID and update or create context.
+		clientID, err := worker.UpdateClientContext(opening)
 		if err != nil {
 			c.ErrorLogOnly("Error extracting context", err)
 			return
@@ -149,22 +153,18 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 			continue
 		}
 
-		// Load user-specific environment.
-		context.UserMaildir = maildir.Dir(fmt.Sprintf("%s%s/", worker.Config.Workers[worker.Name].MaildirRoot, context.UserName))
-		context.UserCRDT = fmt.Sprintf("%s%s/", worker.Config.Workers[worker.Name].CRDTLayerRoot, context.UserName)
-
 		switch {
 
 		case rawReq == "> done <":
 			// TODO: Trigger state-dependent behaviour when user logged out.
-			log.Printf("%s: done.", context.UserName)
+			log.Printf("%s: done.", clientID)
 
 		case rawReq == "> changed <":
 			// TODO: Trigger state-dependent behaviour when session changed.
-			log.Printf("%s: session changed.", context.UserName)
+			log.Printf("%s: session changed.", clientID)
 
 		case req.Command == "SELECT":
-			if ok := worker.Select(c, req, context); ok {
+			if ok := worker.Select(c, req, clientID); ok {
 
 				// If successful, signal end of operation to distributor.
 				err := c.SignalSessionDone(nil)

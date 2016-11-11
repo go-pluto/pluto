@@ -32,13 +32,15 @@ func TestInitWorker(t *testing.T) {
 	go func() {
 
 		// Close the socket after 500ms.
-		time.AfterFunc((500 * time.Millisecond), func() {
+		time.AfterFunc((600 * time.Millisecond), func() {
 			storage.Socket.Close()
 		})
 
 		// Run the storage node.
 		_ = storage.Run()
 	}()
+
+	time.Sleep(400 * time.Millisecond)
 
 	// Correct worker initialization.
 	worker, err := imap.InitWorker(config, "worker-1")
@@ -48,5 +50,5 @@ func TestInitWorker(t *testing.T) {
 
 	worker.Socket.Close()
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(400 * time.Millisecond)
 }
