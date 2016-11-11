@@ -74,8 +74,6 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 	err := mailbox.Check()
 	if err != nil {
 
-		log.Printf("maildir error: %s\n", err.Error())
-
 		// If specified maildir did not turn out to be a valid one,
 		// this is a client error. Return NO statement.
 		err := c.Send(fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder", req.Tag))
