@@ -16,6 +16,7 @@ test-env:
 	if [ ! -d "private" ]; then mkdir private; fi
 	chmod 0700 private
 	mkdir -p private/Maildirs/worker-1/user{0,1,2,3,4,5,6,7,8,9}/{cur,new,tmp}
+	chmod -R 0700 private/Maildirs/worker-1/*
 	mkdir -p private/crdt-layers/worker-1/
 
 build:
