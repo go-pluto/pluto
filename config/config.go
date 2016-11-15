@@ -35,7 +35,8 @@ type Distributor struct {
 // information for an individual IMAP worker node.
 type Worker struct {
 	IP            string
-	Port          string
+	MailPort      string
+	SyncPort      string
 	UserStart     int
 	UserEnd       int
 	MaildirRoot   string
@@ -46,9 +47,9 @@ type Worker struct {
 // Storage configures the global database node
 // storing all user data in a very safe manner.
 type Storage struct {
-	IP   string
-	Port string
-	TLS  TLS
+	IP       string
+	SyncPort string
+	TLS      TLS
 }
 
 // TLS contains Transport Layer Security relevant

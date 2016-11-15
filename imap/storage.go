@@ -40,13 +40,13 @@ func InitStorage(config *config.Config) (*Storage, error) {
 		return nil, err
 	}
 
-	// Start to listen for incoming internal connections on defined IP and port.
-	storage.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.Port), internalTLSConfig)
+	// Start to listen for incoming internal connections on defined IP and sync port.
+	storage.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.SyncPort), internalTLSConfig)
 	if err != nil {
 		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal TLS connections failed with: %s\n", err.Error())
 	}
 
-	log.Printf("[imap.InitStorage] Listening for incoming IMAP requests on %s.\n", storage.Socket.Addr())
+	log.Printf("[imap.InitStorage] Listening for incoming sync requests on %s.\n", storage.Socket.Addr())
 
 	return storage, nil
 }

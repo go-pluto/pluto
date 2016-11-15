@@ -48,7 +48,7 @@ func TestInitWorker(t *testing.T) {
 		t.Fatalf("[imap.TestInitWorker] Expected correct worker-1 initialization but failed with: '%s'\n", err.Error())
 	}
 
-	worker.Socket.Close()
+	worker.MailSocket.Close()
 
 	time.Sleep(400 * time.Millisecond)
 }

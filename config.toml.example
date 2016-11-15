@@ -41,7 +41,12 @@ AuthAdapter = "AuthPostgreSQL"
 
     [Workers.worker-1]
     IP = "127.0.0.1"
-    Port = "20001"
+    # MailPort specifies the port for connections
+    # concerning the IMAP protocol.
+    MailPort = "20001"
+    # SyncPort is used internally in the pluto system
+    # to synchronize user mailbox state via CRDTs.
+    SyncPort = "30001"
     # The first ID of the user database table entry
     # that this worker node is responsible for.
     UserStart = 1
@@ -61,7 +66,8 @@ AuthAdapter = "AuthPostgreSQL"
 
     [Workers.worker-2]
     IP = "127.0.0.1"
-    Port = "20002"
+    MailPort = "20002"
+    SyncPort = "30002"
     UserStart = 11
     UserEnd = 20
     MaildirRoot = "/for/example/var/mail/Maildir/"
@@ -73,7 +79,8 @@ AuthAdapter = "AuthPostgreSQL"
 
     [Workers.worker-3]
     IP = "127.0.0.1"
-    Port = "20003"
+    MailPort = "20003"
+    SyncPort = "30003"
     UserStart = 21
     UserEnd = 30
     MaildirRoot = "/for/example/some/very/unique/path/Maildir/"
@@ -86,7 +93,7 @@ AuthAdapter = "AuthPostgreSQL"
 
 [Storage]
 IP = "127.0.0.1"
-Port = "21000"
+SyncPort = "21000"
 
     [Storage.TLS]
     CertLoc = "/very/complicated/and/long/path/to/your/internal-storage-cert.pem"

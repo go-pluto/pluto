@@ -88,7 +88,7 @@ func RunWorkerWithTimeout(conf *config.Config, workerName string, waitMillisecon
 
 	// Close the socket after 500ms.
 	time.AfterFunc((time.Duration(waitMilliseconds) * time.Millisecond), func() {
-		worker.Socket.Close()
+		worker.MailSocket.Close()
 	})
 
 	// Run the worker node.

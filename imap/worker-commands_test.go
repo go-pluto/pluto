@@ -24,6 +24,7 @@ var selectTests = []struct {
 	{"b SELECT INBOX", "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]"},
 	{"c SELECT", "c BAD Command SELECT was sent without a mailbox to select"},
 	{"d SELECT lol rofl nope", "d BAD Command SELECT was sent with multiple mailbox names instead of only one"},
+	{"e LOGOUT", "* BYE Terminating connection\ne OK LOGOUT completed"},
 }
 
 // Functions
@@ -81,7 +82,7 @@ func TestSelect(t *testing.T) {
 			t.Errorf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
 		}
 
-		if i == 1 {
+		if (i == 1) || (i == 4) {
 
 			// Receive command termination message from distributor.
 			okAnswer, err := c.Receive()

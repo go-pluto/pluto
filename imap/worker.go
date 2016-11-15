@@ -17,7 +17,8 @@ import (
 type Worker struct {
 	lock        sync.RWMutex
 	Name        string
-	Socket      net.Listener
+	MailSocket  net.Listener
+	SyncSocket  net.Listener
 	Connections map[string]*tls.Conn
 	Contexts    map[string]*Context
 	Config      *config.Config
@@ -61,22 +62,30 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		return nil, err
 	}
 
-	// Try to connect to storage node with internal TLS config.
-	c, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.Port), internalTLSConfig)
+	// Try to connect to sync port of storage node with internal TLS config.
+	c, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.SyncPort), internalTLSConfig)
 	if err != nil {
-		return nil, fmt.Errorf("[imap.InitWorker] Could not connect to storage node because of: %s\n", err.Error())
+		return nil, fmt.Errorf("[imap.InitWorker] Could not connect to sync port of storage node because of: %s\n", err.Error())
 	}
 
 	// Save connection for later use.
 	worker.Connections["storage"] = c
 
-	// Start to listen for incoming internal connections on defined IP and port.
-	worker.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].IP, config.Workers[worker.Name].Port), internalTLSConfig)
+	// Start to listen for incoming internal connections on defined IP and sync port.
+	worker.SyncSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].IP, config.Workers[worker.Name].SyncPort), internalTLSConfig)
 	if err != nil {
-		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal TLS connections failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal sync TLS connections failed with: %s\n", err.Error())
 	}
 
-	log.Printf("[imap.InitWorker] Listening for incoming IMAP requests on %s.\n", worker.Socket.Addr())
+	// TODO: Dispatch into receiving goroutine on sync connection.
+
+	// Start to listen for incoming internal connections on defined IP and mail port.
+	worker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].IP, config.Workers[worker.Name].MailPort), internalTLSConfig)
+	if err != nil {
+		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
+	}
+
+	log.Printf("[imap.InitWorker] Listening for incoming IMAP requests on %s.\n", worker.MailSocket.Addr())
 
 	return worker, nil
 }
@@ -89,7 +98,7 @@ func (worker *Worker) Run() error {
 	for {
 
 		// Accept request or fail on error.
-		conn, err := worker.Socket.Accept()
+		conn, err := worker.MailSocket.Accept()
 		if err != nil {
 			return fmt.Errorf("[imap.Run] Accepting incoming request at %s failed with: %s\n", worker.Name, err.Error())
 		}

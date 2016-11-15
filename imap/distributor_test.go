@@ -52,7 +52,7 @@ func TestInitDistributor(t *testing.T) {
 
 		// Close the socket after 500ms.
 		time.AfterFunc((600 * time.Millisecond), func() {
-			worker.Socket.Close()
+			worker.MailSocket.Close()
 		})
 
 		// Run the worker.

@@ -66,8 +66,8 @@ func InitDistributor(config *config.Config) (*Distributor, error) {
 	// have established TLS connections later on.
 	for name, worker := range config.Workers {
 
-		// Try to connect to worker with internal TLS config.
-		c, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", worker.IP, worker.Port), internalTLSConfig)
+		// Try to connect to IMAP port of worker with internal TLS config.
+		c, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", worker.IP, worker.MailPort), internalTLSConfig)
 		if err != nil {
 			return nil, fmt.Errorf("[imap.InitDistributor] Could not connect to %s because of: %s\n", name, err.Error())
 		}

@@ -60,7 +60,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer worker.Socket.Close()
+		defer worker.MailSocket.Close()
 
 		// Loop on incoming requests.
 		err = worker.Run()
