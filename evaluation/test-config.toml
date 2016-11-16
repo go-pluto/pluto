@@ -25,7 +25,8 @@ AuthAdapter = "AuthFile"
 
     [Workers.worker-1]
     IP = "127.0.0.1"
-    Port = "20001"
+    MailPort = "20001"
+    SyncPort = "30001"
     UserStart = 1
     UserEnd = 10
     MaildirRoot = "../private/Maildirs/worker-test/"
@@ -38,7 +39,7 @@ AuthAdapter = "AuthFile"
 
 [Storage]
 IP = "127.0.0.1"
-Port = "21000"
+SyncPort = "21000"
 
     [Storage.TLS]
     CertLoc = "../private/internal-storage-cert.pem"

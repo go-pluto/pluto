@@ -10,7 +10,7 @@ coverage:
   status:
     project:
       default:
-        threshold: 10
+        threshold: 20
     patch: true
     changes: false
 comment:
