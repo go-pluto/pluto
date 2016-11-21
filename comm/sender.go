@@ -46,14 +46,14 @@ func InitSender(name string, logFilePath string, nodes map[string]*tls.Conn) cha
 	}
 
 	// Open log file descriptor for writing.
-	write, err := os.OpenFile(logFilePath, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0700)
+	write, err := os.OpenFile(logFilePath, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
 	if err != nil {
 		log.Fatalf("[comm.InitSender] Opening CRDT log file for writing failed with: %s\n", err.Error())
 	}
 	sender.writeLog = write
 
 	// Open log file descriptor for updating.
-	upd, err := os.OpenFile(logFilePath, os.O_RDWR, 0700)
+	upd, err := os.OpenFile(logFilePath, os.O_RDWR, 0600)
 	if err != nil {
 		log.Fatalf("[comm.InitSender] Opening CRDT log file for updating failed with: %s\n", err.Error())
 	}
@@ -94,7 +94,7 @@ func (sender *Sender) HandleMessages() {
 
 		case _ = <-msgInLog:
 
-			log.Println("Message in log")
+			log.Println("Message in log or start up")
 
 			// Most of the following commands are taking from
 			// this stackoverflow answer which describes a way

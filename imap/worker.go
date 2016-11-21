@@ -8,6 +8,7 @@ import (
 
 	"crypto/tls"
 
+	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crypto"
 )
@@ -15,13 +16,14 @@ import (
 // Worker struct bundles information needed in
 // operation of a worker node.
 type Worker struct {
-	lock        sync.RWMutex
-	Name        string
-	MailSocket  net.Listener
-	SyncSocket  net.Listener
-	Connections map[string]*tls.Conn
-	Contexts    map[string]*Context
-	Config      *config.Config
+	lock         sync.RWMutex
+	Name         string
+	MailSocket   net.Listener
+	SyncSocket   net.Listener
+	SyncSendChan chan string
+	Connections  map[string]*tls.Conn
+	Contexts     map[string]*Context
+	Config       *config.Config
 }
 
 // Functions
@@ -78,6 +80,9 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	}
 
 	// TODO: Dispatch into receiving goroutine on sync connection.
+
+	// Init sending part of CRDT communication and accept messages in background.
+	worker.SyncSendChan = comm.InitSender(workerName, fmt.Sprintf("%ssending.log", worker.Config.Workers[workerName].CRDTLayerRoot), worker.Connections)
 
 	// Start to listen for incoming internal connections on defined IP and mail port.
 	worker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].IP, config.Workers[worker.Name].MailPort), internalTLSConfig)

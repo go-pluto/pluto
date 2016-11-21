@@ -56,6 +56,8 @@ func InitStorage(config *config.Config) (*Storage, error) {
 // the commands supplied.
 func (storage *Storage) Run() error {
 
+	// TODO: Let the CRDT receiver function do the work.
+
 	for {
 
 		// Accept request or fail on error.
