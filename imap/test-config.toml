@@ -40,6 +40,7 @@ AuthAdapter = "AuthFile"
 [Storage]
 IP = "127.0.0.1"
 SyncPort = "21000"
+CRDTLayerRoot = "../private/crdt-layers/storage/"
 
     [Storage.TLS]
     CertLoc = "../private/internal-storage-cert.pem"

@@ -61,18 +61,19 @@ func CreateTestEnv() (*config.Config, *tls.Config, error) {
 func RunStorageWithTimeout(conf *config.Config, waitMilliseconds int) {
 
 	// Initialize storage node.
-	storage, err := imap.InitStorage(conf)
+	storage, recv, err := imap.InitStorage(conf)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Close the socket after 500ms.
 	time.AfterFunc((time.Duration(waitMilliseconds) * time.Millisecond), func() {
+		log.Println("[utils.RunStorageWithTimeout] Timeout reached, closing storage socket. BEWARE.")
 		storage.Socket.Close()
 	})
 
 	// Run the storage node.
-	_ = storage.Run()
+	_ = recv.AcceptIncMsgs()
 }
 
 // RunWorkerWithTimeout is supposed to be called in a goroutine
@@ -88,7 +89,9 @@ func RunWorkerWithTimeout(conf *config.Config, workerName string, waitMillisecon
 
 	// Close the socket after 500ms.
 	time.AfterFunc((time.Duration(waitMilliseconds) * time.Millisecond), func() {
+		log.Printf("[utils.RunWorkerWithTimeout] Timeout reached, closing %s socket. BEWARE.", workerName)
 		worker.MailSocket.Close()
+		worker.SyncSocket.Close()
 	})
 
 	// Run the worker node.
@@ -108,6 +111,7 @@ func RunDistributorWithTimeout(conf *config.Config, waitMilliseconds int) {
 
 	// Close the socket after 500ms.
 	time.AfterFunc((time.Duration(waitMilliseconds) * time.Millisecond), func() {
+		log.Println("[utils.RunDistributorWithTimeout] Timeout reached, closing distributor socket. BEWARE.")
 		distr.Socket.Close()
 	})
 

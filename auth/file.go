@@ -17,7 +17,7 @@ import (
 // information including the in-memory map of username to
 // password mapping.
 type FileAuthenticator struct {
-	lock      sync.RWMutex
+	lock      *sync.RWMutex
 	File      string
 	Separator string
 	Users     []User
@@ -94,7 +94,7 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 	sort.Sort(UsersByName(Users))
 
 	return &FileAuthenticator{
-		lock:      sync.RWMutex{},
+		lock:      new(sync.RWMutex),
 		File:      file,
 		Separator: sep,
 		Users:     Users,

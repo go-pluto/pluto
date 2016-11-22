@@ -24,7 +24,7 @@ func TestInitDistributor(t *testing.T) {
 	}
 
 	// Correct storage initialization.
-	storage, err := imap.InitStorage(config)
+	storage, recv, err := imap.InitStorage(config)
 	if err != nil {
 		t.Fatalf("[imap.TestInitDistributor] Expected correct storage initialization but failed with: '%s'\n", err.Error())
 	}
@@ -33,11 +33,12 @@ func TestInitDistributor(t *testing.T) {
 
 		// Close the socket after 500ms.
 		time.AfterFunc((1000 * time.Millisecond), func() {
+			log.Println("[imap_test.TestInitDistributor] Timeout reached, closing storage socket. BEWARE.")
 			storage.Socket.Close()
 		})
 
 		// Run the storage node.
-		_ = storage.Run()
+		_ = recv.AcceptIncMsgs()
 	}()
 
 	time.Sleep(400 * time.Millisecond)
@@ -52,7 +53,9 @@ func TestInitDistributor(t *testing.T) {
 
 		// Close the socket after 500ms.
 		time.AfterFunc((600 * time.Millisecond), func() {
+			log.Println("[imap_test.TestInitDistributor] Timeout reached, closing worker-1 socket. BEWARE.")
 			worker.MailSocket.Close()
+			worker.SyncSocket.Close()
 		})
 
 		// Run the worker.

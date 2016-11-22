@@ -23,7 +23,7 @@ func TestInitStorage(t *testing.T) {
 	}
 
 	// Correct storage initialization.
-	storage, err := imap.InitStorage(config)
+	storage, _, err := imap.InitStorage(config)
 	if err != nil {
 		t.Fatalf("[imap.TestInitStorage] Expected correct storage initialization but failed with: '%s'\n", err.Error())
 	}

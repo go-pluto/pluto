@@ -47,9 +47,10 @@ type Worker struct {
 // Storage configures the global database node
 // storing all user data in a very safe manner.
 type Storage struct {
-	IP       string
-	SyncPort string
-	TLS      TLS
+	IP            string
+	SyncPort      string
+	CRDTLayerRoot string
+	TLS           TLS
 }
 
 // TLS contains Transport Layer Security relevant

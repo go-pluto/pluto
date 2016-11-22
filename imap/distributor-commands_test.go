@@ -144,6 +144,8 @@ func TestCapability(t *testing.T) {
 // implemented Login() function.
 func TestLogin(t *testing.T) {
 
+	time.Sleep(1 * time.Second)
+
 	// Create needed test environment.
 	config, tlsConfig, err := utils.CreateTestEnv()
 	if err != nil {

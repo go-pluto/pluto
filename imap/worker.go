@@ -16,7 +16,7 @@ import (
 // Worker struct bundles information needed in
 // operation of a worker node.
 type Worker struct {
-	lock         sync.RWMutex
+	lock         *sync.RWMutex
 	Name         string
 	MailSocket   net.Listener
 	SyncSocket   net.Listener
@@ -38,7 +38,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 
 	// Initialize and set fields.
 	worker := &Worker{
-		lock:        sync.RWMutex{},
+		lock:        new(sync.RWMutex),
 		Name:        workerName,
 		Connections: make(map[string]*tls.Conn),
 		Contexts:    make(map[string]*Context),
@@ -79,10 +79,17 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal sync TLS connections failed with: %s\n", err.Error())
 	}
 
-	// TODO: Dispatch into receiving goroutine on sync connection.
+	// Initialize receiving goroutine for sync operations.
+	err = comm.InitReceiver(worker.Name, fmt.Sprintf("%sreceiving.log", config.Workers[worker.Name].CRDTLayerRoot), worker.SyncSocket)
+	if err != nil {
+		return nil, err
+	}
 
-	// Init sending part of CRDT communication and accept messages in background.
-	worker.SyncSendChan = comm.InitSender(workerName, fmt.Sprintf("%ssending.log", worker.Config.Workers[workerName].CRDTLayerRoot), worker.Connections)
+	// Init sending part of CRDT communication and send messages in background.
+	worker.SyncSendChan, err = comm.InitSender(worker.Name, fmt.Sprintf("%ssending.log", config.Workers[worker.Name].CRDTLayerRoot), worker.Connections)
+	if err != nil {
+		return nil, err
+	}
 
 	// Start to listen for incoming internal connections on defined IP and mail port.
 	worker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].IP, config.Workers[worker.Name].MailPort), internalTLSConfig)

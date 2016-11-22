@@ -19,6 +19,7 @@ test-env:
 	@for i in 0 1 2 3 4 5 6 7 8 9; do mkdir -p private/Maildirs/worker-1/user$$i/new && mkdir -p private/Maildirs/worker-1/user$$i/tmp && mkdir -p private/Maildirs/worker-1/user$$i/cur; done
 	chmod -R 0700 private/Maildirs/worker-1/*
 	mkdir -p private/crdt-layers/worker-1/
+	mkdir -p private/crdt-layers/storage/
 
 build:
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'
