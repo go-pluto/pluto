@@ -68,7 +68,7 @@ func InitSender(name string, logFilePath string, nodes map[string]*tls.Conn) (ch
 	sender.updLog = upd
 
 	// Initially set vector clock entries to 0.
-	for i, _ := range nodes {
+	for i := range nodes {
 		sender.vclock[i] = 0
 	}
 
