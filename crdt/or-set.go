@@ -1,6 +1,7 @@
 package crdt
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/satori/go.uuid"
@@ -16,6 +17,11 @@ type ORSet struct {
 	lock     *sync.RWMutex
 	elements map[string]interface{}
 }
+
+// sendFunc is used as a parameter to below defined
+// AddSendDownstream function that broadcasts an update
+// payload to all other replicas.
+type sendFunc func(string)
 
 // Functions
 
@@ -57,23 +63,21 @@ func (s *ORSet) Lookup(e interface{}) bool {
 	return found
 }
 
-// AddSource is the prepare part of an update add
+// AddPrepare is the prepare part of an update add
 // operation defined by the specification. It is executed
 // only at the source node that initiated the addition.
 // It returns a random UUID (v4) and it is assumed that
 // each of these IDs is unique.
-func (s *ORSet) AddSource() string {
+func (s *ORSet) AddPrepare() string {
 
 	return uuid.NewV4().String()
 }
 
-// AddDownstream is the effect part of an update add
-// operation defined by the specification. It is executed
-// by all replicas of the data set including the source node.
-// It inserts given element and tag into the set representation.
-func (s *ORSet) AddDownstream(e interface{}, tag string) {
-
-	// TODO: Send to all other replicas.
+// AddEffect is the effect part of an update add operation
+// defined by the specification. It is executed by all
+// replicas of the data set including the source node. It
+// inserts given element and tag into the set representation.
+func (s *ORSet) AddEffect(e interface{}, tag string) {
 
 	// Write-lock the set.
 	s.lock.Lock()
@@ -83,4 +87,18 @@ func (s *ORSet) AddDownstream(e interface{}, tag string) {
 
 	// Relieve write lock.
 	s.lock.Unlock()
+}
+
+// AddSendDownstream is a helper function only executed at
+// the source node of the corresponding update operation.
+// It outputs a built update message into a supplied send
+// function that is responsible for reliable causally-ordered
+// broadcast to all other replicas.
+func (s *ORSet) AddSendDownstream(e interface{}, tag string, send sendFunc) {
+
+	// Compose downstream update message.
+	msg := fmt.Sprintf("add;%s;%s", e, tag)
+
+	// Send to other involved nodes.
+	send(msg)
 }

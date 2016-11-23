@@ -40,15 +40,15 @@ func TestSelect(t *testing.T) {
 	}
 
 	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 1800)
+	go utils.RunStorageWithTimeout(config, 2200)
 	time.Sleep(400 * time.Millisecond)
 
 	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 1400)
+	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
 	time.Sleep(400 * time.Millisecond)
 
 	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 1000)
+	go utils.RunDistributorWithTimeout(config, 1400)
 	time.Sleep(400 * time.Millisecond)
 
 	// Connect to IMAP server.
@@ -103,5 +103,5 @@ func TestSelect(t *testing.T) {
 	// At the end of each test, terminate connection.
 	c.Terminate()
 
-	time.Sleep(800 * time.Millisecond)
+	time.Sleep(1200 * time.Millisecond)
 }

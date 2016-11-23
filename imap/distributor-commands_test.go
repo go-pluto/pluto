@@ -74,15 +74,15 @@ func TestCapability(t *testing.T) {
 	}
 
 	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 1800)
+	go utils.RunStorageWithTimeout(config, 2200)
 	time.Sleep(400 * time.Millisecond)
 
 	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 1400)
+	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
 	time.Sleep(400 * time.Millisecond)
 
 	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 1000)
+	go utils.RunDistributorWithTimeout(config, 1400)
 	time.Sleep(400 * time.Millisecond)
 
 	// Connect to IMAP distributor.
@@ -137,7 +137,7 @@ func TestCapability(t *testing.T) {
 	// At the end of each test, terminate connection.
 	c.Terminate()
 
-	time.Sleep(800 * time.Millisecond)
+	time.Sleep(1200 * time.Millisecond)
 }
 
 // TestLogin executes a black-box table test on the
@@ -153,15 +153,15 @@ func TestLogin(t *testing.T) {
 	}
 
 	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 1800)
+	go utils.RunStorageWithTimeout(config, 2200)
 	time.Sleep(400 * time.Millisecond)
 
 	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 1400)
+	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
 	time.Sleep(400 * time.Millisecond)
 
 	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 1000)
+	go utils.RunDistributorWithTimeout(config, 1400)
 	time.Sleep(400 * time.Millisecond)
 
 	// Connect to IMAP distributor.
@@ -201,7 +201,7 @@ func TestLogin(t *testing.T) {
 	// At the end of each test, terminate connection.
 	c.Terminate()
 
-	time.Sleep(800 * time.Millisecond)
+	time.Sleep(1200 * time.Millisecond)
 }
 
 // TestLogout executes a black-box table test on the
@@ -215,15 +215,15 @@ func TestLogout(t *testing.T) {
 	}
 
 	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 1800)
+	go utils.RunStorageWithTimeout(config, 2200)
 	time.Sleep(400 * time.Millisecond)
 
 	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 1400)
+	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
 	time.Sleep(400 * time.Millisecond)
 
 	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 1000)
+	go utils.RunDistributorWithTimeout(config, 1400)
 	time.Sleep(400 * time.Millisecond)
 
 	for i, tt := range logoutTests {
@@ -281,7 +281,7 @@ func TestLogout(t *testing.T) {
 		}
 	}
 
-	time.Sleep(800 * time.Millisecond)
+	time.Sleep(1200 * time.Millisecond)
 }
 
 // TestStartTLS executes a black-box table test on the
@@ -295,15 +295,15 @@ func TestStartTLS(t *testing.T) {
 	}
 
 	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 1800)
+	go utils.RunStorageWithTimeout(config, 2200)
 	time.Sleep(400 * time.Millisecond)
 
 	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 1400)
+	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
 	time.Sleep(400 * time.Millisecond)
 
 	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 1000)
+	go utils.RunDistributorWithTimeout(config, 1400)
 	time.Sleep(400 * time.Millisecond)
 
 	// Connect to IMAP server.
@@ -343,5 +343,5 @@ func TestStartTLS(t *testing.T) {
 	// At the end of each test, terminate connection.
 	c.Terminate()
 
-	time.Sleep(800 * time.Millisecond)
+	time.Sleep(1200 * time.Millisecond)
 }
