@@ -63,16 +63,6 @@ func (s *ORSet) Lookup(e interface{}) bool {
 	return found
 }
 
-// AddPrepare is the prepare part of an update add
-// operation defined by the specification. It is executed
-// only at the source node that initiated the addition.
-// It returns a random UUID (v4) and it is assumed that
-// each of these IDs is unique.
-func (s *ORSet) AddPrepare() string {
-
-	return uuid.NewV4().String()
-}
-
 // AddEffect is the effect part of an update add operation
 // defined by the specification. It is executed by all
 // replicas of the data set including the source node. It
@@ -89,15 +79,23 @@ func (s *ORSet) AddEffect(e interface{}, tag string) {
 	s.lock.Unlock()
 }
 
-// AddSendDownstream is a helper function only executed at
-// the source node of the corresponding update operation.
-// It outputs a built update message into a supplied send
-// function that is responsible for reliable causally-ordered
-// broadcast to all other replicas.
-func (s *ORSet) AddSendDownstream(e interface{}, tag string, send sendFunc) {
+// Add is a helper function only to be executed at the
+// source node of an update. It executes the prepare and
+// effect update parts of an add operation. Afterwards,
+// the update instruction is send downstream to all other
+// replicas via the send function which takes care of the
+// reliable causally-ordered broadcast.
+func (s *ORSet) Add(e interface{}, send sendFunc) {
+
+	// Create a new unique tag.
+	tag := uuid.NewV4().String()
+
+	// Apply effect part of update add.
+	s.AddEffect(e, tag)
 
 	// Compose downstream update message.
-	msg := fmt.Sprintf("add;%s;%s", e, tag)
+	// TODO: Escape possible ';' in e.
+	msg := fmt.Sprintf("add;%v;%s", e, tag)
 
 	// Send to other involved nodes.
 	send(msg)
