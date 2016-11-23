@@ -57,68 +57,92 @@ func TestLookup(t *testing.T) {
 	// Set values in internal map and check
 	// that they are reachable via Lookup().
 
+	// v1
 	if s.Lookup(v1) == true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' not to be in set but Lookup() returns true.\n", v1)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.\n", v1)
 	}
+
 	s.elements["10000000-a071-4227-9e63-a4b0ee84688f"] = v1
+
 	if s.Lookup(v1) != true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' to be in set but Lookup() returns false.\n", v1)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.\n", v1)
 	}
 
+	// v2
 	if s.Lookup(v2) == true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' not to be in set but Lookup() returns true.\n", v2)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.\n", v2)
 	}
+
 	s.elements["20000000-a071-4227-9e63-a4b0ee84688f"] = v2
+
 	if s.Lookup(v2) != true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' to be in set but Lookup() returns false.\n", v2)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.\n", v2)
 	}
 
+	// v3
 	if s.Lookup(v3) == true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' not to be in set but Lookup() returns true.\n", v3)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.\n", v3)
 	}
+
 	s.elements["30000000-a071-4227-9e63-a4b0ee84688f"] = v3
+
 	if s.Lookup(v3) != true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' to be in set but Lookup() returns false.\n", v3)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.\n", v3)
 	}
 
+	// v4
 	if s.Lookup(v4) == true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' not to be in set but Lookup() returns true.\n", v4)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.\n", v4)
 	}
+
 	s.elements["40000000-a071-4227-9e63-a4b0ee84688f"] = v4
+
 	if s.Lookup(v4) != true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' to be in set but Lookup() returns false.\n", v4)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.\n", v4)
 	}
 
+	// v5
 	if s.Lookup(v5) == true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' not to be in set but Lookup() returns true.\n", v5)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.\n", v5)
 	}
+
 	s.elements["50000000-a071-4227-9e63-a4b0ee84688f"] = v5
+
 	if s.Lookup(v5) != true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' to be in set but Lookup() returns false.\n", v5)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.\n", v5)
 	}
 
+	// v6
 	if s.Lookup(v6) == true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' not to be in set but Lookup() returns true.\n", v6)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.\n", v6)
 	}
+
 	s.elements["60000000-a071-4227-9e63-a4b0ee84688f"] = v6
+
 	if s.Lookup(v6) != true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' to be in set but Lookup() returns false.\n", v6)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.\n", v6)
 	}
 
+	// v7
 	if s.Lookup(v7) == true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' not to be in set but Lookup() returns true.\n", v7)
-	}
-	s.elements["70000000-a071-4227-9e63-a4b0ee84688f"] = v7
-	if s.Lookup(v7) != true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' to be in set but Lookup() returns false.\n", v7)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.\n", v7)
 	}
 
-	if s.Lookup(v8) == true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' not to be in set but Lookup() returns true.\n", v8)
+	s.elements["70000000-a071-4227-9e63-a4b0ee84688f"] = v7
+
+	if s.Lookup(v7) != true {
+		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.\n", v7)
 	}
+
+	// v8
+	if s.Lookup(v8) == true {
+		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.\n", v8)
+	}
+
 	s.elements["80000000-a071-4227-9e63-a4b0ee84688f"] = v8
+
 	if s.Lookup(v8) != true {
-		t.Fatalf("[crdt.TestLookup] Expected '%s' to be in set but Lookup() returns false.\n", v8)
+		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.\n", v8)
 	}
 }
 
@@ -131,26 +155,35 @@ func TestAddEffect(t *testing.T) {
 
 	// Set and test keys.
 
+	// k1
 	if value, found := s.elements[k1]; found {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' not to be an active map key but found '%v' at that place.\n", k1, value)
 	}
-	s.AddEffect(v1, k1)
+
+	s.AddEffect(v1, k1, true)
+
 	if value, found := s.elements[k1]; !found {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' to be an active map key and contain '%v' as value but found '%v' at that place.\n", k1, v1, value)
 	}
 
+	// k2
 	if value, found := s.elements[k2]; found {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' not to be an active map key but found '%v' at that place.\n", k2, value)
 	}
-	s.AddEffect(v3, k2)
+
+	s.AddEffect(v3, k2, true)
+
 	if value, found := s.elements[k2]; !found {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' to be an active map key and contain '%v' as value but found '%v' at that place.\n", k2, v3, value)
 	}
 
+	// k3
 	if value, found := s.elements[k3]; found {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' not to be an active map key but found '%v' at that place.\n", k3, value)
 	}
-	s.AddEffect(v5, k3)
+
+	s.AddEffect(v5, k3, true)
+
 	if value, found := s.elements[k3]; !found {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' to be an active map key and contain '%v' as value but found '%v' at that place.\n", k3, v5, value)
 	}
@@ -161,41 +194,50 @@ func TestAddEffect(t *testing.T) {
 func TestAdd(t *testing.T) {
 
 	// Use these variables to compare sent values.
-	var msg1, msg2, msg3 string
+	var msg1, msg2, msg3, msg4 string
 
 	// Create new ORSet.
 	s := InitORSet()
 
 	// Add defined values to set.
 
+	// v2
 	if s.Lookup(v2) == true {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' not to be in set but Lookup() returns true.\n", v2)
+		t.Fatalf("[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true.\n", v2)
 	}
+
 	s.Add(v2, func(payload string) {
 		msg1 = payload
 	})
+
 	if s.Lookup(v2) != true {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to be in set but Lookup() returns false.\n", v2)
+		t.Fatalf("[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false.\n", v2)
 	}
 
+	// v4
 	if s.Lookup(v4) == true {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' not to be in set but Lookup() returns true.\n", v4)
+		t.Fatalf("[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true.\n", v4)
 	}
+
 	s.Add(v4, func(payload string) {
 		msg2 = payload
 	})
+
 	if s.Lookup(v4) != true {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to be in set but Lookup() returns false.\n", v4)
+		t.Fatalf("[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false.\n", v4)
 	}
 
+	// v6
 	if s.Lookup(v6) == true {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' not to be in set but Lookup() returns true.\n", v6)
+		t.Fatalf("[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true.\n", v6)
 	}
+
 	s.Add(v6, func(payload string) {
 		msg3 = payload
 	})
+
 	if s.Lookup(v6) != true {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to be in set but Lookup() returns false.\n", v6)
+		t.Fatalf("[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false.\n", v6)
 	}
 
 	// Check sent messages for length.
@@ -216,18 +258,33 @@ func TestAdd(t *testing.T) {
 	// Check that sent messages only contain two semicolons.
 	// This discovers possible non-escaped characters in payload.
 
-	parts1 := strings.Split(msg1, ";")
+	parts1 := strings.Split(msg1, "|")
 	if len(parts1) != 3 {
 		t.Fatalf("[crdt.TestAdd] Expected '%s' to contain exactly two semicolons but found %d instead.\n", msg1, len(parts1))
 	}
 
-	parts2 := strings.Split(msg2, ";")
+	parts2 := strings.Split(msg2, "|")
 	if len(parts2) != 3 {
 		t.Fatalf("[crdt.TestAdd] Expected '%s' to contain exactly two semicolons but found %d instead.\n", msg2, len(parts2))
 	}
 
-	parts3 := strings.Split(msg3, ";")
+	parts3 := strings.Split(msg3, "|")
 	if len(parts3) != 3 {
 		t.Fatalf("[crdt.TestAdd] Expected '%s' to contain exactly two semicolons but found %d instead.\n", msg3, len(parts3))
+	}
+
+	// Test second add of an element that is
+	// already contained in set.
+
+	s.Add(v2, func(payload string) {
+		msg4 = payload
+	})
+
+	if len(s.elements) != 4 {
+		t.Fatalf("[crdt.TestAdd] Expected set to contain exactly 4 elements but found %d instead.\n", len(s.elements))
+	}
+
+	if msg1 == msg4 {
+		t.Fatalf("[crdt.TestAdd] Expected '%s' and '%s' not to be equal but comparison returned true.\n", msg1, msg4)
 	}
 }

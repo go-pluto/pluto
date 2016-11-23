@@ -71,20 +71,20 @@ func TestParse(t *testing.T) {
 
 	// Check parsing.
 	_, err := Parse(marshalled1)
-	if err.Error() != "Invalid sync message" {
-		t.Fatalf("[comm.TestParse] Expected 'Invalid sync message' but received: '%s'\n", err.Error())
+	if err.Error() != "invalid sync message" {
+		t.Fatalf("[comm.TestParse] Expected 'invalid sync message' but received: '%s'\n", err.Error())
 	}
 
 	// Check parsing.
 	_, err = Parse(marshalled2)
-	if err.Error() != "Invalid vector clock element" {
-		t.Fatalf("[comm.TestParse] Expected 'Invalid vector clock element' but received: '%s'\n", err.Error())
+	if err.Error() != "invalid vector clock element" {
+		t.Fatalf("[comm.TestParse] Expected 'invalid vector clock element' but received: '%s'\n", err.Error())
 	}
 
 	// Check parsing.
 	_, err = Parse(marshalled3)
-	if err.Error() != "Invalid number as element in vector clock" {
-		t.Fatalf("[comm.TestParse] Expected 'Invalid number as element in vector clock' but received: '%s'\n", err.Error())
+	if err.Error() != "invalid number as element in vector clock" {
+		t.Fatalf("[comm.TestParse] Expected 'invalid number as element in vector clock' but received: '%s'\n", err.Error())
 	}
 
 	// Check parsing.

@@ -57,7 +57,7 @@ func Parse(msg string) (*Message, error) {
 
 	// Messages with less than two parts are discarded.
 	if len(tmpMsg) < 2 {
-		return nil, fmt.Errorf("Invalid sync message")
+		return nil, fmt.Errorf("invalid sync message")
 	}
 
 	// Split first part at semicolons for vector clock.
@@ -70,13 +70,13 @@ func Parse(msg string) (*Message, error) {
 
 		// Vector clock entries with less than two parts are discarded.
 		if len(c) < 2 {
-			return nil, fmt.Errorf("Invalid vector clock element")
+			return nil, fmt.Errorf("invalid vector clock element")
 		}
 
 		// Parse number from string.
 		num, err := strconv.Atoi(c[1])
 		if err != nil {
-			return nil, fmt.Errorf("Invalid number as element in vector clock")
+			return nil, fmt.Errorf("invalid number as element in vector clock")
 		}
 
 		// Place vector clock entry in struct.
@@ -91,13 +91,13 @@ func Parse(msg string) (*Message, error) {
 
 			// Vector clock entries with less than two parts are discarded.
 			if len(c) < 2 {
-				return nil, fmt.Errorf("Invalid vector clock element")
+				return nil, fmt.Errorf("invalid vector clock element")
 			}
 
 			// Parse number from string.
 			num, err := strconv.Atoi(c[1])
 			if err != nil {
-				return nil, fmt.Errorf("Invalid number as element in vector clock")
+				return nil, fmt.Errorf("invalid number as element in vector clock")
 			}
 
 			// Place vector clock entries in struct.
