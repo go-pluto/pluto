@@ -37,13 +37,15 @@ func InitORSet() *ORSet {
 // Lookup cycles through elements in ORSet and
 // returns true if element e is present and
 // false otherwise.
-func (s *ORSet) Lookup(e interface{}) bool {
+func (s *ORSet) Lookup(e interface{}, needsLocking bool) bool {
 
 	// Fallback return value is false.
 	found := false
 
-	// Read-lock the set.
-	s.lock.RLock()
+	if needsLocking {
+		// Read-lock the set.
+		s.lock.RLock()
+	}
 
 	for _, value := range s.elements {
 
@@ -56,8 +58,10 @@ func (s *ORSet) Lookup(e interface{}) bool {
 		}
 	}
 
-	// Relieve read lock.
-	s.lock.RUnlock()
+	if needsLocking {
+		// Relieve read lock.
+		s.lock.RUnlock()
+	}
 
 	return found
 }
@@ -147,13 +151,13 @@ func (s *ORSet) Remove(e interface{}, send sendFunc) error {
 
 	// Initialize needed remove set and msg variables.
 	rSet := make(map[string]interface{})
-	msg := "rmv|"
+	msg := "rmv"
 
 	// Write-lock the set.
 	s.lock.Lock()
 
 	// Check precondition: is element present in set?
-	if s.Lookup(e) != true {
+	if s.Lookup(e, false) != true {
 
 		// If not, relieve write lock and return with error.
 		s.lock.Unlock()
@@ -177,7 +181,7 @@ func (s *ORSet) Remove(e interface{}, send sendFunc) error {
 
 	// Construct message to send to other replicas.
 	for tag, value := range rSet {
-		msg = fmt.Sprintf("%s%v|%s", msg, value, tag)
+		msg = fmt.Sprintf("%s|%v|%s", msg, value, tag)
 	}
 
 	// Send message to other replicas.
