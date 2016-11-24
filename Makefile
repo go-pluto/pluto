@@ -35,7 +35,7 @@ test-pki:
 	if [ ! -d "private" ]; then mkdir private; fi
 	chmod 0700 private
 	go build crypto/generate_pki.go
-	./generate_pki -path-prefix ./ -pluto-config imap/test-config.toml -rsa-bits 1024
+	./generate_pki -path-prefix ./ -pluto-config test-config.toml -rsa-bits 1024
 	rm generate_pki
 
 test-public:
