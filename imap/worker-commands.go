@@ -5,6 +5,8 @@ import (
 	"log"
 	"strings"
 
+	"path/filepath"
+
 	"github.com/numbleroot/maildir"
 )
 
@@ -67,7 +69,7 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 	// If any other mailbox than INBOX was specified,
 	// append it to mailbox in order to check it.
 	if mailboxes[0] != "INBOX" {
-		mailbox = maildir.Dir(fmt.Sprintf("%s%s", mailbox, mailboxes[0]))
+		mailbox = maildir.Dir(filepath.Join(string(mailbox), mailboxes[0]))
 	}
 
 	// Check if mailbox is existing and a conformant maildir folder.

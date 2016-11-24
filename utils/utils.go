@@ -24,7 +24,7 @@ func CreateTestEnv() (*config.Config, *tls.Config, error) {
 	var err error
 
 	// Read configuration from file.
-	config, err := config.LoadConfig("test-config.toml")
+	config, err := config.LoadConfig("../test-config.toml")
 	if err != nil {
 		return nil, nil, err
 	}

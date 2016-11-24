@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"path/filepath"
+
 	"github.com/numbleroot/maildir"
 )
 
@@ -56,8 +58,8 @@ func (worker *Worker) UpdateClientContext(clientIDRaw string) (string, error) {
 			ClientID:    clientID,
 			IMAPState:   AUTHENTICATED,
 			UserName:    clientInfo[2],
-			UserCRDT:    fmt.Sprintf("%s%s/", worker.Config.Workers[worker.Name].CRDTLayerRoot, clientInfo[2]),
-			UserMaildir: maildir.Dir(fmt.Sprintf("%s%s/", worker.Config.Workers[worker.Name].MaildirRoot, clientInfo[2])),
+			UserCRDT:    filepath.Join(worker.Config.Workers[worker.Name].CRDTLayerRoot, clientInfo[2]),
+			UserMaildir: maildir.Dir(filepath.Join(worker.Config.Workers[worker.Name].MaildirRoot, clientInfo[2])),
 		}
 	}
 

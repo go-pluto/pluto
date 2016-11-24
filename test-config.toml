@@ -1,0 +1,47 @@
+RootCertLoc = "private/root-cert.pem"
+
+[Distributor]
+IP = "127.0.0.1"
+Port = "19933"
+AuthAdapter = "AuthFile"
+
+    [Distributor.PublicTLS]
+    CertLoc = "private/public-distributor-cert.pem"
+    KeyLoc = "private/public-distributor-key.pem"
+
+    [Distributor.InternalTLS]
+    CertLoc = "private/internal-distributor-cert.pem"
+    KeyLoc = "private/internal-distributor-key.pem"
+
+    [Distributor.IMAP]
+    Greeting = "Pluto ready."
+
+    [Distributor.AuthFile]
+    File = "test-users.txt"
+    Separator = ";"
+
+
+[Workers]
+
+    [Workers.worker-1]
+    IP = "127.0.0.1"
+    MailPort = "20001"
+    SyncPort = "30001"
+    UserStart = 1
+    UserEnd = 10
+    MaildirRoot = "private/Maildirs/worker-1/"
+    CRDTLayerRoot = "private/crdt-layers/worker-1/"
+
+        [Workers.worker-1.TLS]
+        CertLoc = "private/internal-worker-1-cert.pem"
+        KeyLoc = "private/internal-worker-1-key.pem"
+
+
+[Storage]
+IP = "127.0.0.1"
+SyncPort = "21000"
+CRDTLayerRoot = "private/crdt-layers/storage/"
+
+    [Storage.TLS]
+    CertLoc = "private/internal-storage-cert.pem"
+    KeyLoc = "private/internal-storage-key.pem"

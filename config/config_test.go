@@ -3,6 +3,8 @@ package config_test
 import (
 	"testing"
 
+	"path/filepath"
+
 	"github.com/numbleroot/pluto/config"
 )
 
@@ -19,13 +21,22 @@ func TestLoadConfig(t *testing.T) {
 	}
 
 	// Now load a valid config.
-	config, err := config.LoadConfig("test-config.toml")
+	config, err := config.LoadConfig("../test-config.toml")
 	if err != nil {
 		t.Fatalf("[config.TestLoadConfig] Expected success while loading 'test-config.toml' but received: '%s'\n", err.Error())
 	}
 
+	// Retrieve absolute path of pluto directory.
+	absPlutoPath, err := filepath.Abs("../")
+	if err != nil {
+		t.Fatalf("[config.TestLoadConfig] Expected to retrieve absolute path of pluto directory with success but error says: %s\n", err.Error())
+	}
+
+	// Build correct cert location path.
+	absCertLoc := filepath.Join(absPlutoPath, "private/public-distributor-cert.pem")
+
 	// Check for test success.
-	if config.Distributor.PublicTLS.CertLoc != "/very/complicated/test/directory/certificate.test" {
-		t.Fatalf("[config.TestLoadConfig] Expected '%s' but received '%s'\n", "/very/complicated/test/directory/certificate.test", config.Distributor.PublicTLS.CertLoc)
+	if config.Distributor.PublicTLS.CertLoc != absCertLoc {
+		t.Fatalf("[config.TestLoadConfig] Expected '%s' but received '%s'\n", absCertLoc, config.Distributor.PublicTLS.CertLoc)
 	}
 }

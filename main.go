@@ -31,12 +31,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Load environment from .env file.
-	err = config.LoadEnv()
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	// Initialize and run a node of the pluto
 	// system based on passed command line flag.
 	if *distributorFlag {
