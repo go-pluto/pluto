@@ -7,6 +7,7 @@ all: deps build
 clean:
 	go clean -i ./...
 	find . -name \*.out -type f -delete
+	find . -name test-\*.log -type f -delete
 	rm -f generate_pki generate_cert generate_cert.go
 
 deps:

@@ -36,7 +36,6 @@ AuthAdapter = "AuthFile"
         CertLoc = "private/internal-worker-1-cert.pem"
         KeyLoc = "private/internal-worker-1-key.pem"
 
-
 [Storage]
 IP = "127.0.0.1"
 SyncPort = "21000"

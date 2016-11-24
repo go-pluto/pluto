@@ -135,8 +135,6 @@ func (recv *Receiver) AcceptIncMsgs() error {
 // it into incoming CRDT message log file.
 func (recv *Receiver) StoreIncMsgs(conn net.Conn) {
 
-	// TODO: Include loop on "> done <" similar to worker.
-
 	// Create new buffered reader for connection.
 	r := bufio.NewReader(conn)
 
@@ -146,29 +144,40 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn) {
 		log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
 	}
 
-	// Lock mutex.
-	recv.lock.Lock()
+	// Unless we do not receive the signal that continuous CRDT
+	// message transmission is done, we accept new messages.
+	for msgRaw != "> done <" {
 
-	// Write it to message log file.
-	_, err = recv.writeLog.WriteString(msgRaw)
-	if err != nil {
-		log.Fatalf("[comm.StoreIncMsgs] Writing to CRDT log file failed with: %s\n", err.Error())
+		// Lock mutex.
+		recv.lock.Lock()
+
+		// Write it to message log file.
+		_, err = recv.writeLog.WriteString(msgRaw)
+		if err != nil {
+			log.Fatalf("[comm.StoreIncMsgs] Writing to CRDT log file failed with: %s\n", err.Error())
+		}
+
+		// Save to stable storage.
+		err = recv.writeLog.Sync()
+		if err != nil {
+			log.Fatalf("[comm.StoreIncMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
+		}
+
+		// Unlock mutex.
+		recv.lock.Unlock()
+
+		log.Printf("[comm.StoreIncMsgs] Wrote to CRDT log file: %s", msgRaw)
+
+		// Indicate to applying routine that a new message
+		// is available to process.
+		recv.msgInLog <- true
+
+		// Read next CRDT message until newline character is received.
+		msgRaw, err = r.ReadString('\n')
+		if err != nil {
+			log.Fatalf("[comm.StoreIncMsgs] Error while reading next sync message: %s\n", err.Error())
+		}
 	}
-
-	// Save to stable storage.
-	err = recv.writeLog.Sync()
-	if err != nil {
-		log.Fatalf("[comm.StoreIncMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
-	}
-
-	// Unlock mutex.
-	recv.lock.Unlock()
-
-	log.Printf("[comm.StoreIncMsgs] Wrote to CRDT log file: '%s'\n", msgRaw)
-
-	// Indicate to applying routine that a new message
-	// is available to process.
-	recv.msgInLog <- true
 }
 
 // ApplyStoredMsgs waits for a signal on a channel that

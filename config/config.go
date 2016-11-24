@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"path/filepath"
 
@@ -101,10 +102,20 @@ func LoadConfig(configFile string) (*Config, error) {
 	}
 
 	// Retrieve absolute path of pluto directory.
-	// TODO: Fix path.
-	absPlutoPath, err := filepath.Abs("../")
+	// Start with current directory.
+	absPlutoPath, err := filepath.Abs("./")
 	if err != nil {
-		return nil, fmt.Errorf("[config.LoadConfig] Could not get absolute path of pluto directory: %s\n", err.Error())
+		return nil, fmt.Errorf("[config.LoadConfig] Could not get absolute path of current directory: %s\n", err.Error())
+	}
+
+	// Check if path ends in 'pluto'.
+	if strings.HasSuffix(absPlutoPath, "pluto") != true {
+
+		// If not, use the directory one level above.
+		absPlutoPath, err = filepath.Abs("../")
+		if err != nil {
+			return nil, fmt.Errorf("[config.LoadConfig] Could not get absolute path of pluto directory: %s\n", err.Error())
+		}
 	}
 
 	// Prefix each relative path in config with

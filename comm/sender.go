@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"sync"
 
 	"crypto/tls"
@@ -101,6 +102,12 @@ func (sender *Sender) BrokerMsgs() {
 		// on incoming channel.
 		payload := <-sender.inc
 
+		// If payload does not end with a newline symbol,
+		// append one to it.
+		if strings.HasSuffix(payload, "\n") != true {
+			payload = fmt.Sprintf("%s\n", payload)
+		}
+
 		// Lock mutex.
 		sender.lock.Lock()
 
@@ -185,17 +192,22 @@ func (sender *Sender) SendMsgs() {
 			log.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
 		}
 
-		// Update this node's vector clock.
+		// Update this node's vector clock and save
+		// to temporary variable so that we can unlock.
 		sender.vclock[sender.name] += 1
-
-		// Create a new message based on these values.
-		msg := Message{
-			vclock:  sender.vclock,
-			payload: payload,
-		}
+		curVClock := sender.vclock
 
 		// Unlock mutex.
 		sender.lock.Unlock()
+
+		// Remove trailing newline symbol from payload.
+		payload = strings.TrimSpace(payload)
+
+		// Create a new message based on these values.
+		msg := Message{
+			vclock:  curVClock,
+			payload: payload,
+		}
 
 		for i, conn := range sender.nodes {
 
@@ -222,6 +234,8 @@ func (sender *Sender) SendMsgs() {
 				// Increment break counter.
 				sent++
 			}
+
+			log.Printf("Sent to '%s': '%s'\n", i, marshalledMsg)
 		}
 
 		// Lock mutex.

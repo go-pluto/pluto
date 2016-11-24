@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"crypto/tls"
+	"path/filepath"
 
 	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
@@ -80,13 +81,13 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	}
 
 	// Initialize receiving goroutine for sync operations.
-	err = comm.InitReceiver(worker.Name, fmt.Sprintf("%sreceiving.log", config.Workers[worker.Name].CRDTLayerRoot), worker.SyncSocket)
+	err = comm.InitReceiver(worker.Name, filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "receiving.log"), worker.SyncSocket)
 	if err != nil {
 		return nil, err
 	}
 
 	// Init sending part of CRDT communication and send messages in background.
-	worker.SyncSendChan, err = comm.InitSender(worker.Name, fmt.Sprintf("%ssending.log", config.Workers[worker.Name].CRDTLayerRoot), worker.Connections)
+	worker.SyncSendChan, err = comm.InitSender(worker.Name, filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "sending.log"), worker.Connections)
 	if err != nil {
 		return nil, err
 	}

@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"crypto/tls"
+	"path/filepath"
 
 	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
@@ -48,7 +49,7 @@ func InitStorage(config *config.Config) (*Storage, *comm.Receiver, error) {
 	}
 
 	// Initialize receiving goroutine for sync operations.
-	recv, err := comm.InitReceiverForeground("storage", fmt.Sprintf("%sreceiving.log", config.Storage.CRDTLayerRoot), storage.Socket)
+	recv, err := comm.InitReceiverForeground("storage", filepath.Join(config.Storage.CRDTLayerRoot, "receiving.log"), storage.Socket)
 	if err != nil {
 		return nil, nil, err
 	}
