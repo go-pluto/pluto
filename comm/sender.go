@@ -126,11 +126,11 @@ func (sender *Sender) BrokerMsgs() {
 		// Unlock mutex.
 		sender.lock.Unlock()
 
-		log.Printf("[comm.BrokerMsgs] Wrote to CRDT log file: '%s'\n", payload)
-
 		// Inidicate consecutive loop iterations
 		// that a message is waiting in log.
-		sender.msgInLog <- true
+		if len(sender.msgInLog) < 1 {
+			sender.msgInLog <- true
+		}
 	}
 }
 
@@ -195,17 +195,13 @@ func (sender *Sender) SendMsgs() {
 		// Update this node's vector clock and save
 		// to temporary variable so that we can unlock.
 		sender.vclock[sender.name] += 1
-		curVClock := sender.vclock
-
-		// Unlock mutex.
-		sender.lock.Unlock()
 
 		// Remove trailing newline symbol from payload.
 		payload = strings.TrimSpace(payload)
 
 		// Create a new message based on these values.
 		msg := Message{
-			vclock:  curVClock,
+			vclock:  sender.vclock,
 			payload: payload,
 		}
 
@@ -237,9 +233,6 @@ func (sender *Sender) SendMsgs() {
 
 			log.Printf("Sent to '%s': '%s'\n", i, marshalledMsg)
 		}
-
-		// Lock mutex.
-		sender.lock.Lock()
 
 		// Copy reduced buffer contents back to beginning
 		// of CRDT log file, effectively deleting the first line.
@@ -273,6 +266,8 @@ func (sender *Sender) SendMsgs() {
 		// We do not know how many elements are waiting in the
 		// log file. Therefore attempt to send next one and if
 		// it does not exist, the loop iteration will abort.
-		sender.msgInLog <- true
+		if len(sender.msgInLog) < 1 {
+			sender.msgInLog <- true
+		}
 	}
 }

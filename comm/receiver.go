@@ -170,7 +170,9 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn) {
 
 		// Indicate to applying routine that a new message
 		// is available to process.
-		recv.msgInLog <- true
+		if len(recv.msgInLog) < 1 {
+			recv.msgInLog <- true
+		}
 
 		// Read next CRDT message until newline character is received.
 		msgRaw, err = r.ReadString('\n')
@@ -239,9 +241,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			log.Fatalf("[comm.ApplyStoredMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
 		}
 
-		// Unlock mutex.
-		recv.lock.Unlock()
-
 		// Parse sync message.
 		msg, err := Parse(msgRaw)
 		if err != nil {
@@ -252,9 +251,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 
 		// TODO: Apply CRDT state.
 		log.Printf("[comm.ApplyStoredMsgs] Should apply following CRDT state here: %s\n", msg.payload)
-
-		// Lock mutex.
-		recv.lock.Lock()
 
 		// Copy reduced buffer contents back to beginning
 		// of CRDT log file, effectively deleting the first line.
@@ -288,6 +284,8 @@ func (recv *Receiver) ApplyStoredMsgs() {
 		// We do not know how many elements are waiting in the
 		// log file. Therefore attempt to process next one and
 		// if it does not exist, the loop iteration will abort.
-		recv.msgInLog <- true
+		if len(recv.msgInLog) < 1 {
+			recv.msgInLog <- true
+		}
 	}
 }

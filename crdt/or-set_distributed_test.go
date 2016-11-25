@@ -99,12 +99,21 @@ func TestDistributedORSet(t *testing.T) {
 	}
 
 	// Initialize sending interface for storage.
-	_, err = comm.InitSender(n2, "../test-sending-storage.log", connsN2)
+	chan2, err := comm.InitSender(n2, "../test-sending-storage.log", connsN2)
 	if err != nil {
 		t.Fatalf("[crdt_test.TestDistributedSet] Expected InitSender() for storage not to fail but received: %s\n", err.Error())
 	}
 
-	chan1 <- "noob"
-	chan1 <- "rofl"
-	chan1 <- "a"
+	chan1 <- "1"
+	chan1 <- "2"
+	chan1 <- "3"
+	chan1 <- "4"
+	chan1 <- "5"
+	chan1 <- "6"
+	chan2 <- "7"
+	chan2 <- "8"
+	chan2 <- "9"
+
+	// Let output finish.
+	time.Sleep(2 * time.Second)
 }
