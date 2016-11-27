@@ -9,6 +9,8 @@ import (
 	"net"
 	"os"
 	"sync"
+
+	"github.com/numbleroot/pluto/crdt"
 )
 
 // Structs
@@ -247,10 +249,16 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			log.Fatalf("[comm.ApplyStoredMsgs] Error while parsing sync message: %s\n", err.Error())
 		}
 
+		// Parse contained CRDT update message.
+		msgCRDT, err := crdt.Parse(msg.payload)
+		if err != nil {
+			log.Fatalf("[comm.ApplyStoredMsgs] Error while parsing CRDT update message: %s\n", err.Error())
+		}
+
 		// TODO: If needed, check vector clock validity here.
 
 		// TODO: Apply CRDT state.
-		log.Printf("[comm.ApplyStoredMsgs] Should apply following CRDT state here: %s\n", msg.payload)
+		log.Printf("[comm.ApplyStoredMsgs] Should apply following CRDT state here: %v\n", msgCRDT.Arguments)
 
 		// Copy reduced buffer contents back to beginning
 		// of CRDT log file, effectively deleting the first line.

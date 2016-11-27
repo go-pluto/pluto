@@ -97,18 +97,19 @@ func (s *ORSet) Add(e interface{}, send sendFunc) {
 	// Create a new unique tag.
 	tag := uuid.NewV4().String()
 
+	// Initialize needed add operation variables.
+	addOp := InitORSetOp()
+	addOp.Operation = "add"
+	addOp.Arguments[tag] = e
+
 	// Write-lock the set.
 	s.lock.Lock()
 
 	// Apply effect part of update add.
 	s.AddEffect(e, tag, false)
 
-	// Compose downstream update message.
-	// TODO: Escape possible ';' in e.
-	msg := fmt.Sprintf("add|%v|%s", e, tag)
-
 	// Send to other involved nodes.
-	send(msg)
+	send(addOp.String())
 
 	// Relieve write lock.
 	s.lock.Unlock()
@@ -149,9 +150,9 @@ func (s *ORSet) RemoveEffect(rSet map[string]interface{}, needsLocking bool) {
 // sends out the remove message to all other replicas.
 func (s *ORSet) Remove(e interface{}, send sendFunc) error {
 
-	// Initialize needed remove set and msg variables.
-	rSet := make(map[string]interface{})
-	msg := "rmv"
+	// Initialize needed remove operation variables.
+	rmvOp := InitORSetOp()
+	rmvOp.Operation = "rmv"
 
 	// Write-lock the set.
 	s.lock.Lock()
@@ -171,21 +172,16 @@ func (s *ORSet) Remove(e interface{}, send sendFunc) error {
 		// If we see the element to-be-deleted, we add
 		// the associated tag into our prepared remove set.
 		if e == value {
-			rSet[tag] = e
+			rmvOp.Arguments[tag] = e
 		}
 	}
 
 	// Execute the effect part of the update remove but do
 	// not lock the set structure as we already maintain a lock.
-	s.RemoveEffect(rSet, false)
-
-	// Construct message to send to other replicas.
-	for tag, value := range rSet {
-		msg = fmt.Sprintf("%s|%v|%s", msg, value, tag)
-	}
+	s.RemoveEffect(rmvOp.Arguments, false)
 
 	// Send message to other replicas.
-	send(msg)
+	send(rmvOp.String())
 
 	// Relieve write lock.
 	s.lock.Unlock()

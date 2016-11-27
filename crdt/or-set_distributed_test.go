@@ -104,15 +104,15 @@ func TestDistributedORSet(t *testing.T) {
 		t.Fatalf("[crdt_test.TestDistributedSet] Expected InitSender() for storage not to fail but received: %s\n", err.Error())
 	}
 
-	chan1 <- "1"
-	chan1 <- "2"
-	chan1 <- "3"
-	chan1 <- "4"
-	chan1 <- "5"
-	chan1 <- "6"
-	chan2 <- "7"
-	chan2 <- "8"
-	chan2 <- "9"
+	chan1 <- "add|world|1"
+	chan1 <- "rmv|world|1"
+	chan1 <- "add|world|1"
+	chan1 <- "add|world|2"
+	chan1 <- "rmv|world|2|world|1"
+	chan1 <- "add|what|3"
+	chan2 <- "add|alright|a"
+	chan2 <- "add|cheese|b"
+	chan2 <- "rmv|alright|a"
 
 	// Let output finish.
 	time.Sleep(2 * time.Second)

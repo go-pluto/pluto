@@ -241,7 +241,7 @@ func TestAdd(t *testing.T) {
 	}
 
 	// Check sent messages for length.
-	// Minimal length = 'add' + ';' + ';' + 36 UUID chars = 41 chars.
+	// Minimal length = 'add' + '|' + '|' + 36 UUID chars = 41 chars.
 
 	if len(msg1) < 41 {
 		t.Fatalf("[crdt.TestAdd] Expected '%s' to be at least 41 characters long but only got %d many.\n", msg1, len(msg1))
