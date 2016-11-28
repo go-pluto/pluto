@@ -49,7 +49,9 @@ func InitStorage(config *config.Config) (*Storage, *comm.Receiver, error) {
 	}
 
 	// Initialize receiving goroutine for sync operations.
-	recv, err := comm.InitReceiverForeground("storage", filepath.Join(config.Storage.CRDTLayerRoot, "receiving.log"), storage.Socket)
+	// TODO: Storage has to iterate over all worker nodes it is serving
+	//       as CRDT backend for and create a 'CRDT-subnet' for each.
+	recv, _, _, err := comm.InitReceiverForeground("storage", filepath.Join(config.Storage.CRDTLayerRoot, "receiving.log"), storage.Socket, []string{"worker-1"})
 	if err != nil {
 		return nil, nil, err
 	}

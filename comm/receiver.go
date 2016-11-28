@@ -18,12 +18,16 @@ import (
 // Receiver bundles all information needed to accept
 // and process incoming CRDT downstream messages.
 type Receiver struct {
-	lock     *sync.Mutex
-	name     string
-	msgInLog chan bool
-	socket   net.Listener
-	writeLog *os.File
-	updLog   *os.File
+	lock      *sync.Mutex
+	name      string
+	msgInLog  chan bool
+	socket    net.Listener
+	writeLog  *os.File
+	updLog    *os.File
+	incVClock chan string
+	updVClock chan map[string]int
+	vclock    map[string]int
+	nodes     []string
 }
 
 // Functions
@@ -31,33 +35,58 @@ type Receiver struct {
 // InitReceiver initializes above struct and sets
 // default values. It starts involved background
 // routines and send initial channel trigger.
-func InitReceiver(name string, logFilePath string, socket net.Listener) error {
+func InitReceiver(name string, logFilePath string, socket net.Listener, nodes []string) (chan string, chan map[string]int, error) {
 
 	// Make a channel to communicate over with local
 	// processes intending to process received messages.
 	msgInLog := make(chan bool, 1)
 
+	// Make a channel to return and be used in sender
+	// to indicate a particular vector clock entry is
+	// supposed to be incremented.
+	incVClock := make(chan string)
+
+	// Additionally, make a channel to send the updated
+	// vector clock over after a successful increment.
+	updVClock := make(chan map[string]int)
+
 	// Create and initialize new struct.
 	recv := &Receiver{
-		lock:     new(sync.Mutex),
-		name:     name,
-		msgInLog: msgInLog,
-		socket:   socket,
+		lock:      new(sync.Mutex),
+		name:      name,
+		msgInLog:  msgInLog,
+		socket:    socket,
+		incVClock: incVClock,
+		updVClock: updVClock,
+		vclock:    make(map[string]int),
+		nodes:     nodes,
 	}
 
 	// Open log file descriptor for writing.
 	write, err := os.OpenFile(logFilePath, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
 	if err != nil {
-		return fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for writing failed with: %s\n", err.Error())
+		return nil, nil, fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for writing failed with: %s\n", err.Error())
 	}
 	recv.writeLog = write
 
 	// Open log file descriptor for updating.
 	upd, err := os.OpenFile(logFilePath, os.O_RDWR, 0600)
 	if err != nil {
-		return fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for updating failed with: %s\n", err.Error())
+		return nil, nil, fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for updating failed with: %s\n", err.Error())
 	}
 	recv.updLog = upd
+
+	// Initially set vector clock entries to 0.
+	for _, node := range nodes {
+		recv.vclock[node] = 0
+	}
+
+	// Including the entry of this node.
+	recv.vclock[name] = 0
+
+	// Start routine in background that takes care of
+	// vector clock increments.
+	go recv.IncVClockEntry()
 
 	// Apply received messages in background.
 	go recv.ApplyStoredMsgs()
@@ -69,7 +98,7 @@ func InitReceiver(name string, logFilePath string, socket net.Listener) error {
 	// Accept incoming messages in background.
 	go recv.AcceptIncMsgs()
 
-	return nil
+	return incVClock, updVClock, nil
 }
 
 // InitReceiverForeground initializes above struct
@@ -77,33 +106,58 @@ func InitReceiver(name string, logFilePath string, socket net.Listener) error {
 // the needed background routines and returns the
 // receiver struct so that the others can be started
 // in foreground.
-func InitReceiverForeground(name string, logFilePath string, socket net.Listener) (*Receiver, error) {
+func InitReceiverForeground(name string, logFilePath string, socket net.Listener, nodes []string) (*Receiver, chan string, chan map[string]int, error) {
 
 	// Make a channel to communicate over with local
 	// processes intending to process received messages.
 	msgInLog := make(chan bool, 1)
 
+	// Make a channel to return and be used in sender
+	// to indicate a particular vector clock entry is
+	// supposed to be incremented.
+	incVClock := make(chan string)
+
+	// Additionally, make a channel to send the updated
+	// vector clock over after a successful increment.
+	updVClock := make(chan map[string]int)
+
 	// Create and initialize new struct.
 	recv := &Receiver{
-		lock:     new(sync.Mutex),
-		name:     name,
-		msgInLog: msgInLog,
-		socket:   socket,
+		lock:      new(sync.Mutex),
+		name:      name,
+		msgInLog:  msgInLog,
+		socket:    socket,
+		incVClock: incVClock,
+		updVClock: updVClock,
+		vclock:    make(map[string]int),
+		nodes:     nodes,
 	}
 
 	// Open log file descriptor for writing.
 	write, err := os.OpenFile(logFilePath, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
 	if err != nil {
-		return nil, fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for writing failed with: %s\n", err.Error())
+		return nil, nil, nil, fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for writing failed with: %s\n", err.Error())
 	}
 	recv.writeLog = write
 
 	// Open log file descriptor for updating.
 	upd, err := os.OpenFile(logFilePath, os.O_RDWR, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for updating failed with: %s\n", err.Error())
+		return nil, nil, nil, fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for updating failed with: %s\n", err.Error())
 	}
 	recv.updLog = upd
+
+	// Initially set vector clock entries to 0.
+	for _, node := range nodes {
+		recv.vclock[node] = 0
+	}
+
+	// Including the entry of this node.
+	recv.vclock[name] = 0
+
+	// Start routine in background that takes care of
+	// vector clock increments.
+	go recv.IncVClockEntry()
 
 	// Apply received messages in background.
 	go recv.ApplyStoredMsgs()
@@ -112,7 +166,44 @@ func InitReceiverForeground(name string, logFilePath string, socket net.Listener
 	// initial run to check if log file contains elements.
 	recv.msgInLog <- true
 
-	return recv, nil
+	return recv, incVClock, updVClock, nil
+}
+
+// IncVClockEntry waits for an incoming name of a node on
+// channel defined during initialization and passed on to
+// senders. If the node is present in vector clock map, its
+// value is incremented by one.
+func (recv *Receiver) IncVClockEntry() {
+
+	for {
+
+		log.Printf("[inc at %s] waiting for inc...", recv.name)
+
+		// Wait for name of node on channel.
+		entry := <-recv.incVClock
+
+		// Lock receiver struct.
+		recv.lock.Lock()
+
+		// Check if received node name exists in map.
+		if _, exists := recv.vclock[entry]; exists {
+
+			log.Printf("[inc] old vclock value for %s: %d\n", entry, recv.vclock[entry])
+
+			// If it does, increment its vector clock
+			// value by one.
+			recv.vclock[entry] += 1
+
+			log.Printf("[inc] new vclock value for %s: %d\n", entry, recv.vclock[entry])
+
+			// Send back the updated vector clock on other
+			// defined channel to sender.
+			recv.updVClock <- recv.vclock
+		}
+
+		// Unlock struct.
+		recv.lock.Unlock()
+	}
 }
 
 // AcceptIncMsgs runs in background and waits for
@@ -249,13 +340,14 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			log.Fatalf("[comm.ApplyStoredMsgs] Error while parsing sync message: %s\n", err.Error())
 		}
 
+		// TODO: Check vector clock validity and update appropriately.
+		log.Printf("[comm.ApplyStoredMsgs] Should apply vector clock magic here: %v\n", msg.VClock)
+
 		// Parse contained CRDT update message.
 		msgCRDT, err := crdt.Parse(msg.Payload)
 		if err != nil {
 			log.Fatalf("[comm.ApplyStoredMsgs] Error while parsing CRDT update message: %s\n", err.Error())
 		}
-
-		// TODO: If needed, check vector clock validity here.
 
 		// TODO: Apply CRDT state.
 		log.Printf("[comm.ApplyStoredMsgs] Should apply following CRDT state here: %v\n", msgCRDT.Arguments)

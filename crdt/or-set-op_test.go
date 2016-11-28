@@ -2,7 +2,6 @@ package crdt_test
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"testing"
 
@@ -147,8 +146,6 @@ func TestParse(t *testing.T) {
 		t.Fatalf("[crdt.TestParse] marshalled5: Expected nil error but received: '%s'\n", err.Error())
 	}
 
-	log.Printf("msg5: %v, len(args): %d\n", msg5, len(msg5.Arguments))
-
 	if msg5.Operation != "rmv" {
 		t.Fatalf("[crdt.TestParse] marshalled5: Expected 'rmv' as operation but found: '%s'\n", msg5.Operation)
 	}
@@ -170,8 +167,6 @@ func TestParse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("[crdt.TestParse] marshalled6: Expected nil error but received: '%s'\n", err.Error())
 	}
-
-	log.Printf("msg6: %v, len(args): %d, args: %v\n", msg6, len(msg6.Arguments), msg6.Arguments)
 
 	if msg6.Operation != "add" {
 		t.Fatalf("[crdt.TestParse] marshalled6: Expected 'add' as operation but found: '%s'\n", msg6.Operation)
@@ -200,8 +195,6 @@ func TestParse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("[crdt.TestParse] marshalled8: Expected nil error but received: '%s'\n", err.Error())
 	}
-
-	log.Printf("msg8: %v, len(args): %d, args: %v\n", msg8, len(msg8.Arguments), msg8.Arguments)
 
 	if msg8.Operation != "rmv" {
 		t.Fatalf("[crdt.TestParse] marshalled8: Expected 'rmv' as operation but found: '%s'\n", msg8.Operation)

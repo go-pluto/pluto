@@ -53,13 +53,13 @@ func TestSenderReceiver(t *testing.T) {
 	}
 
 	// Initialize receiver in background at worker-1.
-	err = comm.InitReceiver(n1, "../test-receiving-worker-1.log", socketN1)
+	chanIncN1, chanUpdN1, err := comm.InitReceiver(n1, "../test-receiving-worker-1.log", socketN1, []string{n2})
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitReceiver() for worker-1 not to fail but received: %s\n", err.Error())
 	}
 
 	// Initialize receiver in foreground at storage.
-	recv2, err := comm.InitReceiverForeground(n2, "../test-receiving-storage.log", socketN2)
+	recv2, chanIncN2, chanUpdN2, err := comm.InitReceiverForeground(n2, "../test-receiving-storage.log", socketN2, []string{n1})
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitReceiverForeground() for storage not to fail but received: %s\n", err.Error())
 	}
@@ -94,13 +94,13 @@ func TestSenderReceiver(t *testing.T) {
 	connsN2[n1] = cToN1
 
 	// Initialize sending interface for worker-1.
-	chan1, err := comm.InitSender(n1, "../test-sending-worker-1.log", connsN1)
+	chan1, err := comm.InitSender(n1, "../test-sending-worker-1.log", chanIncN1, chanUpdN1, connsN1)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitSender() for worker-1 not to fail but received: %s\n", err.Error())
 	}
 
 	// Initialize sending interface for storage.
-	chan2, err := comm.InitSender(n2, "../test-sending-storage.log", connsN2)
+	chan2, err := comm.InitSender(n2, "../test-sending-storage.log", chanIncN2, chanUpdN2, connsN2)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitSender() for storage not to fail but received: %s\n", err.Error())
 	}

@@ -17,14 +17,15 @@ import (
 // Sender bundles information needed for sending
 // out sync messages via CRDTs.
 type Sender struct {
-	lock     *sync.Mutex
-	name     string
-	inc      chan string
-	msgInLog chan bool
-	vclock   map[string]int
-	writeLog *os.File
-	updLog   *os.File
-	nodes    map[string]*tls.Conn
+	lock      *sync.Mutex
+	name      string
+	inc       chan string
+	msgInLog  chan bool
+	writeLog  *os.File
+	updLog    *os.File
+	incVClock chan string
+	updVClock chan map[string]int
+	nodes     map[string]*tls.Conn
 }
 
 // Functions
@@ -34,7 +35,7 @@ type Sender struct {
 // with. It returns a channel local processes can put
 // CRDT changes into, so that those changes will be
 // communicated to connected nodes.
-func InitSender(name string, logFilePath string, nodes map[string]*tls.Conn) (chan string, error) {
+func InitSender(name string, logFilePath string, incVClock chan string, updVClock chan map[string]int, nodes map[string]*tls.Conn) (chan string, error) {
 
 	// Make a channel to communicate over with
 	// local processes intending to send a message
@@ -46,12 +47,13 @@ func InitSender(name string, logFilePath string, nodes map[string]*tls.Conn) (ch
 	// Create and initialize what we need for
 	// a CRDT sender routine.
 	sender := &Sender{
-		lock:     new(sync.Mutex),
-		name:     name,
-		inc:      inc,
-		msgInLog: msgInLog,
-		vclock:   make(map[string]int),
-		nodes:    nodes,
+		lock:      new(sync.Mutex),
+		name:      name,
+		inc:       inc,
+		msgInLog:  msgInLog,
+		incVClock: incVClock,
+		updVClock: updVClock,
+		nodes:     nodes,
 	}
 
 	// Open log file descriptor for writing.
@@ -67,14 +69,6 @@ func InitSender(name string, logFilePath string, nodes map[string]*tls.Conn) (ch
 		return nil, fmt.Errorf("[comm.InitSender] Opening CRDT log file for updating failed with: %s\n", err.Error())
 	}
 	sender.updLog = upd
-
-	// Initially set vector clock entries to 0.
-	for i := range nodes {
-		sender.vclock[i] = 0
-	}
-
-	// Including the entry of this node.
-	sender.vclock[name] = 0
 
 	// Start brokering routine in background.
 	go sender.BrokerMsgs()
@@ -192,42 +186,36 @@ func (sender *Sender) SendMsgs() {
 			log.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
 		}
 
-		// Update this node's vector clock and save
-		// to temporary variable so that we can unlock.
-		sender.vclock[sender.name] += 1
+		// Create a new message for message values.
+		msg := InitMessage()
+
+		// Send this node's name on incVClock channel to
+		// request an increment of its vector clock value.
+		sender.incVClock <- sender.name
+
+		// Wait for updated vector clock to be sent back
+		// on other defined channel.
+		msg.VClock = <-sender.updVClock
 
 		// Remove trailing newline symbol from payload.
-		payload = strings.TrimSpace(payload)
-
-		// Create a new message based on these values.
-		msg := InitMessage()
-		msg.VClock = sender.vclock
-		msg.Payload = payload
+		msg.Payload = strings.TrimSpace(payload)
 
 		for i, conn := range sender.nodes {
 
-			sent := 0
+			var err error
+
+			// Marshall message.
 			marshalledMsg := msg.String()
 
 			// Write message to TLS connections.
-			_, err := fmt.Fprintf(conn, "%s\n", marshalledMsg)
+			_, err = fmt.Fprintf(conn, "%s\n", marshalledMsg)
 			for err != nil {
-
-				// If we tried to send the message three times
-				// and had no success, log error and give up.
-				// TODO: This is not the intended behaviour.
-				if sent == 2 {
-					log.Fatalf("[comm.SendMsgs] Tried to send out CRDT update to node %s three times without success. Giving up. TODO!\n", i)
-				}
 
 				// Log fail.
 				log.Printf("[comm.SendMsgs] Sending CRDT update to node %s failed with: %s\n", i, err.Error())
 
 				// Retry transfer.
 				_, err = fmt.Fprintf(conn, "%s\n", marshalledMsg)
-
-				// Increment break counter.
-				sent++
 			}
 
 			log.Printf("Sent to '%s': '%s'\n", i, marshalledMsg)

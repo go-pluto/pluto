@@ -81,13 +81,13 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	}
 
 	// Initialize receiving goroutine for sync operations.
-	err = comm.InitReceiver(worker.Name, filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "receiving.log"), worker.SyncSocket)
+	chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(worker.Name, filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "receiving.log"), worker.SyncSocket, []string{"storage"})
 	if err != nil {
 		return nil, err
 	}
 
 	// Init sending part of CRDT communication and send messages in background.
-	worker.SyncSendChan, err = comm.InitSender(worker.Name, filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "sending.log"), worker.Connections)
+	worker.SyncSendChan, err = comm.InitSender(worker.Name, filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "sending.log"), chanIncVClockWorker, chanUpdVClockWorker, worker.Connections)
 	if err != nil {
 		return nil, err
 	}
