@@ -200,10 +200,9 @@ func (sender *Sender) SendMsgs() {
 		payload = strings.TrimSpace(payload)
 
 		// Create a new message based on these values.
-		msg := Message{
-			vclock:  sender.vclock,
-			payload: payload,
-		}
+		msg := InitMessage()
+		msg.VClock = sender.vclock
+		msg.Payload = payload
 
 		for i, conn := range sender.nodes {
 

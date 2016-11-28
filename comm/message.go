@@ -13,11 +13,19 @@ import (
 // vector clock of the originating node and a CRDT payload
 // to apply at receiver's CRDT replica.
 type Message struct {
-	vclock  map[string]int
-	payload string
+	VClock  map[string]int
+	Payload string
 }
 
 // Functions
+
+// InitMessage returns a fresh Message variable.
+func InitMessage() *Message {
+
+	return &Message{
+		VClock: make(map[string]int),
+	}
+}
 
 // String marshalls given Message m into string representation
 // so that we can send it out onto the TLS connection.
@@ -27,7 +35,7 @@ func (m Message) String() string {
 
 	// Merge together all vector clock entries.
 	// TODO: Escape possibly contained delimiter characters.
-	for id, value := range m.vclock {
+	for id, value := range m.VClock {
 
 		if vclockValues == "" {
 			vclockValues = fmt.Sprintf("%s:%d", id, value)
@@ -37,7 +45,7 @@ func (m Message) String() string {
 	}
 
 	// Return final string representation.
-	return fmt.Sprintf("%s|%s", vclockValues, m.payload)
+	return fmt.Sprintf("%s|%s", vclockValues, m.Payload)
 }
 
 // Parse takes in supplied string representing a received
@@ -45,9 +53,7 @@ func (m Message) String() string {
 func Parse(msg string) (*Message, error) {
 
 	// Initialize new message struct.
-	m := &Message{
-		vclock: make(map[string]int),
-	}
+	m := InitMessage()
 
 	// Remove attached newline symbol.
 	msg = strings.TrimRight(msg, "\n")
@@ -80,7 +86,7 @@ func Parse(msg string) (*Message, error) {
 		}
 
 		// Place vector clock entry in struct.
-		m.vclock[c[0]] = num
+		m.VClock[c[0]] = num
 	} else {
 
 		// Range over all vector clock entries.
@@ -101,12 +107,12 @@ func Parse(msg string) (*Message, error) {
 			}
 
 			// Place vector clock entries in struct.
-			m.vclock[c[0]] = num
+			m.VClock[c[0]] = num
 		}
 	}
 
 	// Put message payload into struct.
-	m.payload = tmpMsg[1]
+	m.Payload = tmpMsg[1]
 
 	// Initialize new message struct with parsed values.
 	return m, nil

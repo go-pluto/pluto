@@ -1,19 +1,19 @@
-package comm
+package comm_test
 
 import (
 	"testing"
+
+	"github.com/numbleroot/pluto/comm"
 )
 
 // Functions
 
-// TestString executes a white-box unit test
+// TestString executes a black-box unit test
 // on implemented String() function of messages.
 func TestString(t *testing.T) {
 
 	// Create a new message struct.
-	msg := Message{
-		vclock: make(map[string]int),
-	}
+	msg := comm.InitMessage()
 
 	// Check marshalling.
 	marshalled := msg.String()
@@ -22,7 +22,7 @@ func TestString(t *testing.T) {
 	}
 
 	// Set one vector clock entry.
-	msg.vclock["A"] = 5
+	msg.VClock["A"] = 5
 
 	// Check marshalling.
 	marshalled = msg.String()
@@ -31,8 +31,8 @@ func TestString(t *testing.T) {
 	}
 
 	// Set payload once.
-	msg.vclock = make(map[string]int)
-	msg.payload = "lorem ipsum DOLOR sit"
+	msg.VClock = make(map[string]int)
+	msg.Payload = "lorem ipsum DOLOR sit"
 
 	// Check marshalling.
 	marshalled = msg.String()
@@ -41,10 +41,10 @@ func TestString(t *testing.T) {
 	}
 
 	// Set multiple values.
-	msg.vclock["worker-1"] = 3
-	msg.vclock["worker-2"] = 10
-	msg.vclock["worker-3"] = 0
-	msg.payload = "works"
+	msg.VClock["worker-1"] = 3
+	msg.VClock["worker-2"] = 10
+	msg.VClock["worker-3"] = 0
+	msg.Payload = "works"
 
 	// Check marshalling.
 	marshalled = msg.String()
@@ -58,7 +58,7 @@ func TestString(t *testing.T) {
 	}
 }
 
-// TestString executes a white-box unit test
+// TestString executes a black-box unit test
 // on implemented Parse() function of messages.
 func TestParse(t *testing.T) {
 
@@ -70,70 +70,70 @@ func TestParse(t *testing.T) {
 	marshalled5 := "A:5;B:3;C:10;D:7|this is a long payload"
 
 	// Check parsing.
-	_, err := Parse(marshalled1)
+	_, err := comm.Parse(marshalled1)
 	if err.Error() != "invalid sync message" {
 		t.Fatalf("[comm.TestParse] Expected 'invalid sync message' but received: '%s'\n", err.Error())
 	}
 
 	// Check parsing.
-	_, err = Parse(marshalled2)
+	_, err = comm.Parse(marshalled2)
 	if err.Error() != "invalid vector clock element" {
 		t.Fatalf("[comm.TestParse] Expected 'invalid vector clock element' but received: '%s'\n", err.Error())
 	}
 
 	// Check parsing.
-	_, err = Parse(marshalled3)
+	_, err = comm.Parse(marshalled3)
 	if err.Error() != "invalid number as element in vector clock" {
 		t.Fatalf("[comm.TestParse] Expected 'invalid number as element in vector clock' but received: '%s'\n", err.Error())
 	}
 
 	// Check parsing.
-	msg4, err := Parse(marshalled4)
+	msg4, err := comm.Parse(marshalled4)
 	if err != nil {
 		t.Fatalf("[comm.TestParse] Expected nil error but received: '%s'\n", err.Error())
 	}
 
-	if msg4.vclock["A"] != 5 {
-		t.Fatalf("[comm.TestParse] Expected value '5' at key 'A' but found: '%v'\n", msg4.vclock["A"])
+	if msg4.VClock["A"] != 5 {
+		t.Fatalf("[comm.TestParse] Expected value '5' at key 'A' but found: '%v'\n", msg4.VClock["A"])
 	}
 
-	if msg4.payload != "abc" {
-		t.Fatalf("[comm.TestParse] Expected value 'abc' as payload but found: '%v'\n", msg4.payload)
+	if msg4.Payload != "abc" {
+		t.Fatalf("[comm.TestParse] Expected value 'abc' as payload but found: '%v'\n", msg4.Payload)
 	}
 
 	// Check parsing.
-	msg5, err := Parse(marshalled5)
+	msg5, err := comm.Parse(marshalled5)
 	if err != nil {
 		t.Fatalf("[comm.TestParse] Expected nil error but received: '%s'\n", err.Error())
 	}
 
-	for i, e := range msg5.vclock {
+	for i, e := range msg5.VClock {
 
 		switch i {
 
 		case "A":
 			if e != 5 {
-				t.Fatalf("[comm.TestParse] Expected value '5' at key 'A' but found: '%v'\n", msg5.vclock["A"])
+				t.Fatalf("[comm.TestParse] Expected value '5' at key 'A' but found: '%v'\n", msg5.VClock["A"])
 			}
 
 		case "B":
 			if e != 3 {
-				t.Fatalf("[comm.TestParse] Expected value '3' at key 'B' but found: '%v'\n", msg5.vclock["B"])
+				t.Fatalf("[comm.TestParse] Expected value '3' at key 'B' but found: '%v'\n", msg5.VClock["B"])
 			}
 
 		case "C":
 			if e != 10 {
-				t.Fatalf("[comm.TestParse] Expected value '10' at key 'C' but found: '%v'\n", msg5.vclock["C"])
+				t.Fatalf("[comm.TestParse] Expected value '10' at key 'C' but found: '%v'\n", msg5.VClock["C"])
 			}
 
 		case "D":
 			if e != 7 {
-				t.Fatalf("[comm.TestParse] Expected value '7' at key 'D' but found: '%v'\n", msg5.vclock["D"])
+				t.Fatalf("[comm.TestParse] Expected value '7' at key 'D' but found: '%v'\n", msg5.VClock["D"])
 			}
 		}
 	}
 
-	if msg5.payload != "this is a long payload" {
-		t.Fatalf("[comm.TestParse] Expected value 'this is a long payload' as payload but found: '%v'\n", msg5.payload)
+	if msg5.Payload != "this is a long payload" {
+		t.Fatalf("[comm.TestParse] Expected value 'this is a long payload' as payload but found: '%v'\n", msg5.Payload)
 	}
 }

@@ -250,7 +250,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 		}
 
 		// Parse contained CRDT update message.
-		msgCRDT, err := crdt.Parse(msg.payload)
+		msgCRDT, err := crdt.Parse(msg.Payload)
 		if err != nil {
 			log.Fatalf("[comm.ApplyStoredMsgs] Error while parsing CRDT update message: %s\n", err.Error())
 		}

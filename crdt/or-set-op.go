@@ -17,7 +17,7 @@ type ORSetOp struct {
 
 // Functions
 
-// InitORSetOp initializes and returns a fresh ORSetOp variable.
+// InitORSetOp returns a fresh ORSetOp variable.
 func InitORSetOp() *ORSetOp {
 
 	return &ORSetOp{
@@ -71,8 +71,8 @@ func Parse(msgRaw string) (*ORSetOp, error) {
 	}
 
 	// Construct arguments map.
-	for tag := 1; tag < len(parts); tag += 2 {
-		value := tag + 1
+	for value := 1; value < len(parts); value += 2 {
+		tag := value + 1
 		args[parts[tag]] = parts[value]
 	}
 
