@@ -189,6 +189,9 @@ func (sender *Sender) SendMsgs() {
 		// Create a new message for message values.
 		msg := InitMessage()
 
+		// Set this node's name as sending part.
+		msg.Sender = sender.name
+
 		// Send this node's name on incVClock channel to
 		// request an increment of its vector clock value.
 		sender.incVClock <- sender.name
@@ -200,12 +203,12 @@ func (sender *Sender) SendMsgs() {
 		// Remove trailing newline symbol from payload.
 		msg.Payload = strings.TrimSpace(payload)
 
+		// Marshall message.
+		marshalledMsg := msg.String()
+
 		for i, conn := range sender.nodes {
 
 			var err error
-
-			// Marshall message.
-			marshalledMsg := msg.String()
 
 			// Write message to TLS connections.
 			_, err = fmt.Fprintf(conn, "%s\n", marshalledMsg)

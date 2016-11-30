@@ -13,6 +13,7 @@ import (
 // vector clock of the originating node and a CRDT payload
 // to apply at receiver's CRDT replica.
 type Message struct {
+	Sender  string
 	VClock  map[string]int
 	Payload string
 }
@@ -29,7 +30,7 @@ func InitMessage() *Message {
 
 // String marshalls given Message m into string representation
 // so that we can send it out onto the TLS connection.
-func (m Message) String() string {
+func (m *Message) String() string {
 
 	var vclockValues string
 
@@ -45,7 +46,7 @@ func (m Message) String() string {
 	}
 
 	// Return final string representation.
-	return fmt.Sprintf("%s|%s", vclockValues, m.Payload)
+	return fmt.Sprintf("%s|%s|%s", m.Sender, vclockValues, m.Payload)
 }
 
 // Parse takes in supplied string representing a received
@@ -58,16 +59,24 @@ func Parse(msg string) (*Message, error) {
 	// Remove attached newline symbol.
 	msg = strings.TrimRight(msg, "\n")
 
-	// Split message at pipe symbol at maximum one time.
-	tmpMsg := strings.SplitN(msg, "|", 2)
+	// Split message at pipe symbol at maximum two times.
+	tmpMsg := strings.SplitN(msg, "|", 3)
 
-	// Messages with less than two parts are discarded.
-	if len(tmpMsg) < 2 {
+	// Messages with less than three parts are discarded.
+	if len(tmpMsg) < 3 {
 		return nil, fmt.Errorf("invalid sync message")
 	}
 
+	// Check sender part of message.
+	if len(tmpMsg[0]) < 1 {
+		return nil, fmt.Errorf("invalid sync message because sender node name is missing")
+	}
+
+	// Put sender name into struct.
+	m.Sender = tmpMsg[0]
+
 	// Split first part at semicolons for vector clock.
-	tmpVClock := strings.Split(tmpMsg[0], ";")
+	tmpVClock := strings.Split(tmpMsg[1], ";")
 
 	if len(tmpVClock) < 2 {
 
@@ -112,7 +121,7 @@ func Parse(msg string) (*Message, error) {
 	}
 
 	// Put message payload into struct.
-	m.Payload = tmpMsg[1]
+	m.Payload = tmpMsg[2]
 
 	// Initialize new message struct with parsed values.
 	return m, nil

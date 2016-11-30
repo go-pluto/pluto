@@ -51,4 +51,4 @@ test-public:
 
 test:
 	@echo "mode: atomic" > coverage.out;
-	@for PKG in $(PACKAGES); do go test -v -race -coverprofile $$GOPATH/src/$$PKG/coverage-package.out -covermode=atomic $$PKG || exit 1; test ! -f $$GOPATH/src/$$PKG/coverage-package.out || (cat $$GOPATH/src/$$PKG/coverage-package.out | grep -v mode: | sort -r >> coverage.out); done
+	@for PKG in $(PACKAGES); do find . -name test-\*.log -type f -delete; go test -v -race -coverprofile $$GOPATH/src/$$PKG/coverage-package.out -covermode=atomic $$PKG || exit 1; test ! -f $$GOPATH/src/$$PKG/coverage-package.out || (cat $$GOPATH/src/$$PKG/coverage-package.out | grep -v mode: | sort -r >> coverage.out); done
