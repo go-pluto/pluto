@@ -429,7 +429,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			// that message duplicates will get purged but not applied.
 			if msg.VClock[msg.Sender] == (recv.vclock[msg.Sender] + 1) {
 
-				log.Printf("[comm.ApplyStoredMsgs] NEW message, not duplicate. '%s'", msgRaw)
+				log.Printf("[comm.ApplyStoredMsgs] NEW message, not duplicate: %s", msgRaw)
 
 				// Parse contained CRDT update message.
 				msgCRDT, err := crdt.Parse(msg.Payload)
@@ -437,10 +437,19 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					log.Fatalf("[comm.ApplyStoredMsgs] Error while parsing CRDT update message: %s\n", err.Error())
 				}
 
+				switch msgCRDT.Operation {
+
+				case "add":
+					log.Printf("[comm.ApplyStoredMsgs] %s: 'add' operation detected.\n", recv.name)
+
+				case "rmv":
+					log.Printf("[comm.ApplyStoredMsgs] %s: 'rmv' operation detected.\n", recv.name)
+				}
+
 				// TODO: Apply CRDT state.
 				log.Printf("[comm.ApplyStoredMsgs] Should apply following CRDT state here: %v\n", msgCRDT.Arguments)
 			} else {
-				log.Printf("[comm.ApplyStoredMsgs] OLD message, duplicate. '%s'", msgRaw)
+				log.Printf("[comm.ApplyStoredMsgs] OLD message, duplicate: %s", msgRaw)
 			}
 
 			for node, value := range msg.VClock {

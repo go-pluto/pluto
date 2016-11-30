@@ -1,8 +1,8 @@
-.PHONY: all clean deps test-env build pki test-pki test-public test
+.PHONY: prod clean deps test-env build pki test-pki test-public test
 
 PACKAGES = $(shell go list ./... | grep -v /vendor/)
 
-all: deps build
+prod: clean deps pki build
 
 clean:
 	go clean -i ./...

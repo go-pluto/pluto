@@ -25,7 +25,8 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 
 	log.Printf("Serving SELECT '%s'...\n", req.Tag)
 
-	worker.lock.RLock()
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
 
 	// Check if connection is in correct state.
 	if (worker.Contexts[clientID].IMAPState != AUTHENTICATED) && (worker.Contexts[clientID].IMAPState != MAILBOX) {
@@ -34,8 +35,6 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 
 	// Save maildir for later use.
 	mailbox := worker.Contexts[clientID].UserMaildir
-
-	worker.lock.RUnlock()
 
 	if len(req.Payload) < 1 {
 
@@ -87,14 +86,10 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 		return true
 	}
 
-	worker.lock.Lock()
-
 	// Set selected mailbox in context to supplied one
 	// and advance IMAP state of connection to MAILBOX.
 	worker.Contexts[clientID].IMAPState = MAILBOX
 	worker.Contexts[clientID].SelectedMailbox = mailbox
-
-	worker.lock.Unlock()
 
 	// Build up answer to client.
 	answer := ""

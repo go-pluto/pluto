@@ -107,4 +107,7 @@ func TestSenderReceiver(t *testing.T) {
 
 	chan1 <- "rmv|brathering|y"
 	chan2 <- "add|toast|z"
+
+	// Let output finish.
+	time.Sleep(1 * time.Second)
 }
