@@ -2,7 +2,13 @@ package crdt
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"strings"
 	"sync"
+
+	"encoding/base64"
+	"io/ioutil"
 
 	"github.com/satori/go.uuid"
 )
@@ -14,6 +20,7 @@ import (
 // and Zawirski. It consists of unique IDs and data items.
 type ORSet struct {
 	lock     *sync.RWMutex
+	file     *os.File
 	elements map[string]interface{}
 }
 
@@ -32,6 +39,123 @@ func InitORSet() *ORSet {
 		lock:     new(sync.RWMutex),
 		elements: make(map[string]interface{}),
 	}
+}
+
+// InitORSetOpFromFile parses an ORSet found in
+// the supplied file and returns it, initialized
+// with elements saved in file.
+func InitORSetOpFromFile(fileName string) (*ORSet, error) {
+
+	// Init an empty ORSet.
+	s := InitORSet()
+
+	// Attempt to open CRDT file and assign to set afterwards.
+	f, err := os.OpenFile(fileName, os.O_RDWR, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("opening CRDT file '%s' failed with: %s\n", fileName, err.Error())
+	}
+	s.file = f
+
+	// Parse contained CRDT state from file.
+	contentsRaw, err := ioutil.ReadAll(s.file)
+	if err != nil {
+		return nil, fmt.Errorf("reading all contents from CRDT file '%s' failed with: %s\n", fileName, err.Error())
+	}
+	contents := string(contentsRaw)
+
+	// Split content at each | (pipe symbol).
+	parts := strings.Split(contents, "|")
+
+	// Check minimum length.
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("CRDT file '%s' contents were invalid\n", fileName)
+	}
+
+	// Check even number of elements.
+	if (len(parts) % 2) != 0 {
+		return nil, fmt.Errorf("odd number of elements in CRDT file '%s'\n", fileName)
+	}
+
+	// Range over all value-tag-pairs.
+	for value := 0; value < len(parts); value += 2 {
+
+		tag := value + 1
+
+		// Decode string from base64.
+		decValue, err := base64.StdEncoding.DecodeString(parts[value])
+		if err != nil {
+			return nil, fmt.Errorf("decoding base64 string in CRDT file '%s' failed: %s\n", fileName, err.Error())
+		}
+
+		// Assign decoded value to corresponding
+		// tag in elements set.
+		s.elements[parts[tag]] = string(decValue)
+	}
+
+	return s, nil
+}
+
+// WriteORSetToFile saves an active ORSet onto
+// stable storage at fileName location. This allows
+// for a CRDT ORSet to be made persistent and later
+// be resumed from prior state.
+func (s *ORSet) WriteORSetToFile(fileName string) error {
+
+	// Write-lock the set and unlock on any exit.
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	marshalled := ""
+
+	for tag, valueRaw := range s.elements {
+
+		log.Printf("Encoding '%v' ", valueRaw)
+
+		valueConv, ok := valueRaw.([]byte)
+		if ok != true {
+			return fmt.Errorf("could not convert '%v' to []byte.")
+		}
+
+		fmt.Printf("converted as '%v' ", valueConv)
+
+		// Encode value in base64 encoding.
+		value := base64.StdEncoding.EncodeToString([]byte(valueConv))
+
+		fmt.Printf("to '%s'", value)
+
+		// Append value and tag to write-out file.
+		if marshalled == "" {
+			marshalled = fmt.Sprintf("%v|%s", marshalled, value, tag)
+		} else {
+			marshalled = fmt.Sprintf("%s|%v|%s", marshalled, value, tag)
+		}
+	}
+
+	// Reset position in file to beginning.
+	_, err := s.file.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return fmt.Errorf("error while setting head back to beginning in CRDT file '%s': %s\n", fileName, err.Error())
+	}
+
+	// Write marshalled set to file.
+	newNumOfBytes, err := s.file.WriteString(marshalled)
+	if err != nil {
+		return fmt.Errorf("failed to write ORSet contents to file '%s': %s\n", fileName, err.Error())
+	}
+
+	// Adjust file size to just written length of string.
+	err = s.file.Truncate(int64(newNumOfBytes))
+	if err != nil {
+		return fmt.Errorf("error while truncating CRDT file '%s' to new size: %s\n", fileName, err.Error())
+	}
+
+	// Save to stable storage.
+	err = s.file.Sync()
+	if err != nil {
+		return fmt.Errorf("could not synchronise CRDT file '%s' contents to stable storage: %s\n", fileName, err.Error())
+	}
+
+	return nil
 }
 
 // Lookup cycles through elements in ORSet and
@@ -154,15 +278,12 @@ func (s *ORSet) Remove(e interface{}, send sendFunc) error {
 	rmvOp := InitORSetOp()
 	rmvOp.Operation = "rmv"
 
-	// Write-lock the set.
+	// Write-lock the set and unlock on any exit.
 	s.lock.Lock()
+	defer s.lock.Unlock()
 
 	// Check precondition: is element present in set?
 	if s.Lookup(e, false) != true {
-
-		// If not, relieve write lock and return with error.
-		s.lock.Unlock()
-
 		return fmt.Errorf("element to be removed not found in set")
 	}
 
@@ -182,9 +303,6 @@ func (s *ORSet) Remove(e interface{}, send sendFunc) error {
 
 	// Send message to other replicas.
 	send(rmvOp.String())
-
-	// Relieve write lock.
-	s.lock.Unlock()
 
 	return nil
 }

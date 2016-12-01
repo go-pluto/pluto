@@ -59,6 +59,10 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		return nil, fmt.Errorf("[imap.InitWorker] Specified worker ID does not exist in config file. Please provide a valid one, for example '%s'.\n", workerID)
 	}
 
+	// TODO: For all users known to this node via the authentication mechanism,
+	//       read in their respective CRDT mailbox states from stable storage and
+	//       place them in a map accessible via user name as key.
+
 	// Load internal TLS config.
 	internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Workers[worker.Name].TLS.CertLoc, config.Workers[worker.Name].TLS.KeyLoc, config.RootCertLoc)
 	if err != nil {

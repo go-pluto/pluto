@@ -2,8 +2,11 @@ package crdt
 
 import (
 	"math"
+	"os"
 	"strings"
 	"testing"
+
+	"io/ioutil"
 )
 
 // Variables
@@ -37,7 +40,6 @@ func init() {
 	k6 = "6"
 
 	// Values to use in tests below.
-	// TODO: Add test value with semicolons.
 	v1 = true
 	v2 = "Hey there, I am a test."
 	v3 = "Sending ✉ around the 🌐: ✔"
@@ -46,6 +48,100 @@ func init() {
 	v6 = math.MaxFloat64
 	v7 = 123456 + 200i
 	v8 = (math.MaxFloat32 * 2i)
+}
+
+// TestInitORSetOpFromFile executes a white-box unit
+// test on implemented InitORSetOpFromFile() function.
+func TestInitORSetOpFromFile(t *testing.T) {
+
+	// Delete temporary test file on function exit.
+	defer os.Remove("test-crdt.log")
+
+	// Test representations of file contents.
+	marshalled1 := []byte("")
+	marshalled2 := []byte("|\n")
+	marshalled3 := []byte("A|B|C\n")
+	marshalled4 := []byte("abc|1|def|2|ghi|3\n")
+	marshalled5 := []byte("YWJj|1|ZGVm|2|Z2hp|3\n")
+
+	// Write to temporary test file.
+	err := ioutil.WriteFile("test-crdt.log", marshalled1, 0600)
+	if err != nil {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled1: Failed to write to temporary test file: %s\n", err.Error())
+	}
+
+	// Attempt to init ORSet from created file.
+	_, err = InitORSetOpFromFile("test-crdt.log")
+	if err.Error() != "CRDT file 'test-crdt.log' contents were invalid\n" {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled1: Expected '%s' as error but received: %s", "CRDT file 'test-crdt.log' contents were invalid", err.Error())
+	}
+
+	// Write to temporary test file.
+	err = ioutil.WriteFile("test-crdt.log", marshalled2, 0600)
+	if err != nil {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled2: Failed to write to temporary test file: %s\n", err.Error())
+	}
+
+	// Attempt to init ORSet from created file.
+	_, err = InitORSetOpFromFile("test-crdt.log")
+	if err != nil {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled2: Expected InitORSetOpFromFile() not to fail but got: %s\n", err.Error())
+	}
+
+	// Write to temporary test file.
+	err = ioutil.WriteFile("test-crdt.log", marshalled3, 0600)
+	if err != nil {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled3: Failed to write to temporary test file: %s\n", err.Error())
+	}
+
+	// Attempt to init ORSet from created file.
+	_, err = InitORSetOpFromFile("test-crdt.log")
+	if err.Error() != "odd number of elements in CRDT file 'test-crdt.log'\n" {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled3: Expected 'odd number of elements in CRDT file 'test-crdt.log'' as error but received: %s", err.Error())
+	}
+
+	// Write to temporary test file.
+	err = ioutil.WriteFile("test-crdt.log", marshalled4, 0600)
+	if err != nil {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled4: Failed to write to temporary test file: %s\n", err.Error())
+	}
+
+	// Attempt to init ORSet from created file.
+	_, err = InitORSetOpFromFile("test-crdt.log")
+	if err.Error() != "decoding base64 string in CRDT file 'test-crdt.log' failed: illegal base64 data at input byte 0\n" {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled4: Expected 'decoding base64 string in CRDT file 'test-crdt.log' failed: illegal base64 data at input byte 0\n' as error but received: '%s'\n", err.Error())
+	}
+
+	// Write to temporary test file.
+	err = ioutil.WriteFile("test-crdt.log", marshalled5, 0600)
+	if err != nil {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled5: Failed to write to temporary test file: %s\n", err.Error())
+	}
+
+	// Attempt to init ORSet from created file.
+	s, err := InitORSetOpFromFile("test-crdt.log")
+
+	// Check success.
+	if err != nil {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled5: Expected InitORSetOpFromFile() not to fail but got: %s\n", err.Error())
+	}
+
+	// Check correct unmarshalling.
+	if len(s.elements) != 3 {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled5: Expected exactly three elements in set but found: %d\n", len(s.elements))
+	}
+
+	if s.Lookup("abc", true) != true {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] Expected 'abc' to be in set but Lookup() returns false.\n")
+	}
+
+	if s.Lookup("def", true) != true {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] Expected 'def' to be in set but Lookup() returns false.\n")
+	}
+
+	if s.Lookup("ghi", true) != true {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] Expected 'ghi' to be in set but Lookup() returns false.\n")
+	}
 }
 
 // TestLookup executes a white-box unit test

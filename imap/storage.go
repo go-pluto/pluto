@@ -36,6 +36,10 @@ func InitStorage(config *config.Config) (*Storage, *comm.Receiver, error) {
 		Config: config,
 	}
 
+	// TODO: For all users known to this node via the authentication mechanism,
+	//       read in their respective CRDT mailbox states from stable storage and
+	//       place them in a map accessible via user name as key.
+
 	// Load internal TLS config.
 	internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Storage.TLS.CertLoc, config.Storage.TLS.KeyLoc, config.RootCertLoc)
 	if err != nil {

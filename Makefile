@@ -16,11 +16,17 @@ deps:
 test-env:
 	if [ ! -d "private" ]; then mkdir private; fi
 	chmod 0700 private
-	mkdir -p private/Maildirs/worker-1/
-	@for i in 0 1 2 3 4 5 6 7 8 9; do mkdir -p private/Maildirs/worker-1/user$$i/new && mkdir -p private/Maildirs/worker-1/user$$i/tmp && mkdir -p private/Maildirs/worker-1/user$$i/cur; done
+	if [ ! -d "private/Maildirs/worker-1" ]; then mkdir -p private/Maildirs/worker-1; fi
+	for i in 0 1 2 3 4 5 6 7 8 9; do if [ ! -d "private/Maildirs/worker-1/user$$i/new" ]; then mkdir -p private/Maildirs/worker-1/user$$i/new; fi; done
+	for i in 0 1 2 3 4 5 6 7 8 9; do if [ ! -d "private/Maildirs/worker-1/user$$i/tmp" ]; then mkdir -p private/Maildirs/worker-1/user$$i/tmp; fi; done
+	for i in 0 1 2 3 4 5 6 7 8 9; do if [ ! -d "private/Maildirs/worker-1/user$$i/cur" ]; then mkdir -p private/Maildirs/worker-1/user$$i/cur; fi; done
 	chmod -R 0700 private/Maildirs/worker-1/*
-	mkdir -p private/crdt-layers/worker-1/
-	mkdir -p private/crdt-layers/storage/
+	if [ ! -d "private/crdt-layers/worker-1" ]; then mkdir -p private/crdt-layers/worker-1; fi
+	for i in 0 1 2 3 4 5 6 7 8 9; do if [ ! -d "private/crdt-layers/worker-1/user$$i" ]; then mkdir -p private/crdt-layers/worker-1/user$$i; fi; done
+	if [ ! -d "private/crdt-layers/worker-2" ]; then mkdir -p private/crdt-layers/worker-2; fi
+	for i in 0 1 2 3 4 5 6 7 8 9; do if [ ! -d "private/crdt-layers/worker-2/user$$i" ]; then mkdir -p private/crdt-layers/worker-2/user$$i; fi; done
+	if [ ! -d "private/crdt-layers/storage" ]; then mkdir -p private/crdt-layers/storage; fi
+	for i in 0 1 2 3 4 5 6 7 8 9; do if [ ! -d "private/crdt-layers/storage/user$$i" ]; then mkdir -p private/crdt-layers/storage/user$$i; fi; done
 
 build:
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'

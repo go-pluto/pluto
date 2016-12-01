@@ -25,6 +25,8 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 
 	log.Printf("Serving SELECT '%s'...\n", req.Tag)
 
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
 	worker.lock.Lock()
 	defer worker.lock.Unlock()
 
@@ -114,12 +116,22 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 // taken from payload of request.
 func (worker *Worker) Create(c *Connection, req *Request, ctx *Context) bool {
 
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
+
 	return true
 }
 
 // Append inserts a message built from further supplied
 // message literal in a mailbox specified in payload.
 func (worker *Worker) Append(c *Connection, req *Request, ctx *Context) bool {
+
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
 
 	return true
 }
@@ -128,6 +140,11 @@ func (worker *Worker) Append(c *Connection, req *Request, ctx *Context) bool {
 // returns the new meta data of those messages.
 func (worker *Worker) Store(c *Connection, req *Request, ctx *Context) bool {
 
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
+
 	return true
 }
 
@@ -135,12 +152,22 @@ func (worker *Worker) Store(c *Connection, req *Request, ctx *Context) bool {
 // into another stated mailbox.
 func (worker *Worker) Copy(c *Connection, req *Request, ctx *Context) bool {
 
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
+
 	return true
 }
 
 // Expunge deletes messages prior marked as to-be-deleted
 // via labelling them with the \Deleted flag.
 func (worker *Worker) Expunge(c *Connection, req *Request, ctx *Context) bool {
+
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
 
 	return true
 }
