@@ -42,7 +42,7 @@ func TestString(t *testing.T) {
 	}
 
 	// Reset msg and set a correct argument pair.
-	msg.Arguments = make(map[string]interface{})
+	msg.Arguments = make(map[string]string)
 	msg.Arguments["1"] = "test string"
 
 	// Check marshalling.
@@ -56,7 +56,7 @@ func TestString(t *testing.T) {
 	msg.Operation = "rmv"
 
 	// Set multiple arguments.
-	msg.Arguments["1"] = true
+	msg.Arguments["1"] = "true"
 	msg.Arguments["2"] = "test remove message payload"
 
 	// Check marshalling.
@@ -68,9 +68,9 @@ func TestString(t *testing.T) {
 	}
 
 	// Reset arguments and test more types.
-	msg.Arguments = make(map[string]interface{})
-	msg.Arguments["3"] = 99
-	msg.Arguments["4"] = 0.25
+	msg.Arguments = make(map[string]string)
+	msg.Arguments["3"] = "99"
+	msg.Arguments["4"] = "0.25"
 
 	// Check marshalling.
 	marshalled = msg.String()
@@ -81,9 +81,9 @@ func TestString(t *testing.T) {
 	}
 
 	// Reset arguments and test more types.
-	msg.Arguments = make(map[string]interface{})
-	msg.Arguments["5"] = math.MaxFloat64
-	msg.Arguments["6"] = 10 * 10i
+	msg.Arguments = make(map[string]string)
+	msg.Arguments["5"] = fmt.Sprintf("%g", math.MaxFloat64)
+	msg.Arguments["6"] = fmt.Sprintf("%g", (10 * 10i))
 
 	// Check marshalling.
 	marshalled = msg.String()
@@ -94,8 +94,8 @@ func TestString(t *testing.T) {
 	}
 
 	// Reset arguments and test remaining type.
-	msg.Arguments = make(map[string]interface{})
-	msg.Arguments["7"] = (math.MaxFloat32 + 1i)
+	msg.Arguments = make(map[string]string)
+	msg.Arguments["7"] = fmt.Sprintf("%g", (math.MaxFloat32 + 1i))
 
 	// Check marshalling.
 	marshalled = msg.String()

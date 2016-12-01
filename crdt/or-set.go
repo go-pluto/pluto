@@ -21,7 +21,7 @@ import (
 type ORSet struct {
 	lock     *sync.RWMutex
 	file     *os.File
-	elements map[string]interface{}
+	elements map[string]string
 }
 
 // sendFunc is used as a parameter to below defined
@@ -37,7 +37,7 @@ func InitORSet() *ORSet {
 
 	return &ORSet{
 		lock:     new(sync.RWMutex),
-		elements: make(map[string]interface{}),
+		elements: make(map[string]string),
 	}
 }
 
@@ -96,10 +96,10 @@ func InitORSetOpFromFile(fileName string) (*ORSet, error) {
 }
 
 // WriteORSetToFile saves an active ORSet onto
-// stable storage at fileName location. This allows
-// for a CRDT ORSet to be made persistent and later
-// be resumed from prior state.
-func (s *ORSet) WriteORSetToFile(fileName string) error {
+// stable storage at location from initialization.
+// This allows for a CRDT ORSet to be made persistent
+// and later be resumed from prior state.
+func (s *ORSet) WriteORSetToFile() error {
 
 	// Write-lock the set and unlock on any exit.
 	s.lock.Lock()
@@ -109,23 +109,12 @@ func (s *ORSet) WriteORSetToFile(fileName string) error {
 
 	for tag, valueRaw := range s.elements {
 
-		log.Printf("Encoding '%v' ", valueRaw)
-
-		valueConv, ok := valueRaw.([]byte)
-		if ok != true {
-			return fmt.Errorf("could not convert '%v' to []byte.")
-		}
-
-		fmt.Printf("converted as '%v' ", valueConv)
-
 		// Encode value in base64 encoding.
-		value := base64.StdEncoding.EncodeToString([]byte(valueConv))
-
-		fmt.Printf("to '%s'", value)
+		value := base64.StdEncoding.EncodeToString([]byte(valueRaw))
 
 		// Append value and tag to write-out file.
 		if marshalled == "" {
-			marshalled = fmt.Sprintf("%v|%s", marshalled, value, tag)
+			marshalled = fmt.Sprintf("%v|%s", value, tag)
 		} else {
 			marshalled = fmt.Sprintf("%s|%v|%s", marshalled, value, tag)
 		}
@@ -134,25 +123,25 @@ func (s *ORSet) WriteORSetToFile(fileName string) error {
 	// Reset position in file to beginning.
 	_, err := s.file.Seek(0, os.SEEK_SET)
 	if err != nil {
-		return fmt.Errorf("error while setting head back to beginning in CRDT file '%s': %s\n", fileName, err.Error())
+		return fmt.Errorf("error while setting head back to beginning in CRDT file '%s': %s\n", s.file.Name(), err.Error())
 	}
 
 	// Write marshalled set to file.
 	newNumOfBytes, err := s.file.WriteString(marshalled)
 	if err != nil {
-		return fmt.Errorf("failed to write ORSet contents to file '%s': %s\n", fileName, err.Error())
+		return fmt.Errorf("failed to write ORSet contents to file '%s': %s\n", s.file.Name(), err.Error())
 	}
 
 	// Adjust file size to just written length of string.
 	err = s.file.Truncate(int64(newNumOfBytes))
 	if err != nil {
-		return fmt.Errorf("error while truncating CRDT file '%s' to new size: %s\n", fileName, err.Error())
+		return fmt.Errorf("error while truncating CRDT file '%s' to new size: %s\n", s.file.Name(), err.Error())
 	}
 
 	// Save to stable storage.
 	err = s.file.Sync()
 	if err != nil {
-		return fmt.Errorf("could not synchronise CRDT file '%s' contents to stable storage: %s\n", fileName, err.Error())
+		return fmt.Errorf("could not synchronise CRDT file '%s' contents to stable storage: %s\n", s.file.Name(), err.Error())
 	}
 
 	return nil
@@ -161,7 +150,7 @@ func (s *ORSet) WriteORSetToFile(fileName string) error {
 // Lookup cycles through elements in ORSet and
 // returns true if element e is present and
 // false otherwise.
-func (s *ORSet) Lookup(e interface{}, needsLocking bool) bool {
+func (s *ORSet) Lookup(e string, needsLocking bool) bool {
 
 	// Fallback return value is false.
 	found := false
@@ -194,7 +183,7 @@ func (s *ORSet) Lookup(e interface{}, needsLocking bool) bool {
 // defined by the specification. It is executed by all
 // replicas of the data set including the source node. It
 // inserts given element and tag into the set representation.
-func (s *ORSet) AddEffect(e interface{}, tag string, needsLocking bool) {
+func (s *ORSet) AddEffect(e string, tag string, needsLocking bool) {
 
 	if needsLocking {
 		// Write-lock the set.
@@ -216,7 +205,7 @@ func (s *ORSet) AddEffect(e interface{}, tag string, needsLocking bool) {
 // the update instruction is send downstream to all other
 // replicas via the send function which takes care of the
 // reliable causally-ordered broadcast.
-func (s *ORSet) Add(e interface{}, send sendFunc) {
+func (s *ORSet) Add(e string, send sendFunc) {
 
 	// Create a new unique tag.
 	tag := uuid.NewV4().String()
@@ -243,7 +232,7 @@ func (s *ORSet) Add(e interface{}, send sendFunc) {
 // operation defined by the specification. It is executed
 // by all replicas of the data set including the source node.
 // It removes supplied set of tags from the ORSet's set.
-func (s *ORSet) RemoveEffect(rSet map[string]interface{}, needsLocking bool) {
+func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool) {
 
 	if needsLocking {
 		// Write-lock the set.
@@ -272,7 +261,7 @@ func (s *ORSet) RemoveEffect(rSet map[string]interface{}, needsLocking bool) {
 // deletion precondition and creating a remove set
 // and afterwards executes the effect part locally and
 // sends out the remove message to all other replicas.
-func (s *ORSet) Remove(e interface{}, send sendFunc) error {
+func (s *ORSet) Remove(e string, send sendFunc) error {
 
 	// Initialize needed remove operation variables.
 	rmvOp := InitORSetOp()

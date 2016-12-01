@@ -1,6 +1,7 @@
 package crdt
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"strings"
@@ -18,14 +19,14 @@ var k4 string
 var k5 string
 var k6 string
 
-var v1 bool
+var v1 string
 var v2 string
 var v3 string
-var v4 int
-var v5 float32
-var v6 float64
-var v7 complex64
-var v8 complex128
+var v4 string
+var v5 string
+var v6 string
+var v7 string
+var v8 string
 
 // Functions
 
@@ -40,14 +41,14 @@ func init() {
 	k6 = "6"
 
 	// Values to use in tests below.
-	v1 = true
+	v1 = "true"
 	v2 = "Hey there, I am a test."
 	v3 = "Sending ✉ around the 🌐: ✔"
-	v4 = 666
-	v5 = 12.34
-	v6 = math.MaxFloat64
-	v7 = 123456 + 200i
-	v8 = (math.MaxFloat32 * 2i)
+	v4 = "666"
+	v5 = "12.34"
+	v6 = fmt.Sprintf("%g", math.MaxFloat64)
+	v7 = fmt.Sprintf("%g", (123456 + 200i))
+	v8 = fmt.Sprintf("%g", (math.MaxFloat32 * 2i))
 }
 
 // TestInitORSetOpFromFile executes a white-box unit
@@ -141,6 +142,83 @@ func TestInitORSetOpFromFile(t *testing.T) {
 
 	if s.Lookup("ghi", true) != true {
 		t.Fatalf("[crdt.TestInitORSetOpFromFile] Expected 'ghi' to be in set but Lookup() returns false.\n")
+	}
+}
+
+// TestWriteORSetToFile executes a white-box unit test
+// on implemented WriteORSetToFile() function.
+func TestWriteORSetToFile(t *testing.T) {
+
+	// Create a new ORSet.
+	s := InitORSet()
+
+	// Assign a corresponding file.
+	f, err := os.OpenFile("test-crdt.log", (os.O_CREATE | os.O_RDWR), 0600)
+	if err != nil {
+		t.Fatalf("[crdt.TestWriteORSetToFile] Failed to create CRDT file 'test-crdt.log': %s\n", err.Error())
+	}
+
+	// Assign to ORSet and make sure to close
+	// and remove when function exits.
+	s.file = f
+	defer s.file.Close()
+	defer os.Remove("test-crdt.log")
+
+	// Write current ORSet to file.
+	err = s.WriteORSetToFile()
+	if err != nil {
+		t.Fatalf("[crdt.TestWriteORSetToFile] Expected WriteORSetToFile() not to fail but got: %s\n", err.Error())
+	}
+
+	// Verfiy correct file representation.
+	contentsRaw, err := ioutil.ReadFile("test-crdt.log")
+	if err != nil {
+		t.Fatalf("[crdt.TestWriteORSetToFile] Could not read from just written CRDT log file 'test-crdt.log': %s\n", err.Error())
+	}
+	contents1 := string(contentsRaw)
+
+	if contents1 != "" {
+		t.Fatalf("[crdt.TestWriteORSetToFile] contents1: Expected '' but found: %s\n", contents1)
+	}
+
+	// Set a value in the set.
+	s.AddEffect("abc", "1", true)
+
+	// Write current ORSet to file.
+	err = s.WriteORSetToFile()
+	if err != nil {
+		t.Fatalf("[crdt.TestWriteORSetToFile] Expected WriteORSetToFile() not to fail but got: %s\n", err.Error())
+	}
+
+	// Verfiy correct file representation.
+	contentsRaw, err = ioutil.ReadFile("test-crdt.log")
+	if err != nil {
+		t.Fatalf("[crdt.TestWriteORSetToFile] Could not read from just written CRDT log file 'test-crdt.log': %s\n", err.Error())
+	}
+	contents2 := string(contentsRaw)
+
+	if contents2 != "YWJj|1" {
+		t.Fatalf("[crdt.TestWriteORSetToFile] contents2: Expected 'YWJj|1' but found: %s\n", contents2)
+	}
+
+	// Set one more.
+	s.AddEffect("def", "2", true)
+
+	// Write current ORSet to file.
+	err = s.WriteORSetToFile()
+	if err != nil {
+		t.Fatalf("[crdt.TestWriteORSetToFile] Expected WriteORSetToFile() not to fail but got: %s\n", err.Error())
+	}
+
+	// Verfiy correct file representation.
+	contentsRaw, err = ioutil.ReadFile("test-crdt.log")
+	if err != nil {
+		t.Fatalf("[crdt.TestWriteORSetToFile] Could not read from just written CRDT log file 'test-crdt.log': %s\n", err.Error())
+	}
+	contents3 := string(contentsRaw)
+
+	if (contents3 != "YWJj|1|ZGVm|2") && (contents3 != "ZGVm|2|YWJj|1") {
+		t.Fatalf("[crdt.TestWriteORSetToFile] contents3: Expected 'YWJj|1|ZGVm|2' or 'ZGVm|2|YWJj|1' but found: %s\n", contents3)
 	}
 }
 
@@ -391,7 +469,7 @@ func TestRemoveEffect(t *testing.T) {
 	s := InitORSet()
 
 	// Create an empty remove set.
-	testRSet := make(map[string]interface{})
+	testRSet := make(map[string]string)
 
 	// In order to delete keys, we need to add some first.
 	s.AddEffect(v2, k1, true)
@@ -443,7 +521,7 @@ func TestRemoveEffect(t *testing.T) {
 	}
 
 	// Reset map and include an existing tag.
-	testRSet = make(map[string]interface{})
+	testRSet = make(map[string]string)
 	testRSet["1"] = v2
 
 	// Remove all tags from set.
@@ -466,7 +544,7 @@ func TestRemoveEffect(t *testing.T) {
 	}
 
 	// Now mark all tags for value v2 as to-be-removed.
-	testRSet = make(map[string]interface{})
+	testRSet = make(map[string]string)
 	testRSet["1"] = v2
 	testRSet["4"] = v2
 	testRSet["5"] = v2

@@ -12,7 +12,7 @@ import (
 // (add or rmv) and a set of tag-value-pairs.
 type ORSetOp struct {
 	Operation string
-	Arguments map[string]interface{}
+	Arguments map[string]string
 }
 
 // Functions
@@ -21,7 +21,7 @@ type ORSetOp struct {
 func InitORSetOp() *ORSetOp {
 
 	return &ORSetOp{
-		Arguments: make(map[string]interface{}),
+		Arguments: make(map[string]string),
 	}
 }
 
@@ -48,7 +48,7 @@ func (msg *ORSetOp) String() string {
 func Parse(msgRaw string) (*ORSetOp, error) {
 
 	// Prepare map for operation arguments.
-	args := make(map[string]interface{})
+	args := make(map[string]string)
 
 	// Split message at pipe delimiters.
 	parts := strings.Split(msgRaw, "|")
