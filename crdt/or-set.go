@@ -2,7 +2,6 @@ package crdt
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"sync"
