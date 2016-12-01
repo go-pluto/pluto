@@ -73,8 +73,8 @@ func TestInitORSetOpFromFile(t *testing.T) {
 
 	// Attempt to init ORSet from created file.
 	_, err = InitORSetOpFromFile("test-crdt.log")
-	if err.Error() != "CRDT file 'test-crdt.log' contents were invalid\n" {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled1: Expected '%s' as error but received: %s", "CRDT file 'test-crdt.log' contents were invalid", err.Error())
+	if err.Error() != "CRDT file 'test-crdt.log' contains invalid content\n" {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled1: Expected 'CRDT file 'test-crdt.log' contains invalid content' as error but received: %s", err.Error())
 	}
 
 	// Write to temporary test file.
@@ -219,6 +219,28 @@ func TestWriteORSetToFile(t *testing.T) {
 
 	if (contents3 != "YWJj|1|ZGVm|2") && (contents3 != "ZGVm|2|YWJj|1") {
 		t.Fatalf("[crdt.TestWriteORSetToFile] contents3: Expected 'YWJj|1|ZGVm|2' or 'ZGVm|2|YWJj|1' but found: %s\n", contents3)
+	}
+
+	// And one last.
+	s.AddEffect("ghi", "3", true)
+
+	// Write current ORSet to file.
+	err = s.WriteORSetToFile()
+	if err != nil {
+		t.Fatalf("[crdt.TestWriteORSetToFile] Expected WriteORSetToFile() not to fail but got: %s\n", err.Error())
+	}
+
+	// Verfiy correct file representation.
+	contentsRaw, err = ioutil.ReadFile("test-crdt.log")
+	if err != nil {
+		t.Fatalf("[crdt.TestWriteORSetToFile] Could not read from just written CRDT log file 'test-crdt.log': %s\n", err.Error())
+	}
+	contents4 := string(contentsRaw)
+
+	if (contents4 != "YWJj|1|ZGVm|2|Z2hp|3") && (contents4 != "YWJj|1|Z2hp|3|ZGVm|2") &&
+		(contents4 != "ZGVm|2|YWJj|1|Z2hp|3") && (contents4 != "ZGVm|2|Z2hp|3|YWJj|1") &&
+		(contents4 != "Z2hp|3|YWJj|1|ZGVm|2") && (contents4 != "Z2hp|3|ZGVm|2|YWJj|1") {
+		t.Fatalf("[crdt.TestWriteORSetToFile] contents4: Expected 'YWJj|1', 'ZGVm|2' and 'Z2hp|3' to be present but found: %s\n", contents4)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"sync"
 
 	"crypto/tls"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
+	"github.com/numbleroot/pluto/crdt"
 	"github.com/numbleroot/pluto/crypto"
 )
 
@@ -59,9 +61,30 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		return nil, fmt.Errorf("[imap.InitWorker] Specified worker ID does not exist in config file. Please provide a valid one, for example '%s'.\n", workerID)
 	}
 
-	// TODO: For all users known to this node via the authentication mechanism,
-	//       read in their respective CRDT mailbox states from stable storage and
-	//       place them in a map accessible via user name as key.
+	// Find all files below this node's CRDT root layer.
+	userFolders, err := filepath.Glob(filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "*"))
+	if err != nil {
+		return nil, fmt.Errorf("[imap.InitWorker] Globbing for CRDT folders of users failed with: %s\n", err.Error())
+	}
+
+	for _, folder := range userFolders {
+
+		// Retrieve information about accessed file.
+		folderInfo, err := os.Stat(folder)
+		if err != nil {
+			return nil, fmt.Errorf("[imap.InitWorker] Error during stat'ing possible user CRDT folder: %s\n", err.Error())
+		}
+
+		// Only consider folders for building up CRDT map.
+		if folderInfo.IsDir() {
+
+			// Read in mailbox structure CRDT from file.
+			_, err := crdt.InitORSetOpFromFile(filepath.Join(folder, "mailbox-structure.log"))
+			if err != nil {
+				return nil, fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %s\n", err.Error())
+			}
+		}
+	}
 
 	// Load internal TLS config.
 	internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Workers[worker.Name].TLS.CertLoc, config.Workers[worker.Name].TLS.KeyLoc, config.RootCertLoc)

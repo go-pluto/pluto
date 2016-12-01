@@ -22,11 +22,20 @@ test-env:
 	for i in 0 1 2 3 4 5 6 7 8 9; do if [ ! -d "private/Maildirs/worker-1/user$$i/cur" ]; then mkdir -p private/Maildirs/worker-1/user$$i/cur; fi; done
 	chmod -R 0700 private/Maildirs/worker-1/*
 	if [ ! -d "private/crdt-layers/worker-1" ]; then mkdir -p private/crdt-layers/worker-1; fi
-	for i in 0 1 2 3 4 5 6 7 8 9; do if [ ! -d "private/crdt-layers/worker-1/user$$i" ]; then mkdir -p private/crdt-layers/worker-1/user$$i; fi; done
+	for i in 0 1 2 3 4 5 6 7 8 9; do \
+		if [ ! -d "private/crdt-layers/worker-1/user$$i" ]; then mkdir -p private/crdt-layers/worker-1/user$$i; fi; \
+		if [ ! -f "private/crdt-layers/worker-1/user$$i/mailbox-structure.log" ]; then touch private/crdt-layers/worker-1/user$$i/mailbox-structure.log && echo "SU5CT1g=|1" > private/crdt-layers/worker-1/user$$i/mailbox-structure.log; fi; \
+	done
 	if [ ! -d "private/crdt-layers/worker-2" ]; then mkdir -p private/crdt-layers/worker-2; fi
-	for i in 0 1 2 3 4 5 6 7 8 9; do if [ ! -d "private/crdt-layers/worker-2/user$$i" ]; then mkdir -p private/crdt-layers/worker-2/user$$i; fi; done
+	for i in 0 1 2 3 4 5 6 7 8 9; do \
+		if [ ! -d "private/crdt-layers/worker-2/user$$i" ]; then mkdir -p private/crdt-layers/worker-2/user$$i; fi; \
+		if [ ! -f "private/crdt-layers/worker-2/user$$i/mailbox-structure.log" ]; then touch private/crdt-layers/worker-2/user$$i/mailbox-structure.log && echo "SU5CT1g=|1" > private/crdt-layers/worker-2/user$$i/mailbox-structure.log; fi; \
+	done
 	if [ ! -d "private/crdt-layers/storage" ]; then mkdir -p private/crdt-layers/storage; fi
-	for i in 0 1 2 3 4 5 6 7 8 9; do if [ ! -d "private/crdt-layers/storage/user$$i" ]; then mkdir -p private/crdt-layers/storage/user$$i; fi; done
+	for i in 0 1 2 3 4 5 6 7 8 9; do \
+		if [ ! -d "private/crdt-layers/storage/user$$i" ]; then mkdir -p private/crdt-layers/storage/user$$i; fi; \
+		if [ ! -f "private/crdt-layers/storage/user$$i/mailbox-structure.log" ]; then touch private/crdt-layers/storage/user$$i/mailbox-structure.log && echo "SU5CT1g=|1" > private/crdt-layers/storage/user$$i/mailbox-structure.log; fi; \
+	done
 
 build:
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'

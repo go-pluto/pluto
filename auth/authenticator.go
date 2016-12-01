@@ -11,8 +11,8 @@ import (
 // to reach authenticated state (also LOGIN).
 type PlainAuthenticator interface {
 
-	// To be able to route an IMAP request to the responsible
-	// worker node we need to be able to tell which of them it is.
+	// GetWorkerForUser allows us to route an IMAP request to the
+	// worker node responsible for a specific user.
 	GetWorkerForUser(workers map[string]config.Worker, id int) (string, error)
 
 	// AuthenticatePlain will be implemented by each of the

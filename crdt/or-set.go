@@ -67,7 +67,7 @@ func InitORSetOpFromFile(fileName string) (*ORSet, error) {
 
 	// Check minimum length.
 	if len(parts) < 2 {
-		return nil, fmt.Errorf("CRDT file '%s' contents were invalid\n", fileName)
+		return nil, fmt.Errorf("CRDT file '%s' contains invalid content\n", fileName)
 	}
 
 	// Check even number of elements.
