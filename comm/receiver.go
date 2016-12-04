@@ -382,15 +382,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			log.Fatalf("[comm.ApplyStoredMsgs] Error while parsing sync message: %s\n", err.Error())
 		}
 
-		// Minimal plausibility check: discard message from nodes
-		// we do not know about.
-		if _, found := recv.vclock[msg.Sender]; found != true {
-
-			log.Printf("[comm.ApplyStoredMsgs] Unknown sender '%s' of CRDT update message. Deleting.\n", msg.Sender)
-
-			// TODO: Purge message from log, relieve lock etc.
-		}
-
 		// Initially, set apply indicator to true. This means,
 		// that the message would be considered for further parsing.
 		applyMsg := true
