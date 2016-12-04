@@ -73,8 +73,8 @@ func TestInitORSetOpFromFile(t *testing.T) {
 
 	// Attempt to init ORSet from created file.
 	_, err = InitORSetOpFromFile("test-crdt.log")
-	if err.Error() != "CRDT file 'test-crdt.log' contains invalid content\n" {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled1: Expected 'CRDT file 'test-crdt.log' contains invalid content' as error but received: %s", err.Error())
+	if err != nil {
+		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled1: Expected InitORSetOpFromFile() not to fail for empty set but got: %s\n", err.Error())
 	}
 
 	// Write to temporary test file.

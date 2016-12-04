@@ -3,6 +3,13 @@
 # node certificates.
 RootCertLoc = "/very/complicated/and/long/path/to/your/root-cert.pem"
 
+[IMAP]
+# What the system should send on an incoming new
+# IMAP connection.
+Greeting = "Pluto ready."
+# How hierarchy in mailboxes will be indicated.
+HierarchySeparator = "."
+
 [Distributor]
 IP = "127.0.0.1"
 Port = "993"
@@ -21,9 +28,6 @@ AuthAdapter = "AuthPostgreSQL"
     # script dedicated to setting up the PKI.
     CertLoc = "/very/complicated/and/long/path/to/your/internal-distributor-cert.pem"
     KeyLoc = "/very/complicated/and/long/path/to/your/internal-distributor-key.pem"
-
-    [Distributor.IMAP]
-    Greeting = "Pluto ready."
 
     [Distributor.AuthFile]
     File = "users.txt"

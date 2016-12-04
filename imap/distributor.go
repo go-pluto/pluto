@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 
 	"crypto/tls"
 
@@ -44,13 +43,6 @@ func InitDistributor(config *config.Config) (*Distributor, error) {
 
 		// Open authentication file and read user information.
 		distr.AuthAdapter, err = auth.NewFileAuthenticator(config.Distributor.AuthFile.File, config.Distributor.AuthFile.Separator)
-		if err != nil {
-			return nil, err
-		}
-	} else if config.Distributor.AuthAdapter == "AuthPostgreSQL" {
-
-		// Connect to a PostgreSQL database for authentication measures.
-		distr.AuthAdapter, err = auth.NewPostgreSQLAuthenticator(config.Distributor.AuthPostgreSQL.IP, config.Distributor.AuthPostgreSQL.Port, config.Distributor.AuthPostgreSQL.Database, config.Distributor.AuthPostgreSQL.User, os.Getenv("IMAP_AUTH_POSTGRES_DATABASE_PASSWORD"), config.Distributor.AuthPostgreSQL.SSLMode)
 		if err != nil {
 			return nil, err
 		}
@@ -121,7 +113,7 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 	c := NewConnection(conn)
 
 	// Send initial server greeting.
-	err := c.Send("* OK IMAP4rev1 " + distr.Config.Distributor.IMAP.Greeting)
+	err := c.Send(fmt.Sprintf("* OK IMAP4rev1 %s", distr.Config.IMAP.Greeting))
 	if err != nil {
 		c.Error("Encountered error while sending IMAP greeting", err)
 		return

@@ -62,13 +62,13 @@ func InitORSetOpFromFile(fileName string) (*ORSet, error) {
 	}
 	contents := string(contentsRaw)
 
+	// Account for an empty CRDT set which is valid.
+	if contents == "" {
+		return s, nil
+	}
+
 	// Split content at each | (pipe symbol).
 	parts := strings.Split(contents, "|")
-
-	// Check minimum length.
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("CRDT file '%s' contains invalid content\n", fileName)
-	}
 
 	// Check even number of elements.
 	if (len(parts) % 2) != 0 {
@@ -144,6 +144,21 @@ func (s *ORSet) WriteORSetToFile() error {
 	}
 
 	return nil
+}
+
+// GetAllValues returns all values of a supplied
+// ORSet. It does not remove possible duplicates.
+func (s *ORSet) GetAllValues() []string {
+
+	// Make a slice of size of elements map.
+	allValues := make([]string, 0, len(s.elements))
+
+	// Range over all map entries and append them.
+	for _, value := range s.elements {
+		allValues = append(allValues, value)
+	}
+
+	return allValues
 }
 
 // Lookup cycles through elements in ORSet and

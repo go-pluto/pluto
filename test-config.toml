@@ -1,5 +1,9 @@
 RootCertLoc = "private/root-cert.pem"
 
+[IMAP]
+Greeting = "Pluto ready."
+HierarchySeparator = "."
+
 [Distributor]
 IP = "127.0.0.1"
 Port = "19933"
@@ -12,9 +16,6 @@ AuthAdapter = "AuthFile"
     [Distributor.InternalTLS]
     CertLoc = "private/internal-distributor-cert.pem"
     KeyLoc = "private/internal-distributor-key.pem"
-
-    [Distributor.IMAP]
-    Greeting = "Pluto ready."
 
     [Distributor.AuthFile]
     File = "test-users.txt"

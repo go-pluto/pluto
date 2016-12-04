@@ -114,19 +114,34 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 
 // Create attempts to create a mailbox with name
 // taken from payload of request.
-func (worker *Worker) Create(c *Connection, req *Request, ctx *Context) bool {
+func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool {
 
 	// Lock worker exclusively and unlock whenever
 	// this handler exits.
 	worker.lock.Lock()
 	defer worker.lock.Unlock()
 
+	// TODO: Check if name of desired new mailbox is 'INBOX'.
+	//       Deny that.
+
+	// TODO: Check if a mailbox with same name already exists.
+	//       Deny that.
+
+	// TODO: Check if supplied mailbox name is suffixed with
+	//       IMAP hierarchy separator. Trim it if so.
+
+	err := c.Send(fmt.Sprintf("%s OK CREATE completed", req.Tag))
+	if err != nil {
+		c.Error("Encountered send error", err)
+		return false
+	}
+
 	return true
 }
 
 // Append inserts a message built from further supplied
 // message literal in a mailbox specified in payload.
-func (worker *Worker) Append(c *Connection, req *Request, ctx *Context) bool {
+func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool {
 
 	// Lock worker exclusively and unlock whenever
 	// this handler exits.
@@ -138,7 +153,7 @@ func (worker *Worker) Append(c *Connection, req *Request, ctx *Context) bool {
 
 // Store updates meta data of specified messages and
 // returns the new meta data of those messages.
-func (worker *Worker) Store(c *Connection, req *Request, ctx *Context) bool {
+func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 
 	// Lock worker exclusively and unlock whenever
 	// this handler exits.
@@ -150,7 +165,7 @@ func (worker *Worker) Store(c *Connection, req *Request, ctx *Context) bool {
 
 // Copy takes specified messages and inserts them again
 // into another stated mailbox.
-func (worker *Worker) Copy(c *Connection, req *Request, ctx *Context) bool {
+func (worker *Worker) Copy(c *Connection, req *Request, clientID string) bool {
 
 	// Lock worker exclusively and unlock whenever
 	// this handler exits.
@@ -162,7 +177,7 @@ func (worker *Worker) Copy(c *Connection, req *Request, ctx *Context) bool {
 
 // Expunge deletes messages prior marked as to-be-deleted
 // via labelling them with the \Deleted flag.
-func (worker *Worker) Expunge(c *Connection, req *Request, ctx *Context) bool {
+func (worker *Worker) Expunge(c *Connection, req *Request, clientID string) bool {
 
 	// Lock worker exclusively and unlock whenever
 	// this handler exits.

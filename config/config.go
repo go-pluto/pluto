@@ -15,9 +15,17 @@ import (
 // supplied config file.
 type Config struct {
 	RootCertLoc string
+	IMAP        IMAP
 	Distributor Distributor
 	Workers     map[string]Worker
 	Storage     Storage
+}
+
+// IMAP is the IMAP server related part
+// of the TOML config file.
+type IMAP struct {
+	Greeting           string
+	HierarchySeparator string
 }
 
 // Distributor describes the configuration of
@@ -29,7 +37,6 @@ type Distributor struct {
 	AuthAdapter    string
 	PublicTLS      TLS
 	InternalTLS    TLS
-	IMAP           IMAP
 	AuthFile       *AuthFile
 	AuthPostgreSQL *AuthPostgreSQL
 }
@@ -62,12 +69,6 @@ type Storage struct {
 type TLS struct {
 	CertLoc string
 	KeyLoc  string
-}
-
-// IMAP is the IMAP server related part
-// of the TOML config file.
-type IMAP struct {
-	Greeting string
 }
 
 // AuthPostgreSQL defines parameters for connecting

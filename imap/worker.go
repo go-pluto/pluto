@@ -19,14 +19,15 @@ import (
 // Worker struct bundles information needed in
 // operation of a worker node.
 type Worker struct {
-	lock         *sync.RWMutex
-	Name         string
-	MailSocket   net.Listener
-	SyncSocket   net.Listener
-	SyncSendChan chan string
-	Connections  map[string]*tls.Conn
-	Contexts     map[string]*Context
-	Config       *config.Config
+	lock             *sync.RWMutex
+	Name             string
+	MailSocket       net.Listener
+	SyncSocket       net.Listener
+	SyncSendChan     chan string
+	Connections      map[string]*tls.Conn
+	Contexts         map[string]*Context
+	MailboxStructure map[string]map[string]*crdt.ORSet
+	Config           *config.Config
 }
 
 // Functions
@@ -41,11 +42,12 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 
 	// Initialize and set fields.
 	worker := &Worker{
-		lock:        new(sync.RWMutex),
-		Name:        workerName,
-		Connections: make(map[string]*tls.Conn),
-		Contexts:    make(map[string]*Context),
-		Config:      config,
+		lock:             new(sync.RWMutex),
+		Name:             workerName,
+		Connections:      make(map[string]*tls.Conn),
+		Contexts:         make(map[string]*Context),
+		MailboxStructure: make(map[string]map[string]*crdt.ORSet),
+		Config:           config,
 	}
 
 	// Check if supplied worker with workerName actually is configured.
@@ -78,10 +80,33 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		// Only consider folders for building up CRDT map.
 		if folderInfo.IsDir() {
 
+			// Extract last part of path, the user name.
+			userName := filepath.Base(folder)
+
 			// Read in mailbox structure CRDT from file.
-			_, err := crdt.InitORSetOpFromFile(filepath.Join(folder, "mailbox-structure.log"))
+			userMainCRDT, err := crdt.InitORSetOpFromFile(filepath.Join(folder, "mailbox-structure.log"))
 			if err != nil {
 				return nil, fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %s\n", err.Error())
+			}
+
+			// Store main CRDT in designated map for user name.
+			worker.MailboxStructure[userName] = make(map[string]*crdt.ORSet)
+			worker.MailboxStructure[userName]["Structure"] = userMainCRDT
+
+			// Retrieve all mailboxes the user possesses
+			// according to main CRDT.
+			userMailboxes := userMainCRDT.GetAllValues()
+
+			for _, userMailbox := range userMailboxes {
+
+				// Read in each mailbox CRDT from file.
+				userMailboxCRDT, err := crdt.InitORSetOpFromFile(filepath.Join(folder, fmt.Sprintf("%s.log", userMailbox)))
+				if err != nil {
+					return nil, fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %s\n", err.Error())
+				}
+
+				// Store each read-in CRDT in map under
+				worker.MailboxStructure[userName][userMailbox] = userMailboxCRDT
 			}
 		}
 	}
@@ -214,6 +239,17 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 
 		case req.Command == "SELECT":
 			if ok := worker.Select(c, req, clientID); ok {
+
+				// If successful, signal end of operation to distributor.
+				err := c.SignalSessionDone(nil)
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error", err)
+					return
+				}
+			}
+
+		case req.Command == "CREATE":
+			if ok := worker.Create(c, req, clientID); ok {
 
 				// If successful, signal end of operation to distributor.
 				err := c.SignalSessionDone(nil)
