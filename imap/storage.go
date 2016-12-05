@@ -61,7 +61,7 @@ func InitStorage(config *config.Config) (*Storage, *comm.Receiver, error) {
 			userName := filepath.Base(folder)
 
 			// Read in mailbox structure CRDT from file.
-			userMainCRDT, err := crdt.InitORSetOpFromFile(filepath.Join(folder, "mailbox-structure.log"))
+			userMainCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, "mailbox-structure.log"))
 			if err != nil {
 				return nil, nil, fmt.Errorf("[imap.InitStorage] Reading CRDT failed: %s\n", err.Error())
 			}
@@ -77,7 +77,7 @@ func InitStorage(config *config.Config) (*Storage, *comm.Receiver, error) {
 			for _, userMailbox := range userMailboxes {
 
 				// Read in each mailbox CRDT from file.
-				userMailboxCRDT, err := crdt.InitORSetOpFromFile(filepath.Join(folder, fmt.Sprintf("%s.log", userMailbox)))
+				userMailboxCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, fmt.Sprintf("%s.log", userMailbox)))
 				if err != nil {
 					return nil, nil, fmt.Errorf("[imap.InitStorage] Reading CRDT failed: %s\n", err.Error())
 				}

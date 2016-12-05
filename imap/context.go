@@ -17,8 +17,8 @@ type Context struct {
 	ClientID        string
 	IMAPState       IMAPState
 	UserName        string
-	UserCRDT        string
-	UserMaildir     maildir.Dir
+	UserCRDTPath    string
+	UserMaildirPath maildir.Dir
 	SelectedMailbox maildir.Dir
 }
 
@@ -52,14 +52,14 @@ func (worker *Worker) UpdateClientContext(clientIDRaw string) (string, error) {
 	worker.lock.Lock()
 
 	// Check if for parsed clientID a session is already existing.
-	if _, ok := worker.Contexts[clientID]; !ok {
+	if _, found := worker.Contexts[clientID]; !found {
 
 		worker.Contexts[clientID] = &Context{
-			ClientID:    clientID,
-			IMAPState:   AUTHENTICATED,
-			UserName:    clientInfo[2],
-			UserCRDT:    filepath.Join(worker.Config.Workers[worker.Name].CRDTLayerRoot, clientInfo[2]),
-			UserMaildir: maildir.Dir(filepath.Join(worker.Config.Workers[worker.Name].MaildirRoot, clientInfo[2])),
+			ClientID:        clientID,
+			IMAPState:       AUTHENTICATED,
+			UserName:        clientInfo[2],
+			UserCRDTPath:    filepath.Join(worker.Config.Workers[worker.Name].CRDTLayerRoot, clientInfo[2]),
+			UserMaildirPath: maildir.Dir(filepath.Join(worker.Config.Workers[worker.Name].MaildirRoot, clientInfo[2])),
 		}
 	}
 

@@ -3,11 +3,13 @@ package imap
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"path/filepath"
 
 	"github.com/numbleroot/maildir"
+	"github.com/numbleroot/pluto/crdt"
 )
 
 // Functions
@@ -36,7 +38,7 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 	}
 
 	// Save maildir for later use.
-	mailbox := worker.Contexts[clientID].UserMaildir
+	mailbox := worker.Contexts[clientID].UserMaildirPath
 
 	if len(req.Payload) < 1 {
 
@@ -116,21 +118,169 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 // taken from payload of request.
 func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool {
 
+	log.Printf("Serving CREATE '%s'...\n", req.Tag)
+
 	// Lock worker exclusively and unlock whenever
 	// this handler exits.
 	worker.lock.Lock()
 	defer worker.lock.Unlock()
 
-	// TODO: Check if name of desired new mailbox is 'INBOX'.
-	//       Deny that.
+	// Split payload on every space character.
+	posMailboxes := strings.Split(req.Payload, " ")
 
-	// TODO: Check if a mailbox with same name already exists.
-	//       Deny that.
+	if len(posMailboxes) != 1 {
 
-	// TODO: Check if supplied mailbox name is suffixed with
-	//       IMAP hierarchy separator. Trim it if so.
+		// If payload did not contain exactly one element,
+		// this is a client error. Return BAD statement.
+		err := c.Send(fmt.Sprintf("%s BAD Command CREATE was not sent with exactly one parameter", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
 
-	err := c.Send(fmt.Sprintf("%s OK CREATE completed", req.Tag))
+		return true
+	}
+
+	// Trim supplied mailbox name of hierarchy separator if
+	// it was sent with a trailing one.
+	posMailbox := strings.TrimSuffix(posMailboxes[0], worker.Config.IMAP.HierarchySeparator)
+
+	if strings.ToUpper(posMailbox) == "INBOX" {
+
+		// If mailbox to-be-created was named INBOX,
+		// this is a client error. Return NO response.
+		err := c.Send(fmt.Sprintf("%s NO New mailbox cannot be named INBOX", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Save user's mailbox structure CRDT to more
+	// conveniently use it hereafter.
+	userMainCRDT := worker.MailboxStructure[worker.Contexts[clientID].UserName]["Structure"]
+
+	if userMainCRDT.Lookup(posMailbox, true) {
+
+		// If mailbox to-be-created already exists for user,
+		// this is a client error. Return NO response.
+		err := c.Send(fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// TODO: Check and handle UIDVALIDITY behaviour is correct.
+	//       I. a. make sure to assign correct new UIDs.
+
+	// Create a new Maildir on stable storage.
+	posMaildir := maildir.Dir(filepath.Join(string(worker.Contexts[clientID].UserMaildirPath), posMailbox))
+
+	err := posMaildir.Create()
+	if err != nil {
+		log.Fatalf("[imap.Create] Maildir for new mailbox could not be created: %s\n", err.Error())
+	}
+
+	// Construct path to new CRDT file.
+	posMailboxCRDTPath := filepath.Join(worker.Contexts[clientID].UserCRDTPath, fmt.Sprintf("%s.log", posMailbox))
+
+	// Initialize new ORSet for new mailbox.
+	posMailboxCRDT, err := crdt.InitORSetWithFile(posMailboxCRDTPath)
+	if err != nil {
+
+		// Perform clean up.
+
+		log.Printf("[imap.Create] Fail: %s\n", err.Error())
+		log.Printf("[imap.Create] Removing just created Maildir completely...\n")
+
+		// Attempt to remove Maildir.
+		err = posMaildir.Remove()
+		if err != nil {
+			log.Printf("[imap.Create] ... failed to remove Maildir: %s\n", err.Error())
+			log.Printf("[imap.Create] Exiting.\n")
+		} else {
+			log.Printf("[imap.Create] ... done. Exiting.\n")
+		}
+
+		// Exit worker.
+		os.Exit(1)
+	}
+
+	// Write new mailbox' file to stable storage.
+	err = posMailboxCRDT.WriteORSetToFile()
+	if err != nil {
+
+		// Perform clean up.
+
+		log.Printf("[imap.Create] Fail: %s\n", err.Error())
+		log.Printf("[imap.Create] Removing just created Maildir completely...\n")
+
+		// Attempt to remove Maildir.
+		err = posMaildir.Remove()
+		if err != nil {
+			log.Printf("[imap.Create] ... failed to remove Maildir: %s\n", err.Error())
+			log.Printf("[imap.Create] Exiting.\n")
+		} else {
+			log.Printf("[imap.Create] ... done. Exiting.\n")
+		}
+
+		// Exit worker.
+		os.Exit(1)
+	}
+
+	// If succeeded, add a new folder in user's main CRDT
+	// and synchronise it to other replicas.
+	userMainCRDT.Add(posMailbox, func(payload string) {
+		worker.SyncSendChan <- payload
+	})
+
+	// Write updated CRDT to stable storage.
+	err = userMainCRDT.WriteORSetToFile()
+	if err != nil {
+
+		// Perform clean up.
+
+		log.Printf("[imap.Create] Fail: %s\n", err.Error())
+		log.Printf("[imap.Create] Deleting just added mailbox from main structure CRDT...\n")
+
+		// Immediately send out remove operation.
+		userMainCRDT.Remove(posMailbox, func(payload string) {
+			worker.SyncSendChan <- payload
+		})
+
+		log.Printf("[imap.Create] ... done.\n")
+		log.Printf("[imap.Create] Removing just created Maildir completely...\n")
+
+		// Attempt to remove Maildir.
+		err = posMaildir.Remove()
+		if err != nil {
+			log.Printf("[imap.Create] ... failed to remove Maildir: %s\n", err.Error())
+		} else {
+			log.Printf("[imap.Create] ... done.\n")
+		}
+
+		log.Printf("[imap.Create] Removing just created CRDT file...\n")
+
+		// Attempt to remove just created CRDT file.
+		err = os.Remove(posMailboxCRDTPath)
+		if err != nil {
+			log.Printf("[imap.Create] ... failed to remove Maildir: %s\n", err.Error())
+			log.Printf("[imap.Create] Exiting.\n")
+		} else {
+			log.Printf("[imap.Create] ... done. Exiting.\n")
+		}
+
+		// Exit worker.
+		os.Exit(1)
+	}
+
+	// Send success answer.
+	err = c.Send(fmt.Sprintf("%s OK CREATE completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -142,6 +292,8 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 // Append inserts a message built from further supplied
 // message literal in a mailbox specified in payload.
 func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool {
+
+	log.Printf("Serving APPEND '%s'...\n", req.Tag)
 
 	// Lock worker exclusively and unlock whenever
 	// this handler exits.
@@ -155,6 +307,8 @@ func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool 
 // returns the new meta data of those messages.
 func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 
+	log.Printf("Serving STORE '%s'...\n", req.Tag)
+
 	// Lock worker exclusively and unlock whenever
 	// this handler exits.
 	worker.lock.Lock()
@@ -167,6 +321,8 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 // into another stated mailbox.
 func (worker *Worker) Copy(c *Connection, req *Request, clientID string) bool {
 
+	log.Printf("Serving COPY '%s'...\n", req.Tag)
+
 	// Lock worker exclusively and unlock whenever
 	// this handler exits.
 	worker.lock.Lock()
@@ -178,6 +334,8 @@ func (worker *Worker) Copy(c *Connection, req *Request, clientID string) bool {
 // Expunge deletes messages prior marked as to-be-deleted
 // via labelling them with the \Deleted flag.
 func (worker *Worker) Expunge(c *Connection, req *Request, clientID string) bool {
+
+	log.Printf("Serving EXPUNGE '%s'...\n", req.Tag)
 
 	// Lock worker exclusively and unlock whenever
 	// this handler exits.

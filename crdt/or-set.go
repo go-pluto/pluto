@@ -40,10 +40,36 @@ func InitORSet() *ORSet {
 	}
 }
 
-// InitORSetOpFromFile parses an ORSet found in
-// the supplied file and returns it, initialized
-// with elements saved in file.
-func InitORSetOpFromFile(fileName string) (*ORSet, error) {
+// InitORSetWithFile takes in a file name and initializes
+// a new ORSet with opened file handler to that name as
+// designated log file.
+func InitORSetWithFile(fileName string) (*ORSet, error) {
+
+	// Init an empty ORSet.
+	s := InitORSet()
+
+	// Attempt to create a new CRDT file.
+	f, err := os.Create(fileName)
+	if err != nil {
+		return nil, fmt.Errorf("opening CRDT file '%s' failed with: %s\n", fileName, err.Error())
+	}
+
+	// Change permissions.
+	err = f.Chmod(0600)
+	if err != nil {
+		return nil, fmt.Errorf("changing permissions of CRDT file '%s' failed with: %s\n", fileName, err.Error())
+	}
+
+	// Assign it to ORSet.
+	s.file = f
+
+	return s, nil
+}
+
+// InitORSetFromFile parses an ORSet found in the
+// supplied file and returns it, initialized with
+// elements saved in file.
+func InitORSetFromFile(fileName string) (*ORSet, error) {
 
 	// Init an empty ORSet.
 	s := InitORSet()
@@ -170,8 +196,9 @@ func (s *ORSet) Lookup(e string, needsLocking bool) bool {
 	found := false
 
 	if needsLocking {
-		// Read-lock the set.
+		// Read-lock set and unlock on exit.
 		s.lock.RLock()
+		defer s.lock.RUnlock()
 	}
 
 	for _, value := range s.elements {
@@ -185,11 +212,6 @@ func (s *ORSet) Lookup(e string, needsLocking bool) bool {
 		}
 	}
 
-	if needsLocking {
-		// Relieve read lock.
-		s.lock.RUnlock()
-	}
-
 	return found
 }
 
@@ -200,17 +222,13 @@ func (s *ORSet) Lookup(e string, needsLocking bool) bool {
 func (s *ORSet) AddEffect(e string, tag string, needsLocking bool) {
 
 	if needsLocking {
-		// Write-lock the set.
+		// Write-lock set and unlock on exit.
 		s.lock.Lock()
+		defer s.lock.Unlock()
 	}
 
 	// Insert data element e at key tag.
 	s.elements[tag] = e
-
-	if needsLocking {
-		// Relieve write lock.
-		s.lock.Unlock()
-	}
 }
 
 // Add is a helper function only to be executed at the
@@ -229,17 +247,15 @@ func (s *ORSet) Add(e string, send sendFunc) {
 	addOp.Operation = "add"
 	addOp.Arguments[tag] = e
 
-	// Write-lock the set.
+	// Write-lock set and unlock on exit.
 	s.lock.Lock()
+	defer s.lock.Unlock()
 
 	// Apply effect part of update add.
 	s.AddEffect(e, tag, false)
 
 	// Send to other involved nodes.
 	send(addOp.String())
-
-	// Relieve write lock.
-	s.lock.Unlock()
 }
 
 // RemoveEffect is the effect part of an update remove
@@ -249,8 +265,9 @@ func (s *ORSet) Add(e string, send sendFunc) {
 func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool) {
 
 	if needsLocking {
-		// Write-lock the set.
+		// Write-lock set and unlock on exit.
 		s.lock.Lock()
+		defer s.lock.Unlock()
 	}
 
 	// Range over set of received tags to-be-deleted.
@@ -261,11 +278,6 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool) {
 		if _, found := s.elements[rTag]; found {
 			delete(s.elements, rTag)
 		}
-	}
-
-	if needsLocking {
-		// Relieve write lock.
-		s.lock.Unlock()
 	}
 }
 
@@ -281,7 +293,7 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 	rmvOp := InitORSetOp()
 	rmvOp.Operation = "rmv"
 
-	// Write-lock the set and unlock on any exit.
+	// Write-lock set and unlock on exit.
 	s.lock.Lock()
 	defer s.lock.Unlock()
 

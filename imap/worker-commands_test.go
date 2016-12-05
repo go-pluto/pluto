@@ -20,7 +20,7 @@ var selectTests = []struct {
 	in  string
 	out string
 }{
-	{"a LOGIN user1 password1", "a OK Logged in"},
+	{"a LOGIN user0 password0", "a OK Logged in"},
 	{"b SELECT INBOX", "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]"},
 	{"c SELECT", "c BAD Command SELECT was sent without a mailbox to select"},
 	{"d SELECT lol rofl nope", "d BAD Command SELECT was sent with multiple mailbox names instead of only one"},
@@ -31,8 +31,16 @@ var createTests = []struct {
 	in  string
 	out string
 }{
-	{"a LOGIN user2 password2", "a OK Logged in"},
-	{"b CREATE University", "b OK CREATE completed"},
+	{"a LOGIN user1 password1", "a OK Logged in"},
+	{"b CREATE mailbox1 mailbox2", "b BAD Command CREATE was not sent with exactly one parameter"},
+	{"c CREATE INBOX.", "c NO New mailbox cannot be named INBOX"},
+	{"d CREATE INBOX", "d NO New mailbox cannot be named INBOX"},
+	{"d CREATE inbox", "d NO New mailbox cannot be named INBOX"},
+	{"d CREATE inBOx", "d NO New mailbox cannot be named INBOX"},
+	{"e CREATE University.", "e OK CREATE completed"},
+	{"e CREATE University.", "e NO New mailbox cannot be named after already existing mailbox"},
+	{"e CREATE University", "e NO New mailbox cannot be named after already existing mailbox"},
+	{"e CREATE university", "e OK CREATE completed"},
 	{"z LOGOUT", "* BYE Terminating connection\nz OK LOGOUT completed"},
 }
 

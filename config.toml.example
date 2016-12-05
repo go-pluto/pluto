@@ -8,12 +8,13 @@ RootCertLoc = "/very/complicated/and/long/path/to/your/root-cert.pem"
 # IMAP connection.
 Greeting = "Pluto ready."
 # How hierarchy in mailboxes will be indicated.
+# Currently, we assume it to be '.' (dot).
 HierarchySeparator = "."
 
 [Distributor]
 IP = "127.0.0.1"
 Port = "993"
-AuthAdapter = "AuthPostgreSQL"
+AuthAdapter = "AuthFile"
 
     [Distributor.PublicTLS]
     # Use these locations to provide your externally
@@ -32,13 +33,6 @@ AuthAdapter = "AuthPostgreSQL"
     [Distributor.AuthFile]
     File = "users.txt"
     Separator = ";"
-
-    [Distributor.AuthPostgreSQL]
-    IP = "127.0.0.1"
-    Port = "5432"
-    Database = "pluto"
-    User = "pluto"
-    SSLMode = "disable"
 
 
 [Workers]

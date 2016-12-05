@@ -84,7 +84,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 			userName := filepath.Base(folder)
 
 			// Read in mailbox structure CRDT from file.
-			userMainCRDT, err := crdt.InitORSetOpFromFile(filepath.Join(folder, "mailbox-structure.log"))
+			userMainCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, "mailbox-structure.log"))
 			if err != nil {
 				return nil, fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %s\n", err.Error())
 			}
@@ -100,7 +100,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 			for _, userMailbox := range userMailboxes {
 
 				// Read in each mailbox CRDT from file.
-				userMailboxCRDT, err := crdt.InitORSetOpFromFile(filepath.Join(folder, fmt.Sprintf("%s.log", userMailbox)))
+				userMailboxCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, fmt.Sprintf("%s.log", userMailbox)))
 				if err != nil {
 					return nil, fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %s\n", err.Error())
 				}

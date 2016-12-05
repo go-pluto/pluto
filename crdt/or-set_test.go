@@ -51,9 +51,9 @@ func init() {
 	v8 = fmt.Sprintf("%g", (math.MaxFloat32 * 2i))
 }
 
-// TestInitORSetOpFromFile executes a white-box unit
-// test on implemented InitORSetOpFromFile() function.
-func TestInitORSetOpFromFile(t *testing.T) {
+// TestInitORSetFromFile executes a white-box unit
+// test on implemented InitORSetFromFile() function.
+func TestInitORSetFromFile(t *testing.T) {
 
 	// Delete temporary test file on function exit.
 	defer os.Remove("test-crdt.log")
@@ -68,80 +68,80 @@ func TestInitORSetOpFromFile(t *testing.T) {
 	// Write to temporary test file.
 	err := ioutil.WriteFile("test-crdt.log", marshalled1, 0600)
 	if err != nil {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled1: Failed to write to temporary test file: %s\n", err.Error())
+		t.Fatalf("[crdt.TestInitORSetFromFile] marshalled1: Failed to write to temporary test file: %s\n", err.Error())
 	}
 
 	// Attempt to init ORSet from created file.
-	_, err = InitORSetOpFromFile("test-crdt.log")
+	_, err = InitORSetFromFile("test-crdt.log")
 	if err != nil {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled1: Expected InitORSetOpFromFile() not to fail for empty set but got: %s\n", err.Error())
+		t.Fatalf("[crdt.TestInitORSetFromFile] marshalled1: Expected InitORSetFromFile() not to fail for empty set but got: %s\n", err.Error())
 	}
 
 	// Write to temporary test file.
 	err = ioutil.WriteFile("test-crdt.log", marshalled2, 0600)
 	if err != nil {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled2: Failed to write to temporary test file: %s\n", err.Error())
+		t.Fatalf("[crdt.TestInitORSetFromFile] marshalled2: Failed to write to temporary test file: %s\n", err.Error())
 	}
 
 	// Attempt to init ORSet from created file.
-	_, err = InitORSetOpFromFile("test-crdt.log")
+	_, err = InitORSetFromFile("test-crdt.log")
 	if err != nil {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled2: Expected InitORSetOpFromFile() not to fail but got: %s\n", err.Error())
+		t.Fatalf("[crdt.TestInitORSetFromFile] marshalled2: Expected InitORSetFromFile() not to fail but got: %s\n", err.Error())
 	}
 
 	// Write to temporary test file.
 	err = ioutil.WriteFile("test-crdt.log", marshalled3, 0600)
 	if err != nil {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled3: Failed to write to temporary test file: %s\n", err.Error())
+		t.Fatalf("[crdt.TestInitORSetFromFile] marshalled3: Failed to write to temporary test file: %s\n", err.Error())
 	}
 
 	// Attempt to init ORSet from created file.
-	_, err = InitORSetOpFromFile("test-crdt.log")
+	_, err = InitORSetFromFile("test-crdt.log")
 	if err.Error() != "odd number of elements in CRDT file 'test-crdt.log'\n" {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled3: Expected 'odd number of elements in CRDT file 'test-crdt.log'' as error but received: %s", err.Error())
+		t.Fatalf("[crdt.TestInitORSetFromFile] marshalled3: Expected 'odd number of elements in CRDT file 'test-crdt.log'' as error but received: %s", err.Error())
 	}
 
 	// Write to temporary test file.
 	err = ioutil.WriteFile("test-crdt.log", marshalled4, 0600)
 	if err != nil {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled4: Failed to write to temporary test file: %s\n", err.Error())
+		t.Fatalf("[crdt.TestInitORSetFromFile] marshalled4: Failed to write to temporary test file: %s\n", err.Error())
 	}
 
 	// Attempt to init ORSet from created file.
-	_, err = InitORSetOpFromFile("test-crdt.log")
+	_, err = InitORSetFromFile("test-crdt.log")
 	if err.Error() != "decoding base64 string in CRDT file 'test-crdt.log' failed: illegal base64 data at input byte 0\n" {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled4: Expected 'decoding base64 string in CRDT file 'test-crdt.log' failed: illegal base64 data at input byte 0\n' as error but received: '%s'\n", err.Error())
+		t.Fatalf("[crdt.TestInitORSetFromFile] marshalled4: Expected 'decoding base64 string in CRDT file 'test-crdt.log' failed: illegal base64 data at input byte 0\n' as error but received: '%s'\n", err.Error())
 	}
 
 	// Write to temporary test file.
 	err = ioutil.WriteFile("test-crdt.log", marshalled5, 0600)
 	if err != nil {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled5: Failed to write to temporary test file: %s\n", err.Error())
+		t.Fatalf("[crdt.TestInitORSetFromFile] marshalled5: Failed to write to temporary test file: %s\n", err.Error())
 	}
 
 	// Attempt to init ORSet from created file.
-	s, err := InitORSetOpFromFile("test-crdt.log")
+	s, err := InitORSetFromFile("test-crdt.log")
 
 	// Check success.
 	if err != nil {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled5: Expected InitORSetOpFromFile() not to fail but got: %s\n", err.Error())
+		t.Fatalf("[crdt.TestInitORSetFromFile] marshalled5: Expected InitORSetFromFile() not to fail but got: %s\n", err.Error())
 	}
 
 	// Check correct unmarshalling.
 	if len(s.elements) != 3 {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] marshalled5: Expected exactly three elements in set but found: %d\n", len(s.elements))
+		t.Fatalf("[crdt.TestInitORSetFromFile] marshalled5: Expected exactly three elements in set but found: %d\n", len(s.elements))
 	}
 
 	if s.Lookup("abc", true) != true {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] Expected 'abc' to be in set but Lookup() returns false.\n")
+		t.Fatalf("[crdt.TestInitORSetFromFile] Expected 'abc' to be in set but Lookup() returns false.\n")
 	}
 
 	if s.Lookup("def", true) != true {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] Expected 'def' to be in set but Lookup() returns false.\n")
+		t.Fatalf("[crdt.TestInitORSetFromFile] Expected 'def' to be in set but Lookup() returns false.\n")
 	}
 
 	if s.Lookup("ghi", true) != true {
-		t.Fatalf("[crdt.TestInitORSetOpFromFile] Expected 'ghi' to be in set but Lookup() returns false.\n")
+		t.Fatalf("[crdt.TestInitORSetFromFile] Expected 'ghi' to be in set but Lookup() returns false.\n")
 	}
 }
 
