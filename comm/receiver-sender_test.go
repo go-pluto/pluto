@@ -105,8 +105,8 @@ func TestSenderReceiver(t *testing.T) {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitSender() for storage not to fail but received: %s\n", err.Error())
 	}
 
-	chan1 <- "rmv|brathering|y"
-	chan2 <- "add|toast|z"
+	chan1 <- "test message"
+	chan2 <- "yay, it works!"
 
 	// Let output finish.
 	time.Sleep(1 * time.Second)

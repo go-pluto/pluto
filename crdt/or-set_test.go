@@ -51,6 +51,8 @@ func init() {
 	v8 = fmt.Sprintf("%g", (math.MaxFloat32 * 2i))
 }
 
+// TODO: Add missing tests for functions.
+
 // TestInitORSetFromFile executes a white-box unit
 // test on implemented InitORSetFromFile() function.
 func TestInitORSetFromFile(t *testing.T) {
@@ -60,10 +62,10 @@ func TestInitORSetFromFile(t *testing.T) {
 
 	// Test representations of file contents.
 	marshalled1 := []byte("")
-	marshalled2 := []byte("|\n")
-	marshalled3 := []byte("A|B|C\n")
-	marshalled4 := []byte("abc|1|def|2|ghi|3\n")
-	marshalled5 := []byte("YWJj|1|ZGVm|2|Z2hp|3\n")
+	marshalled2 := []byte(";\n")
+	marshalled3 := []byte("A;B;C\n")
+	marshalled4 := []byte("abc;1;def;2;ghi;3\n")
+	marshalled5 := []byte("YWJj;1;ZGVm;2;Z2hp;3\n")
 
 	// Write to temporary test file.
 	err := ioutil.WriteFile("test-crdt.log", marshalled1, 0600)
@@ -197,8 +199,8 @@ func TestWriteORSetToFile(t *testing.T) {
 	}
 	contents2 := string(contentsRaw)
 
-	if contents2 != "YWJj|1" {
-		t.Fatalf("[crdt.TestWriteORSetToFile] contents2: Expected 'YWJj|1' but found: %s\n", contents2)
+	if contents2 != "YWJj;1" {
+		t.Fatalf("[crdt.TestWriteORSetToFile] contents2: Expected 'YWJj;1' but found: %s\n", contents2)
 	}
 
 	// Set one more.
@@ -217,8 +219,8 @@ func TestWriteORSetToFile(t *testing.T) {
 	}
 	contents3 := string(contentsRaw)
 
-	if (contents3 != "YWJj|1|ZGVm|2") && (contents3 != "ZGVm|2|YWJj|1") {
-		t.Fatalf("[crdt.TestWriteORSetToFile] contents3: Expected 'YWJj|1|ZGVm|2' or 'ZGVm|2|YWJj|1' but found: %s\n", contents3)
+	if (contents3 != "YWJj;1;ZGVm;2") && (contents3 != "ZGVm;2;YWJj;1") {
+		t.Fatalf("[crdt.TestWriteORSetToFile] contents3: Expected 'YWJj;1;ZGVm;2' or 'ZGVm;2;YWJj;1' but found: %s\n", contents3)
 	}
 
 	// And one last.
@@ -237,10 +239,10 @@ func TestWriteORSetToFile(t *testing.T) {
 	}
 	contents4 := string(contentsRaw)
 
-	if (contents4 != "YWJj|1|ZGVm|2|Z2hp|3") && (contents4 != "YWJj|1|Z2hp|3|ZGVm|2") &&
-		(contents4 != "ZGVm|2|YWJj|1|Z2hp|3") && (contents4 != "ZGVm|2|Z2hp|3|YWJj|1") &&
-		(contents4 != "Z2hp|3|YWJj|1|ZGVm|2") && (contents4 != "Z2hp|3|ZGVm|2|YWJj|1") {
-		t.Fatalf("[crdt.TestWriteORSetToFile] contents4: Expected 'YWJj|1', 'ZGVm|2' and 'Z2hp|3' to be present but found: %s\n", contents4)
+	if (contents4 != "YWJj;1;ZGVm;2;Z2hp;3") && (contents4 != "YWJj;1;Z2hp;3;ZGVm;2") &&
+		(contents4 != "ZGVm;2;YWJj;1;Z2hp;3") && (contents4 != "ZGVm;2;Z2hp;3;YWJj;1") &&
+		(contents4 != "Z2hp;3;YWJj;1;ZGVm;2") && (contents4 != "Z2hp;3;ZGVm;2;YWJj;1") {
+		t.Fatalf("[crdt.TestWriteORSetToFile] contents4: Expected 'YWJj;1', 'ZGVm;2' and 'Z2hp;3' to be present but found: %s\n", contents4)
 	}
 }
 
@@ -437,36 +439,36 @@ func TestAdd(t *testing.T) {
 	}
 
 	// Check sent messages for length.
-	// Minimal length = 'add' + '|' + '|' + 36 UUID chars = 41 chars.
+	// Minimal length = ';' + 36 UUID chars = 37 chars.
 
-	if len(msg1) < 41 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to be at least 41 characters long but only got %d many.\n", msg1, len(msg1))
+	if len(msg1) < 37 {
+		t.Fatalf("[crdt.TestAdd] Expected '%s' to be at least 37 characters long but only got %d many.\n", msg1, len(msg1))
 	}
 
-	if len(msg2) < 41 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to be at least 41 characters long but only got %d many.\n", msg2, len(msg2))
+	if len(msg2) < 37 {
+		t.Fatalf("[crdt.TestAdd] Expected '%s' to be at least 37 characters long but only got %d many.\n", msg2, len(msg2))
 	}
 
-	if len(msg3) < 41 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to be at least 41 characters long but only got %d many.\n", msg3, len(msg3))
+	if len(msg3) < 37 {
+		t.Fatalf("[crdt.TestAdd] Expected '%s' to be at least 37 characters long but only got %d many.\n", msg3, len(msg3))
 	}
 
-	// Check that sent messages only contain two semicolons.
+	// Check that sent messages only contain one semicolon.
 	// This discovers possible non-escaped characters in payload.
 
-	parts1 := strings.Split(msg1, "|")
-	if len(parts1) != 3 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to contain exactly two semicolons but found %d instead.\n", msg1, len(parts1))
+	parts1 := strings.Split(msg1, ";")
+	if len(parts1) != 2 {
+		t.Fatalf("[crdt.TestAdd] Expected '%s' to contain exactly 1 semicolon but found %d instead.\n", msg1, (len(parts1) - 1))
 	}
 
-	parts2 := strings.Split(msg2, "|")
-	if len(parts2) != 3 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to contain exactly two semicolons but found %d instead.\n", msg2, len(parts2))
+	parts2 := strings.Split(msg2, ";")
+	if len(parts2) != 2 {
+		t.Fatalf("[crdt.TestAdd] Expected '%s' to contain exactly 1 semicolon but found %d instead.\n", msg2, (len(parts2) - 1))
 	}
 
-	parts3 := strings.Split(msg3, "|")
-	if len(parts3) != 3 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to contain exactly two semicolons but found %d instead.\n", msg3, len(parts3))
+	parts3 := strings.Split(msg3, ";")
+	if len(parts3) != 2 {
+		t.Fatalf("[crdt.TestAdd] Expected '%s' to contain exactly 1 semicolon but found %d instead.\n", msg3, (len(parts3) - 1))
 	}
 
 	// Test second add of an element that is
@@ -619,7 +621,7 @@ func TestRemoveEffect(t *testing.T) {
 func TestRemove(t *testing.T) {
 
 	// Use these variables to compare sent values.
-	var msg1, msg2 string //, msg3, msg4, msg5, msg6 string
+	var msg1, msg2 string
 
 	// Create new ORSet.
 	s := InitORSet()
@@ -662,9 +664,9 @@ func TestRemove(t *testing.T) {
 
 	// Split message at delimiter symbols and check for correct length.
 	// This should discover unescaped delimiters in the payload.
-	parts1 := strings.Split(msg1, "|")
-	if len(parts1) != 3 {
-		t.Fatalf("[crdt.TestRemove] Expected '%s' to contain exactly three pipe symbols but found %d instead.\n", msg1, len(parts1))
+	parts1 := strings.Split(msg1, ";")
+	if len(parts1) != 2 {
+		t.Fatalf("[crdt.TestRemove] Expected '%s' to contain exactly 2 semicola but found %d instead.\n", msg1, len(parts1))
 	}
 
 	// Delete all tags corresponding to value v2.
@@ -691,8 +693,8 @@ func TestRemove(t *testing.T) {
 
 	// Split message at delimiter symbols and check for correct length.
 	// This should discover unescaped delimiters in the payload.
-	parts2 := strings.Split(msg2, "|")
-	if len(parts2) != 9 {
-		t.Fatalf("[crdt.TestRemove] Expected '%s' to contain exactly nine pipe symbols but found %d instead.\n", msg2, len(parts2))
+	parts2 := strings.Split(msg2, ";")
+	if len(parts2) != 8 {
+		t.Fatalf("[crdt.TestRemove] Expected '%s' to contain exactly 7 semicola but found %d instead.\n", msg2, (len(parts2) - 1))
 	}
 }

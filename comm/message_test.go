@@ -8,6 +8,8 @@ import (
 
 // Functions
 
+// TODO: Add lots of missing tests for functions.
+
 // TestString executes a black-box unit test
 // on implemented String() function of messages.
 func TestString(t *testing.T) {

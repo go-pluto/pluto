@@ -236,7 +236,7 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 	// If succeeded, add a new folder in user's main CRDT
 	// and synchronise it to other replicas.
 	userMainCRDT.Add(posMailbox, func(payload string) {
-		worker.SyncSendChan <- payload
+		worker.SyncSendChan <- fmt.Sprintf("create|%s||%s|", worker.Contexts[clientID].UserName, payload)
 	})
 
 	// Write updated CRDT to stable storage.
@@ -285,62 +285,6 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 		c.Error("Encountered send error", err)
 		return false
 	}
-
-	return true
-}
-
-// Append inserts a message built from further supplied
-// message literal in a mailbox specified in payload.
-func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool {
-
-	log.Printf("Serving APPEND '%s'...\n", req.Tag)
-
-	// Lock worker exclusively and unlock whenever
-	// this handler exits.
-	worker.lock.Lock()
-	defer worker.lock.Unlock()
-
-	return true
-}
-
-// Store updates meta data of specified messages and
-// returns the new meta data of those messages.
-func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
-
-	log.Printf("Serving STORE '%s'...\n", req.Tag)
-
-	// Lock worker exclusively and unlock whenever
-	// this handler exits.
-	worker.lock.Lock()
-	defer worker.lock.Unlock()
-
-	return true
-}
-
-// Copy takes specified messages and inserts them again
-// into another stated mailbox.
-func (worker *Worker) Copy(c *Connection, req *Request, clientID string) bool {
-
-	log.Printf("Serving COPY '%s'...\n", req.Tag)
-
-	// Lock worker exclusively and unlock whenever
-	// this handler exits.
-	worker.lock.Lock()
-	defer worker.lock.Unlock()
-
-	return true
-}
-
-// Expunge deletes messages prior marked as to-be-deleted
-// via labelling them with the \Deleted flag.
-func (worker *Worker) Expunge(c *Connection, req *Request, clientID string) bool {
-
-	log.Printf("Serving EXPUNGE '%s'...\n", req.Tag)
-
-	// Lock worker exclusively and unlock whenever
-	// this handler exits.
-	worker.lock.Lock()
-	defer worker.lock.Unlock()
 
 	return true
 }

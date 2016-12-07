@@ -14,8 +14,6 @@ import (
 
 // Structs
 
-// TODO: Correctly implement the tests.
-//       Includes behaviour further down.
 var selectTests = []struct {
 	in  string
 	out string

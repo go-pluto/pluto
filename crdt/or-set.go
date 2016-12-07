@@ -93,8 +93,8 @@ func InitORSetFromFile(fileName string) (*ORSet, error) {
 		return s, nil
 	}
 
-	// Split content at each | (pipe symbol).
-	parts := strings.Split(contents, "|")
+	// Split content at each ';' (semicolon).
+	parts := strings.Split(contents, ";")
 
 	// Check even number of elements.
 	if (len(parts) % 2) != 0 {
@@ -139,9 +139,9 @@ func (s *ORSet) WriteORSetToFile() error {
 
 		// Append value and tag to write-out file.
 		if marshalled == "" {
-			marshalled = fmt.Sprintf("%v|%s", value, tag)
+			marshalled = fmt.Sprintf("%v;%s", value, tag)
 		} else {
-			marshalled = fmt.Sprintf("%s|%v|%s", marshalled, value, tag)
+			marshalled = fmt.Sprintf("%s;%v;%s", marshalled, value, tag)
 		}
 	}
 
@@ -172,16 +172,26 @@ func (s *ORSet) WriteORSetToFile() error {
 	return nil
 }
 
-// GetAllValues returns all values of a supplied
-// ORSet. It does not remove possible duplicates.
+// GetAllValues returns all distinct values
+// of a supplied ORSet.
 func (s *ORSet) GetAllValues() []string {
 
-	// Make a slice of size of elements map.
-	allValues := make([]string, 0, len(s.elements))
+	// Make a slice of initial size 0.
+	allValues := make([]string, 0)
 
-	// Range over all map entries and append them.
+	// Also prepare a map to store which elements
+	// we already considered.
+	seenValues := make(map[string]bool)
+
 	for _, value := range s.elements {
-		allValues = append(allValues, value)
+
+		// Check if we did not yet considered this value.
+		if _, seen := seenValues[value]; seen != true {
+
+			// If so, append it and set seen value to true.
+			allValues = append(allValues, value)
+			seenValues[value] = true
+		}
 	}
 
 	return allValues
@@ -242,11 +252,6 @@ func (s *ORSet) Add(e string, send sendFunc) {
 	// Create a new unique tag.
 	tag := uuid.NewV4().String()
 
-	// Initialize needed add operation variables.
-	addOp := InitORSetOp()
-	addOp.Operation = "add"
-	addOp.Arguments[tag] = e
-
 	// Write-lock set and unlock on exit.
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -255,7 +260,7 @@ func (s *ORSet) Add(e string, send sendFunc) {
 	s.AddEffect(e, tag, false)
 
 	// Send to other involved nodes.
-	send(addOp.String())
+	send(fmt.Sprintf("%v;%s", base64.StdEncoding.EncodeToString([]byte(e)), tag))
 }
 
 // RemoveEffect is the effect part of an update remove
@@ -289,9 +294,11 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool) {
 // sends out the remove message to all other replicas.
 func (s *ORSet) Remove(e string, send sendFunc) error {
 
-	// Initialize needed remove operation variables.
-	rmvOp := InitORSetOp()
-	rmvOp.Operation = "rmv"
+	// Initialize string to send out.
+	var msg string
+
+	// Initialize set of elements to remove.
+	rmElements := make(map[string]string)
 
 	// Write-lock set and unlock on exit.
 	s.lock.Lock()
@@ -305,19 +312,28 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 	// Otherwise range over set elements.
 	for tag, value := range s.elements {
 
-		// If we see the element to-be-deleted, we add
-		// the associated tag into our prepared remove set.
 		if e == value {
-			rmvOp.Arguments[tag] = e
+
+			// If we see the element to-be-deleted, we add
+			// the associated tag into our prepared remove set.
+			rmElements[tag] = e
+
+			// And we also append it to the message that will
+			// be sent out to other replicas.
+			if msg == "" {
+				msg = fmt.Sprintf("%v;%s", base64.StdEncoding.EncodeToString([]byte(e)), tag)
+			} else {
+				msg = fmt.Sprintf("%s;%v;%s", msg, base64.StdEncoding.EncodeToString([]byte(e)), tag)
+			}
 		}
 	}
 
 	// Execute the effect part of the update remove but do
 	// not lock the set structure as we already maintain a lock.
-	s.RemoveEffect(rmvOp.Arguments, false)
+	s.RemoveEffect(rmElements, false)
 
 	// Send message to other replicas.
-	send(rmvOp.String())
+	send(msg)
 
 	return nil
 }
