@@ -61,7 +61,7 @@ func CreateTestEnv() (*config.Config, *tls.Config, error) {
 func RunStorageWithTimeout(conf *config.Config, waitMilliseconds int) {
 
 	// Initialize storage node.
-	storage, recv, err := imap.InitStorage(conf)
+	storage, err := imap.InitStorage(conf)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func RunStorageWithTimeout(conf *config.Config, waitMilliseconds int) {
 	})
 
 	// Run the storage node.
-	_ = recv.AcceptIncMsgs()
+	_ = storage.ApplyCRDTUpd()
 }
 
 // RunWorkerWithTimeout is supposed to be called in a goroutine

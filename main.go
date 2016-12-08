@@ -64,14 +64,14 @@ func main() {
 	} else if *storageFlag {
 
 		// Initialize storage.
-		storage, recv, err := imap.InitStorage(conf)
+		storage, err := imap.InitStorage(conf)
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer storage.Socket.Close()
 
 		// Apply received CRDT messages.
-		err = recv.AcceptIncMsgs()
+		err = storage.ApplyCRDTUpd()
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -27,6 +27,8 @@ type Worker struct {
 	Connections      map[string]*tls.Conn
 	Contexts         map[string]*Context
 	MailboxStructure map[string]map[string]*crdt.ORSet
+	ApplyCRDTUpdChan chan string
+	DoneCRDTUpdChan  chan bool
 	Config           *config.Config
 }
 
@@ -47,6 +49,8 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		Connections:      make(map[string]*tls.Conn),
 		Contexts:         make(map[string]*Context),
 		MailboxStructure: make(map[string]map[string]*crdt.ORSet),
+		ApplyCRDTUpdChan: make(chan string),
+		DoneCRDTUpdChan:  make(chan bool),
 		Config:           config,
 	}
 
@@ -133,7 +137,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	}
 
 	// Initialize receiving goroutine for sync operations.
-	chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(worker.Name, filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "receiving.log"), worker.SyncSocket, []string{"storage"})
+	chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(worker.Name, filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "receiving.log"), worker.SyncSocket, worker.ApplyCRDTUpdChan, worker.DoneCRDTUpdChan, []string{"storage"})
 	if err != nil {
 		return nil, err
 	}

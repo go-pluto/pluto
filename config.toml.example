@@ -92,6 +92,8 @@ AuthAdapter = "AuthFile"
 [Storage]
 IP = "127.0.0.1"
 SyncPort = "21000"
+MaildirRoot = "/for/example/some/very/unique/path/Maildir/"
+CRDTLayerRoot = "/for/example/some/very/unique/path/crdt-layer/"
 
     [Storage.TLS]
     CertLoc = "/very/complicated/and/long/path/to/your/internal-storage-cert.pem"

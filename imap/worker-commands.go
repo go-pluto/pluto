@@ -236,7 +236,7 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 	// If succeeded, add a new folder in user's main CRDT
 	// and synchronise it to other replicas.
 	userMainCRDT.Add(posMailbox, func(payload string) {
-		worker.SyncSendChan <- fmt.Sprintf("create|%s||%s|", worker.Contexts[clientID].UserName, payload)
+		worker.SyncSendChan <- fmt.Sprintf("create|%s|%s", worker.Contexts[clientID].UserName, payload)
 	})
 
 	// Write updated CRDT to stable storage.
@@ -250,7 +250,7 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 
 		// Immediately send out remove operation.
 		userMainCRDT.Remove(posMailbox, func(payload string) {
-			worker.SyncSendChan <- payload
+			worker.SyncSendChan <- fmt.Sprintf("delete|%s|%s", worker.Contexts[clientID].UserName, payload)
 		})
 
 		log.Printf("[imap.Create] ... done.\n")

@@ -59,6 +59,7 @@ type Worker struct {
 type Storage struct {
 	IP            string
 	SyncPort      string
+	MaildirRoot   string
 	CRDTLayerRoot string
 	TLS           TLS
 }
@@ -179,6 +180,11 @@ func LoadConfig(configFile string) (*Config, error) {
 
 		// Assign worker config back to main config.
 		conf.Workers[name] = worker
+	}
+
+	// Storage.MaildirRoot
+	if filepath.IsAbs(conf.Storage.MaildirRoot) != true {
+		conf.Storage.MaildirRoot = filepath.Join(absPlutoPath, conf.Storage.MaildirRoot)
 	}
 
 	// Storage.CRDTLayerRoot

@@ -24,7 +24,7 @@ func TestInitWorker(t *testing.T) {
 	}
 
 	// Correct storage initialization.
-	storage, recv, err := imap.InitStorage(config)
+	storage, err := imap.InitStorage(config)
 	if err != nil {
 		t.Fatalf("[imap.TestInitWorker] Expected correct storage initialization but failed with: '%s'\n", err.Error())
 	}
@@ -38,7 +38,7 @@ func TestInitWorker(t *testing.T) {
 		})
 
 		// Run the storage node.
-		_ = recv.AcceptIncMsgs()
+		_ = storage.ApplyCRDTUpd()
 	}()
 
 	time.Sleep(400 * time.Millisecond)

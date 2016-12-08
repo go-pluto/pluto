@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"encoding/base64"
 )
 
 // Structs
@@ -207,10 +209,16 @@ func ParseCreate(payload string) (*CreateMsg, error) {
 		return nil, fmt.Errorf("invalid element in CREATE message: incorrect amount of semicola")
 	}
 
+	// Decode value part of message encoded in base64.
+	decValue, err := base64.StdEncoding.DecodeString(element[0])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 value of CREATE message failed: %s\n", err.Error())
+	}
+
 	return &CreateMsg{
 		User: parts[0],
 		AddMailbox: &Element{
-			Value: element[0],
+			Value: string(decValue),
 			Tag:   element[1],
 		},
 	}, nil
@@ -245,9 +253,15 @@ func ParseDelete(payload string) (*DeleteMsg, error) {
 
 		tag := value + 1
 
+		// Decode value part of message encoded in base64.
+		decValue, err := base64.StdEncoding.DecodeString(elements[value])
+		if err != nil {
+			return nil, fmt.Errorf("decoding base64 value of DELETE message failed: %s\n", err.Error())
+		}
+
 		// Create a new Element of current pair.
 		element := &Element{
-			Value: elements[value],
+			Value: string(decValue),
 			Tag:   elements[tag],
 		}
 
@@ -292,9 +306,15 @@ func ParseRename(payload string) (*RenameMsg, error) {
 
 		tag := value + 1
 
+		// Decode value part of message encoded in base64.
+		decValue, err := base64.StdEncoding.DecodeString(elements[value])
+		if err != nil {
+			return nil, fmt.Errorf("decoding base64 value of RENAME message failed: %s\n", err.Error())
+		}
+
 		// Create a new Element of current pair.
 		element := &Element{
-			Value: elements[value],
+			Value: string(decValue),
 			Tag:   elements[tag],
 		}
 
@@ -308,6 +328,12 @@ func ParseRename(payload string) (*RenameMsg, error) {
 	element := strings.Split(parts[3], ";")
 	if len(element) != 2 {
 		return nil, fmt.Errorf("invalid element for mailbox to add in RENAME message: incorrect amount of semicola")
+	}
+
+	// Decode value part of message encoded in base64.
+	decAddValue, err := base64.StdEncoding.DecodeString(element[0])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 value of RENAME message failed: %s\n", err.Error())
 	}
 
 	// Split elements of mails to add to new
@@ -330,9 +356,15 @@ func ParseRename(payload string) (*RenameMsg, error) {
 		tag := value + 1
 		contents := value + 2
 
+		// Decode value part of message encoded in base64.
+		decValue, err := base64.StdEncoding.DecodeString(elements[value])
+		if err != nil {
+			return nil, fmt.Errorf("decoding base64 value of RENAME message failed: %s\n", err.Error())
+		}
+
 		// Create a new Element of current pair.
 		element := &Element{
-			Value:    elements[value],
+			Value:    string(decValue),
 			Tag:      elements[tag],
 			Contents: elements[contents],
 		}
@@ -347,7 +379,7 @@ func ParseRename(payload string) (*RenameMsg, error) {
 		Mailbox:    parts[1],
 		RmvMailbox: rmvMailbox,
 		AddMailbox: &Element{
-			Value: element[0],
+			Value: string(decAddValue),
 			Tag:   element[1],
 		},
 		AddMails: addMails,
@@ -368,11 +400,17 @@ func ParseAppend(payload string) (*AppendMsg, error) {
 		return nil, fmt.Errorf("invalid element of message to add in APPEND message: incorrect amount of semicola")
 	}
 
+	// Decode value part of message encoded in base64.
+	decValue, err := base64.StdEncoding.DecodeString(element[0])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 value of APPEND message failed: %s\n", err.Error())
+	}
+
 	return &AppendMsg{
 		User:    parts[0],
 		Mailbox: parts[1],
 		AddMail: &Element{
-			Value:    element[0],
+			Value:    string(decValue),
 			Tag:      element[1],
 			Contents: element[2],
 		},
@@ -408,9 +446,15 @@ func ParseExpunge(payload string) (*ExpungeMsg, error) {
 
 		tag := value + 1
 
+		// Decode value part of message encoded in base64.
+		decValue, err := base64.StdEncoding.DecodeString(elements[value])
+		if err != nil {
+			return nil, fmt.Errorf("decoding base64 value of EXPUNGE message failed: %s\n", err.Error())
+		}
+
 		// Create a new Element of current pair.
 		element := &Element{
-			Value: elements[value],
+			Value: string(decValue),
 			Tag:   elements[tag],
 		}
 
@@ -456,9 +500,15 @@ func ParseStore(payload string) (*StoreMsg, error) {
 
 		tag := value + 1
 
+		// Decode value part of message encoded in base64.
+		decValue, err := base64.StdEncoding.DecodeString(elements[value])
+		if err != nil {
+			return nil, fmt.Errorf("decoding base64 value of STORE message failed: %s\n", err.Error())
+		}
+
 		// Create a new Element of current pair.
 		element := &Element{
-			Value: elements[value],
+			Value: string(decValue),
 			Tag:   elements[tag],
 		}
 
@@ -474,12 +524,18 @@ func ParseStore(payload string) (*StoreMsg, error) {
 		return nil, fmt.Errorf("invalid element of renamed mail in STORE message: incorrect amount of semicola")
 	}
 
+	// Decode value part of message encoded in base64.
+	decAddValue, err := base64.StdEncoding.DecodeString(element[0])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 value of STORE message failed: %s\n", err.Error())
+	}
+
 	return &StoreMsg{
 		User:    parts[0],
 		Mailbox: parts[1],
 		RmvMail: rmvMails,
 		AddMail: &Element{
-			Value:    element[0],
+			Value:    string(decAddValue),
 			Tag:      element[1],
 			Contents: element[2],
 		},
@@ -514,9 +570,15 @@ func ParseCopy(payload string) (*CopyMsg, error) {
 		tag := value + 1
 		contents := value + 2
 
+		// Decode value part of message encoded in base64.
+		decValue, err := base64.StdEncoding.DecodeString(elements[value])
+		if err != nil {
+			return nil, fmt.Errorf("decoding base64 value of COPY message failed: %s\n", err.Error())
+		}
+
 		// Create a new Element of current pair.
 		element := &Element{
-			Value:    elements[value],
+			Value:    string(decValue),
 			Tag:      elements[tag],
 			Contents: elements[contents],
 		}
