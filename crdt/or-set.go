@@ -63,6 +63,12 @@ func InitORSetWithFile(fileName string) (*ORSet, error) {
 	// Assign it to ORSet.
 	s.file = f
 
+	// Write newly created CRDT file to stable storage.
+	err = s.WriteORSetToFile(false)
+	if err != nil {
+		return nil, fmt.Errorf("error during CRDT file write-back: %s\n", err.Error())
+	}
+
 	return s, nil
 }
 
@@ -124,11 +130,13 @@ func InitORSetFromFile(fileName string) (*ORSet, error) {
 // stable storage at location from initialization.
 // This allows for a CRDT ORSet to be made persistent
 // and later be resumed from prior state.
-func (s *ORSet) WriteORSetToFile() error {
+func (s *ORSet) WriteORSetToFile(needsLocking bool) error {
 
-	// Write-lock the set and unlock on any exit.
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	if needsLocking {
+		// Write-lock the set and unlock on any exit.
+		s.lock.Lock()
+		defer s.lock.Unlock()
+	}
 
 	marshalled := ""
 
@@ -229,7 +237,7 @@ func (s *ORSet) Lookup(e string, needsLocking bool) bool {
 // defined by the specification. It is executed by all
 // replicas of the data set including the source node. It
 // inserts given element and tag into the set representation.
-func (s *ORSet) AddEffect(e string, tag string, needsLocking bool) {
+func (s *ORSet) AddEffect(e string, tag string, needsLocking bool, needsWriteBack bool) error {
 
 	if needsLocking {
 		// Write-lock set and unlock on exit.
@@ -239,6 +247,27 @@ func (s *ORSet) AddEffect(e string, tag string, needsLocking bool) {
 
 	// Insert data element e at key tag.
 	s.elements[tag] = e
+
+	if needsWriteBack {
+
+		// Instructed to write changes back to file.
+		err := s.WriteORSetToFile(false)
+		if err != nil {
+
+			// Error during write-back to stable storage.
+
+			// Prepare remove set consistent of just added element.
+			rSet := make(map[string]string)
+			rSet[tag] = e
+
+			// Revert just made changes.
+			s.RemoveEffect(rSet, false, false)
+
+			return fmt.Errorf("error during writing CRDT file back: %s\n", err.Error())
+		}
+	}
+
+	return nil
 }
 
 // Add is a helper function only to be executed at the
@@ -247,7 +276,7 @@ func (s *ORSet) AddEffect(e string, tag string, needsLocking bool) {
 // the update instruction is send downstream to all other
 // replicas via the send function which takes care of the
 // reliable causally-ordered broadcast.
-func (s *ORSet) Add(e string, send sendFunc) {
+func (s *ORSet) Add(e string, send sendFunc) error {
 
 	// Create a new unique tag.
 	tag := uuid.NewV4().String()
@@ -256,18 +285,24 @@ func (s *ORSet) Add(e string, send sendFunc) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	// Apply effect part of update add.
-	s.AddEffect(e, tag, false)
+	// Apply effect part of update add. Do not lock
+	// structure but write changes back to stable storage.
+	err := s.AddEffect(e, tag, false, true)
+	if err != nil {
+		return err
+	}
 
 	// Send to other involved nodes.
 	send(fmt.Sprintf("%v;%s", base64.StdEncoding.EncodeToString([]byte(e)), tag))
+
+	return nil
 }
 
 // RemoveEffect is the effect part of an update remove
 // operation defined by the specification. It is executed
 // by all replicas of the data set including the source node.
 // It removes supplied set of tags from the ORSet's set.
-func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool) {
+func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool, needsWriteBack bool) error {
 
 	if needsLocking {
 		// Write-lock set and unlock on exit.
@@ -284,6 +319,25 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool) {
 			delete(s.elements, rTag)
 		}
 	}
+
+	if needsWriteBack {
+
+		// Instructed to write changes back to file.
+		err := s.WriteORSetToFile(false)
+		if err != nil {
+
+			// Error during write-back to stable storage.
+
+			// Revert just made changes.
+			for tag, value := range rSet {
+				s.AddEffect(value, tag, false, false)
+			}
+
+			return fmt.Errorf("error during writing CRDT file back: %s\n", err.Error())
+		}
+	}
+
+	return nil
 }
 
 // Remove is a helper function only to be executed
@@ -330,7 +384,11 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 
 	// Execute the effect part of the update remove but do
 	// not lock the set structure as we already maintain a lock.
-	s.RemoveEffect(rmElements, false)
+	// Also, write changes back to stable storage.
+	err := s.RemoveEffect(rmElements, false, true)
+	if err != nil {
+		return err
+	}
 
 	// Send message to other replicas.
 	send(msg)

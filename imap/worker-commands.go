@@ -190,29 +190,7 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 	posMailboxCRDTPath := filepath.Join(worker.Contexts[clientID].UserCRDTPath, fmt.Sprintf("%s.log", posMailbox))
 
 	// Initialize new ORSet for new mailbox.
-	posMailboxCRDT, err := crdt.InitORSetWithFile(posMailboxCRDTPath)
-	if err != nil {
-
-		// Perform clean up.
-
-		log.Printf("[imap.Create] Fail: %s\n", err.Error())
-		log.Printf("[imap.Create] Removing just created Maildir completely...\n")
-
-		// Attempt to remove Maildir.
-		err = posMaildir.Remove()
-		if err != nil {
-			log.Printf("[imap.Create] ... failed to remove Maildir: %s\n", err.Error())
-			log.Printf("[imap.Create] Exiting.\n")
-		} else {
-			log.Printf("[imap.Create] ... done. Exiting.\n")
-		}
-
-		// Exit worker.
-		os.Exit(1)
-	}
-
-	// Write new mailbox' file to stable storage.
-	err = posMailboxCRDT.WriteORSetToFile()
+	_, err = crdt.InitORSetWithFile(posMailboxCRDTPath)
 	if err != nil {
 
 		// Perform clean up.
@@ -235,39 +213,18 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 
 	// If succeeded, add a new folder in user's main CRDT
 	// and synchronise it to other replicas.
-	userMainCRDT.Add(posMailbox, func(payload string) {
-		worker.SyncSendChan <- fmt.Sprintf("create|%s|%s", worker.Contexts[clientID].UserName, payload)
+	err = userMainCRDT.Add(posMailbox, func(payload string) {
+		worker.SyncSendChan <- fmt.Sprintf("create|%s|%s|%s", worker.Contexts[clientID].UserName, posMailbox, payload)
 	})
-
-	// Write updated CRDT to stable storage.
-	err = userMainCRDT.WriteORSetToFile()
 	if err != nil {
 
 		// Perform clean up.
 
 		log.Printf("[imap.Create] Fail: %s\n", err.Error())
-		log.Printf("[imap.Create] Deleting just added mailbox from main structure CRDT...\n")
-
-		// Immediately send out remove operation.
-		userMainCRDT.Remove(posMailbox, func(payload string) {
-			worker.SyncSendChan <- fmt.Sprintf("delete|%s|%s", worker.Contexts[clientID].UserName, payload)
-		})
-
-		log.Printf("[imap.Create] ... done.\n")
 		log.Printf("[imap.Create] Removing just created Maildir completely...\n")
 
 		// Attempt to remove Maildir.
 		err = posMaildir.Remove()
-		if err != nil {
-			log.Printf("[imap.Create] ... failed to remove Maildir: %s\n", err.Error())
-		} else {
-			log.Printf("[imap.Create] ... done.\n")
-		}
-
-		log.Printf("[imap.Create] Removing just created CRDT file...\n")
-
-		// Attempt to remove just created CRDT file.
-		err = os.Remove(posMailboxCRDTPath)
 		if err != nil {
 			log.Printf("[imap.Create] ... failed to remove Maildir: %s\n", err.Error())
 			log.Printf("[imap.Create] Exiting.\n")
@@ -281,6 +238,116 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 
 	// Send success answer.
 	err = c.Send(fmt.Sprintf("%s OK CREATE completed", req.Tag))
+	if err != nil {
+		c.Error("Encountered send error", err)
+		return false
+	}
+
+	return true
+}
+
+// Delete attempts to remove an existing mailbox with
+// all included content in CRDT as well as file system.
+func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool {
+
+	log.Printf("Serving DELETE '%s'...\n", req.Tag)
+
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
+
+	// Split payload on every space character.
+	delMailboxes := strings.Split(req.Payload, " ")
+
+	if len(delMailboxes) != 1 {
+
+		// If payload did not contain exactly one element,
+		// this is a client error. Return BAD statement.
+		err := c.Send(fmt.Sprintf("%s BAD Command DELETE was not sent with exactly one parameter", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Trim supplied mailbox name of hierarchy separator if
+	// it was sent with a trailing one.
+	delMailbox := strings.TrimSuffix(delMailboxes[0], worker.Config.IMAP.HierarchySeparator)
+
+	if strings.ToUpper(delMailbox) == "INBOX" {
+
+		// If mailbox to-be-deleted was named INBOX,
+		// this is a client error. Return NO response.
+		err := c.Send(fmt.Sprintf("%s NO Forbidden to delete INBOX", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Save user's mailbox structure CRDT to more
+	// conveniently use it hereafter.
+	userMainCRDT := worker.MailboxStructure[worker.Contexts[clientID].UserName]["Structure"]
+
+	// TODO: Add routines to take care of mailboxes that
+	//       are tagged with a \Noselect tag.
+
+	// Remove element from user's main CRDT and send out
+	// remove update operations to all other replicas.
+	err := userMainCRDT.Remove(delMailbox, func(payload string) {
+		worker.SyncSendChan <- fmt.Sprintf("delete|%s|%s|%s", worker.Contexts[clientID].UserName, delMailbox, payload)
+	})
+	if err != nil {
+
+		// Check if error was caused by client, trying to
+		// delete an non-existent mailbox.
+		if err.Error() == "element to be removed not found in set" {
+
+			// If so, return a NO response.
+			err := c.Send(fmt.Sprintf("%s NO Cannot delete folder that does not exist", req.Tag))
+			if err != nil {
+				c.Error("Encountered send error", err)
+				return false
+			}
+
+			return true
+		}
+
+		// Otherwise, this is a write-back error of the updated CRDT
+		// log file. Reverting actions were already taken, log error.
+		log.Printf("[imap.Delete] Failed to remove elements from user's main CRDT: %s\n", err.Error())
+
+		// Exit worker.
+		os.Exit(1)
+	}
+
+	// Construct path to CRDT file to delete.
+	delMailboxCRDTPath := filepath.Join(worker.Contexts[clientID].UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
+
+	// Remove CRDT file of mailbox.
+	err = os.Remove(delMailboxCRDTPath)
+	if err != nil {
+		// TODO: Maybe think about better way to clean up here?
+		log.Fatalf("[imap.Delete] CRDT file of mailbox could not be deleted: %s\n", err.Error())
+	}
+
+	// Remove files associated with deleted mailbox
+	// from stable storage.
+	delMaildir := maildir.Dir(filepath.Join(string(worker.Contexts[clientID].UserMaildirPath), delMailbox))
+
+	err = delMaildir.Remove()
+	if err != nil {
+		// TODO: Maybe think about better way to clean up here?
+		log.Fatalf("[imap.Delete] Maildir could not be deleted: %s\n", err.Error())
+	}
+
+	// Send success answer.
+	err = c.Send(fmt.Sprintf("%s OK DELETE completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false

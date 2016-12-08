@@ -30,11 +30,13 @@ type Element struct {
 
 type CreateMsg struct {
 	User       string
+	Mailbox    string
 	AddMailbox *Element
 }
 
 type DeleteMsg struct {
 	User       string
+	Mailbox    string
 	RmvMailbox []*Element
 }
 
@@ -199,12 +201,12 @@ func ParseCreate(payload string) (*CreateMsg, error) {
 
 	// Split payload at delimiter (pipe symbol).
 	parts := strings.Split(payload, "|")
-	if len(parts) != 2 {
+	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid CREATE message: incorrect amount of pipe symbols")
 	}
 
 	// Split element at delimiter (semicolon).
-	element := strings.Split(parts[1], ";")
+	element := strings.Split(parts[2], ";")
 	if len(element) != 2 {
 		return nil, fmt.Errorf("invalid element in CREATE message: incorrect amount of semicola")
 	}
@@ -216,7 +218,8 @@ func ParseCreate(payload string) (*CreateMsg, error) {
 	}
 
 	return &CreateMsg{
-		User: parts[0],
+		User:    parts[0],
+		Mailbox: parts[1],
 		AddMailbox: &Element{
 			Value: string(decValue),
 			Tag:   element[1],
@@ -228,12 +231,12 @@ func ParseDelete(payload string) (*DeleteMsg, error) {
 
 	// Split payload at delimiter (pipe symbol).
 	parts := strings.Split(payload, "|")
-	if len(parts) != 2 {
+	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid DELETE message: incorrect amount of pipe symbols")
 	}
 
 	// Split elements at delimiter (semicolon).
-	elements := strings.Split(parts[1], ";")
+	elements := strings.Split(parts[2], ";")
 	if len(elements) < 2 {
 		return nil, fmt.Errorf("invalid elements in DELETE message: too few semicola")
 	}
@@ -272,6 +275,7 @@ func ParseDelete(payload string) (*DeleteMsg, error) {
 
 	return &DeleteMsg{
 		User:       parts[0],
+		Mailbox:    parts[1],
 		RmvMailbox: mailbox,
 	}, nil
 }

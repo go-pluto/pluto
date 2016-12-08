@@ -138,8 +138,6 @@ func (recv *Receiver) IncVClockEntry() {
 				updatedVClock[node] = value
 			}
 
-			log.Printf("[comm.IncVClockEntry] %s: Send incremented vector clock: %v\n", recv.name, updatedVClock)
-
 			// Send back the updated vector clock on other
 			// defined channel to sender.
 			recv.updVClock <- updatedVClock
@@ -349,8 +347,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			// that message duplicates will get purged but not applied.
 			if msg.VClock[msg.Sender] == (recv.vclock[msg.Sender] + 1) {
 
-				log.Printf("[comm.ApplyStoredMsgs] NEW message, not duplicate: %s", msgRaw)
-
 				// Pass payload for higher-level interpretation
 				// to channel connected to node.
 				recv.applyCRDTUpdChan <- msg.Payload
@@ -359,6 +355,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				done := <-recv.doneCRDTUpdChan
 
 				log.Printf("[comm.ApplyStoredMsgs] node said %#v\n", done)
+
 			} else {
 				log.Printf("[comm.ApplyStoredMsgs] OLD message, duplicate: %s", msgRaw)
 			}

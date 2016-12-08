@@ -33,13 +33,33 @@ var createTests = []struct {
 	{"b CREATE mailbox1 mailbox2", "b BAD Command CREATE was not sent with exactly one parameter"},
 	{"c CREATE INBOX.", "c NO New mailbox cannot be named INBOX"},
 	{"d CREATE INBOX", "d NO New mailbox cannot be named INBOX"},
-	{"d CREATE inbox", "d NO New mailbox cannot be named INBOX"},
-	{"d CREATE inBOx", "d NO New mailbox cannot be named INBOX"},
-	{"e CREATE University.", "e OK CREATE completed"},
-	{"e CREATE University.", "e NO New mailbox cannot be named after already existing mailbox"},
-	{"e CREATE University", "e NO New mailbox cannot be named after already existing mailbox"},
-	{"e CREATE university", "e OK CREATE completed"},
-	{"z LOGOUT", "* BYE Terminating connection\nz OK LOGOUT completed"},
+	{"e CREATE inbox", "e NO New mailbox cannot be named INBOX"},
+	{"f CREATE inBOx", "f NO New mailbox cannot be named INBOX"},
+	{"g CREATE University.", "g OK CREATE completed"},
+	{"h CREATE University.", "h NO New mailbox cannot be named after already existing mailbox"},
+	{"i CREATE University", "i NO New mailbox cannot be named after already existing mailbox"},
+	{"j CREATE university", "j OK CREATE completed"},
+	{"k CREATE University.Thesis", "k OK CREATE completed"},
+	{"l CREATE University.Thesis.", "l NO New mailbox cannot be named after already existing mailbox"},
+	{"m LOGOUT", "* BYE Terminating connection\nm OK LOGOUT completed"},
+}
+
+var deleteTests = []struct {
+	in  string
+	out string
+}{
+	{"a LOGIN user1 password1", "a OK Logged in"},
+	{"b DELETE INBOX.", "b NO Forbidden to delete INBOX"},
+	{"c DELETE INBOX", "c NO Forbidden to delete INBOX"},
+	{"d DELETE inbox", "d NO Forbidden to delete INBOX"},
+	{"e DELETE inBOx", "e NO Forbidden to delete INBOX"},
+	{"f DELETE DoesNotExist.", "f NO Cannot delete folder that does not exist"},
+	{"g DELETE DoesNotExist", "g NO Cannot delete folder that does not exist"},
+	{"h DELETE University.Thesis.", "h OK DELETE completed"},
+	{"i DELETE University.Thesis", "i NO Cannot delete folder that does not exist"},
+	{"j DELETE University.", "j OK DELETE completed"},
+	{"k DELETE University", "k NO Cannot delete folder that does not exist"},
+	{"l LOGOUT", "* BYE Terminating connection\nl OK LOGOUT completed"},
 }
 
 // Functions
@@ -195,5 +215,82 @@ func TestCreate(t *testing.T) {
 	// At the end of each test, terminate connection.
 	c.Terminate()
 
-	time.Sleep(1200 * time.Millisecond)
+	time.Sleep(1400 * time.Millisecond)
+}
+
+// TestDelete executes a black-box table test on the
+// implemented Delete() function.
+func TestDelete(t *testing.T) {
+
+	// Create needed test environment.
+	config, tlsConfig, err := utils.CreateTestEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Start a storage node in background.
+	go utils.RunStorageWithTimeout(config, 2200)
+	time.Sleep(400 * time.Millisecond)
+
+	// Start a worker node in background.
+	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
+	time.Sleep(400 * time.Millisecond)
+
+	// Start a distributor node in background.
+	go utils.RunDistributorWithTimeout(config, 1400)
+	time.Sleep(400 * time.Millisecond)
+
+	// Connect to IMAP server.
+	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
+	if err != nil {
+		t.Fatalf("[imap.TestDelete] Error during connection attempt to IMAP server: %s\n", err.Error())
+	}
+
+	// Create new connection struct.
+	c := imap.NewConnection(conn)
+
+	// Consume mandatory IMAP greeting.
+	_, err = c.Receive()
+	if err != nil {
+		t.Errorf("[imap.TestDelete] Error during receiving initial server greeting: %s\n", err.Error())
+	}
+
+	for i, tt := range deleteTests {
+
+		var answer string
+
+		// Table test: send 'in' part of each line.
+		err = c.Send(tt.in)
+		if err != nil {
+			t.Fatalf("[imap.TestDelete] Sending message to server failed with: %s\n", err.Error())
+		}
+
+		// Receive answer to DELETE request.
+		deleteAnswer, err := c.Receive()
+		if err != nil {
+			t.Errorf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
+		}
+
+		if i == (len(deleteTests) - 1) {
+
+			// Receive command termination message from distributor.
+			okAnswer, err := c.Receive()
+			if err != nil {
+				t.Errorf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
+			}
+
+			answer = fmt.Sprintf("%s\n%s", deleteAnswer, okAnswer)
+		} else {
+			answer = deleteAnswer
+		}
+
+		if answer != tt.out {
+			t.Fatalf("[imap.TestDelete] Expected '%s' but received '%s'\n", tt.out, answer)
+		}
+	}
+
+	// At the end of each test, terminate connection.
+	c.Terminate()
+
+	time.Sleep(1400 * time.Millisecond)
 }

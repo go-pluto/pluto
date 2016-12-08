@@ -167,7 +167,7 @@ func TestWriteORSetToFile(t *testing.T) {
 	defer os.Remove("test-crdt.log")
 
 	// Write current ORSet to file.
-	err = s.WriteORSetToFile()
+	err = s.WriteORSetToFile(true)
 	if err != nil {
 		t.Fatalf("[crdt.TestWriteORSetToFile] Expected WriteORSetToFile() not to fail but got: %s\n", err.Error())
 	}
@@ -184,12 +184,9 @@ func TestWriteORSetToFile(t *testing.T) {
 	}
 
 	// Set a value in the set.
-	s.AddEffect("abc", "1", true)
-
-	// Write current ORSet to file.
-	err = s.WriteORSetToFile()
+	err = s.AddEffect("abc", "1", true, true)
 	if err != nil {
-		t.Fatalf("[crdt.TestWriteORSetToFile] Expected WriteORSetToFile() not to fail but got: %s\n", err.Error())
+		t.Fatalf("[crdt.TestWriteORSetToFile] Expected AddEffect() not to fail but got: %s\n", err.Error())
 	}
 
 	// Verfiy correct file representation.
@@ -204,12 +201,9 @@ func TestWriteORSetToFile(t *testing.T) {
 	}
 
 	// Set one more.
-	s.AddEffect("def", "2", true)
-
-	// Write current ORSet to file.
-	err = s.WriteORSetToFile()
+	err = s.AddEffect("def", "2", true, true)
 	if err != nil {
-		t.Fatalf("[crdt.TestWriteORSetToFile] Expected WriteORSetToFile() not to fail but got: %s\n", err.Error())
+		t.Fatalf("[crdt.TestWriteORSetToFile] Expected AddEffect() not to fail but got: %s\n", err.Error())
 	}
 
 	// Verfiy correct file representation.
@@ -224,12 +218,9 @@ func TestWriteORSetToFile(t *testing.T) {
 	}
 
 	// And one last.
-	s.AddEffect("ghi", "3", true)
-
-	// Write current ORSet to file.
-	err = s.WriteORSetToFile()
+	err = s.AddEffect("ghi", "3", true, true)
 	if err != nil {
-		t.Fatalf("[crdt.TestWriteORSetToFile] Expected WriteORSetToFile() not to fail but got: %s\n", err.Error())
+		t.Fatalf("[crdt.TestWriteORSetToFile] Expected AddEffect() not to fail but got: %s\n", err.Error())
 	}
 
 	// Verfiy correct file representation.
@@ -250,8 +241,14 @@ func TestWriteORSetToFile(t *testing.T) {
 // on implemented Lookup() function.
 func TestLookup(t *testing.T) {
 
-	// Create new ORSet.
-	s := InitORSet()
+	// Delete temporary test file on function exit.
+	defer os.Remove("test-crdt.log")
+
+	// Create new ORSet with associated file.
+	s, err := InitORSetWithFile("test-crdt.log")
+	if err != nil {
+		t.Fatalf("[crdt.TestLookup] Expected InitORSetWithFile() not to fail but got: %s\n", err.Error())
+	}
 
 	// Make sure, set is initially empty.
 	if len(s.elements) != 0 {
@@ -364,7 +361,10 @@ func TestAddEffect(t *testing.T) {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' not to be an active map key but found '%v' at that place.\n", k1, value)
 	}
 
-	s.AddEffect(v1, k1, true)
+	err := s.AddEffect(v1, k1, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestAddEffect] Expected AddEffect() not to fail but got: %s\n", err.Error())
+	}
 
 	if value, found := s.elements[k1]; !found {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' to be an active map key and contain '%v' as value but found '%v' at that place.\n", k1, v1, value)
@@ -375,7 +375,10 @@ func TestAddEffect(t *testing.T) {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' not to be an active map key but found '%v' at that place.\n", k2, value)
 	}
 
-	s.AddEffect(v3, k2, true)
+	err = s.AddEffect(v3, k2, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestAddEffect] Expected AddEffect() not to fail but got: %s\n", err.Error())
+	}
 
 	if value, found := s.elements[k2]; !found {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' to be an active map key and contain '%v' as value but found '%v' at that place.\n", k2, v3, value)
@@ -386,7 +389,10 @@ func TestAddEffect(t *testing.T) {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' not to be an active map key but found '%v' at that place.\n", k3, value)
 	}
 
-	s.AddEffect(v5, k3, true)
+	err = s.AddEffect(v5, k3, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestAddEffect] Expected AddEffect() not to fail but got: %s\n", err.Error())
+	}
 
 	if value, found := s.elements[k3]; !found {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' to be an active map key and contain '%v' as value but found '%v' at that place.\n", k3, v5, value)
@@ -400,8 +406,14 @@ func TestAdd(t *testing.T) {
 	// Use these variables to compare sent values.
 	var msg1, msg2, msg3, msg4 string
 
-	// Create new ORSet.
-	s := InitORSet()
+	// Delete temporary test file on function exit.
+	defer os.Remove("test-crdt.log")
+
+	// Create new ORSet with associated file.
+	s, err := InitORSetWithFile("test-crdt.log")
+	if err != nil {
+		t.Fatalf("[crdt.TestAdd] Expected InitORSetWithFile() not to fail but got: %s\n", err.Error())
+	}
 
 	// Add defined values to set.
 
@@ -410,7 +422,10 @@ func TestAdd(t *testing.T) {
 		t.Fatalf("[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true.\n", v2)
 	}
 
-	s.Add(v2, func(payload string) { msg1 = payload })
+	err = s.Add(v2, func(payload string) { msg1 = payload })
+	if err != nil {
+		t.Fatalf("[crdt.TestAdd] Expected Add() to return nil error but received '%s'.\n", err.Error())
+	}
 
 	if s.Lookup(v2, true) != true {
 		t.Fatalf("[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false.\n", v2)
@@ -421,7 +436,10 @@ func TestAdd(t *testing.T) {
 		t.Fatalf("[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true.\n", v4)
 	}
 
-	s.Add(v4, func(payload string) { msg2 = payload })
+	err = s.Add(v4, func(payload string) { msg2 = payload })
+	if err != nil {
+		t.Fatalf("[crdt.TestAdd] Expected Add() to return nil error but received '%s'.\n", err.Error())
+	}
 
 	if s.Lookup(v4, true) != true {
 		t.Fatalf("[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false.\n", v4)
@@ -432,7 +450,10 @@ func TestAdd(t *testing.T) {
 		t.Fatalf("[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true.\n", v6)
 	}
 
-	s.Add(v6, func(payload string) { msg3 = payload })
+	err = s.Add(v6, func(payload string) { msg3 = payload })
+	if err != nil {
+		t.Fatalf("[crdt.TestAdd] Expected Add() to return nil error but received '%s'.\n", err.Error())
+	}
 
 	if s.Lookup(v6, true) != true {
 		t.Fatalf("[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false.\n", v6)
@@ -474,7 +495,10 @@ func TestAdd(t *testing.T) {
 	// Test second add of an element that is
 	// already contained in set.
 
-	s.Add(v2, func(payload string) { msg4 = payload })
+	err = s.Add(v2, func(payload string) { msg4 = payload })
+	if err != nil {
+		t.Fatalf("[crdt.TestAdd] Expected Add() to return nil error but received '%s'.\n", err.Error())
+	}
 
 	if len(s.elements) != 4 {
 		t.Fatalf("[crdt.TestAdd] Expected set to contain exactly 4 elements but found %d instead.\n", len(s.elements))
@@ -496,15 +520,42 @@ func TestRemoveEffect(t *testing.T) {
 	testRSet := make(map[string]string)
 
 	// In order to delete keys, we need to add some first.
-	s.AddEffect(v2, k1, true)
-	s.AddEffect(v3, k2, true)
-	s.AddEffect(v4, k3, true)
-	s.AddEffect(v2, k4, true)
-	s.AddEffect(v2, k5, true)
-	s.AddEffect(v2, k6, true)
+
+	err := s.AddEffect(v2, k1, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %s\n", err.Error())
+	}
+
+	err = s.AddEffect(v3, k2, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %s\n", err.Error())
+	}
+
+	err = s.AddEffect(v4, k3, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %s\n", err.Error())
+	}
+
+	err = s.AddEffect(v2, k4, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %s\n", err.Error())
+	}
+
+	err = s.AddEffect(v2, k5, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %s\n", err.Error())
+	}
+
+	err = s.AddEffect(v2, k6, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %s\n", err.Error())
+	}
 
 	// Attempt to delete non-existing keys.
-	s.RemoveEffect(testRSet, true)
+	err = s.RemoveEffect(testRSet, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestRemoveEffect] Expected RemoveEffect() not to fail but got: %s\n", err.Error())
+	}
 
 	if len(s.elements) != 6 {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected 6 elements in set but only found %d.\n", len(s.elements))
@@ -526,7 +577,10 @@ func TestRemoveEffect(t *testing.T) {
 	testRSet["0"] = v2
 
 	// And try to remove that tag from the set.
-	s.RemoveEffect(testRSet, true)
+	err = s.RemoveEffect(testRSet, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestRemoveEffect] Expected RemoveEffect() not to fail but got: %s\n", err.Error())
+	}
 
 	if len(s.elements) != 6 {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected 6 elements in set but only found %d.\n", len(s.elements))
@@ -549,7 +603,10 @@ func TestRemoveEffect(t *testing.T) {
 	testRSet["1"] = v2
 
 	// Remove all tags from set.
-	s.RemoveEffect(testRSet, true)
+	err = s.RemoveEffect(testRSet, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestRemoveEffect] Expected RemoveEffect() not to fail but got: %s\n", err.Error())
+	}
 
 	if len(s.elements) != 5 {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected 5 elements in set but only found %d.\n", len(s.elements))
@@ -575,7 +632,10 @@ func TestRemoveEffect(t *testing.T) {
 	testRSet["6"] = v2
 
 	// Remove all tags from set.
-	s.RemoveEffect(testRSet, true)
+	err = s.RemoveEffect(testRSet, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestRemoveEffect] Expected RemoveEffect() not to fail but got: %s\n", err.Error())
+	}
 
 	if len(s.elements) != 2 {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected 2 elements in set but only found %d.\n", len(s.elements))
@@ -594,10 +654,16 @@ func TestRemoveEffect(t *testing.T) {
 	}
 
 	// Add one again.
-	s.AddEffect(v2, k6, true)
+	err = s.AddEffect(v2, k6, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %s\n", err.Error())
+	}
 
 	// And remove all again.
-	s.RemoveEffect(testRSet, true)
+	err = s.RemoveEffect(testRSet, true, false)
+	if err != nil {
+		t.Fatalf("[crdt.TestRemoveEffect] Expected RemoveEffect() not to fail but got: %s\n", err.Error())
+	}
 
 	if len(s.elements) != 2 {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected 2 elements in set but only found %d.\n", len(s.elements))
@@ -623,22 +689,52 @@ func TestRemove(t *testing.T) {
 	// Use these variables to compare sent values.
 	var msg1, msg2 string
 
-	// Create new ORSet.
-	s := InitORSet()
+	// Delete temporary test file on function exit.
+	defer os.Remove("test-crdt.log")
+
+	// Create new ORSet with associated file.
+	s, err := InitORSetWithFile("test-crdt.log")
+	if err != nil {
+		t.Fatalf("[crdt.TestRemove] Expected InitORSetWithFile() not to fail but got: %s\n", err.Error())
+	}
 
 	// Attempt to delete non-existing value.
-	err := s.Remove(v1, func(payload string) {})
+	err = s.Remove(v1, func(payload string) {})
 	if err.Error() != "element to be removed not found in set" {
 		t.Fatalf("[crdt.TestRemove] Expected Remove() to return error 'element to be removed not found in set' but received '%s'.\n", err.Error())
 	}
 
 	// In order to delete keys, we need to add some first.
-	s.Add(v2, func(payload string) {})
-	s.Add(v3, func(payload string) {})
-	s.Add(v4, func(payload string) {})
-	s.Add(v2, func(payload string) {})
-	s.Add(v2, func(payload string) {})
-	s.Add(v2, func(payload string) {})
+
+	err = s.Add(v2, func(payload string) {})
+	if err != nil {
+		t.Fatalf("[crdt.TestRemove] Expected Add() to return nil error but received '%s'.\n", err.Error())
+	}
+
+	err = s.Add(v3, func(payload string) {})
+	if err != nil {
+		t.Fatalf("[crdt.TestRemove] Expected Add() to return nil error but received '%s'.\n", err.Error())
+	}
+
+	err = s.Add(v4, func(payload string) {})
+	if err != nil {
+		t.Fatalf("[crdt.TestRemove] Expected Add() to return nil error but received '%s'.\n", err.Error())
+	}
+
+	err = s.Add(v2, func(payload string) {})
+	if err != nil {
+		t.Fatalf("[crdt.TestRemove] Expected Add() to return nil error but received '%s'.\n", err.Error())
+	}
+
+	err = s.Add(v2, func(payload string) {})
+	if err != nil {
+		t.Fatalf("[crdt.TestRemove] Expected Add() to return nil error but received '%s'.\n", err.Error())
+	}
+
+	err = s.Add(v2, func(payload string) {})
+	if err != nil {
+		t.Fatalf("[crdt.TestRemove] Expected Add() to return nil error but received '%s'.\n", err.Error())
+	}
 
 	// Delete value that is only present once in set.
 	err = s.Remove(v3, func(payload string) { msg1 = payload })
@@ -670,7 +766,7 @@ func TestRemove(t *testing.T) {
 	}
 
 	// Delete all tags corresponding to value v2.
-	s.Remove(v2, func(payload string) { msg2 = payload })
+	err = s.Remove(v2, func(payload string) { msg2 = payload })
 	if err != nil {
 		t.Fatalf("[crdt.TestRemove] Expected Remove() to return nil error but received '%s'.\n", err.Error())
 	}
