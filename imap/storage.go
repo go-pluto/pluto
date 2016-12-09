@@ -166,7 +166,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			if err != nil {
 
 				// Perform clean up.
-				log.Printf("[imap.ApplyCRDTUpd] Fail: %s\n", err.Error())
+				log.Printf("[imap.ApplyCRDTUpd] CREATE fail: %s\n", err.Error())
 				log.Printf("[imap.ApplyCRDTUpd] Removing just created Maildir completely...\n")
 
 				// Attempt to remove Maildir.
@@ -187,7 +187,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			if err != nil {
 
 				// Perform clean up.
-				log.Printf("[imap.ApplyCRDTUpd] Fail: %s\n", err.Error())
+				log.Printf("[imap.ApplyCRDTUpd] CREATE fail: %s\n", err.Error())
 				log.Printf("[imap.ApplyCRDTUpd] Removing just created Maildir completely...\n")
 
 				// Attempt to remove Maildir.
@@ -254,12 +254,113 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			log.Printf("APPLY HERE: RENAME %#v\n", renameUpd.RmvMailbox)
 
 		case "append":
+
+			// Parse received payload message into append message struct.
 			appendUpd, err := comm.ParseAppend(opPayload)
 			if err != nil {
 				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing APPEND update from sync message: %s\n", err.Error())
 			}
 
-			log.Printf("APPLY HERE: APPEND %#v\n", appendUpd.AddMail)
+			// Save user's mailbox structure CRDT to more
+			// conveniently use it hereafter.
+			userMainCRDT := storage.MailboxStructure[appendUpd.User]["Structure"]
+
+			// Check if specified mailbox from append message is present
+			// in user's main CRDT on this node.
+			if userMainCRDT.Lookup(appendUpd.Mailbox, true) {
+
+				// Store concerned mailbox CRDT.
+				userMailboxCRDT := storage.MailboxStructure[appendUpd.User][appendUpd.Mailbox]
+
+				// Check if mail is not yet present on this node.
+				if userMailboxCRDT.Lookup(appendUpd.AddMail.Value, true) != true {
+
+					// Construct path to new file.
+					var appendFileName string
+					if appendUpd.Mailbox == "INBOX" {
+						appendFileName = filepath.Join(storage.Config.Storage.MaildirRoot, appendUpd.User, "cur", appendUpd.AddMail.Value)
+					} else {
+						appendFileName = filepath.Join(storage.Config.Storage.MaildirRoot, appendUpd.User, appendUpd.Mailbox, "cur", appendUpd.AddMail.Value)
+					}
+
+					log.Printf("WILL CREATE NEW MAIL FILE HERE: %s\n", appendFileName)
+
+					// If so, place file contents at correct location.
+					appendFile, err := os.Create(appendFileName)
+					if err != nil {
+						return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to create file for mail to append: %s\n", err.Error())
+					}
+
+					_, err = appendFile.WriteString(appendUpd.AddMail.Contents)
+					if err != nil {
+
+						// Perform clean up.
+						log.Printf("[imap.ApplyCRDTUpd] APPEND fail: %s\n", err.Error())
+						log.Printf("[imap.ApplyCRDTUpd] Removing just created mail file...\n")
+
+						// Remove just created mail file.
+						err = os.Remove(appendFileName)
+						if err != nil {
+							log.Printf("[imap.ApplyCRDTUpd] ... failed: %s\n", err.Error())
+							log.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
+						} else {
+							log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
+						}
+
+						// Exit worker.
+						os.Exit(1)
+					}
+
+					// Sync contents to stable storage.
+					err = appendFile.Sync()
+					if err != nil {
+
+						// Perform clean up.
+						log.Printf("[imap.ApplyCRDTUpd] APPEND fail: %s\n", err.Error())
+						log.Printf("[imap.ApplyCRDTUpd] Removing just created mail file...\n")
+
+						// Remove just created mail file.
+						err = os.Remove(appendFileName)
+						if err != nil {
+							log.Printf("[imap.ApplyCRDTUpd] ... failed: %s\n", err.Error())
+							log.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
+						} else {
+							log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
+						}
+
+						// Exit worker.
+						os.Exit(1)
+					}
+
+					// If succeeded, add new mail to mailbox' CRDT.
+					err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true, true)
+					if err != nil {
+
+						// Perform clean up.
+						log.Printf("[imap.ApplyCRDTUpd] APPEND fail: %s\n", err.Error())
+						log.Printf("[imap.ApplyCRDTUpd] Removing just created mail file...\n")
+
+						// Remove just created mail file.
+						err = os.Remove(appendFileName)
+						if err != nil {
+							log.Printf("[imap.ApplyCRDTUpd] ... failed: %s\n", err.Error())
+							log.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
+						} else {
+							log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
+						}
+
+						// Exit worker.
+						os.Exit(1)
+					}
+				} else {
+
+					// Add new mail to mailbox' CRDT.
+					err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true, true)
+					if err != nil {
+						log.Fatalf("[imap.ApplyCRDTUpd] APPEND fail: %s. Exiting.\n", err.Error())
+					}
+				}
+			}
 
 		case "expunge":
 			expungeUpd, err := comm.ParseExpunge(opPayload)

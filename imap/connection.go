@@ -148,6 +148,23 @@ func (c *Connection) SignalSessionDone(worker *tls.Conn) error {
 	return nil
 }
 
+// SignalAwaitingLiteral is used by workers to indicate
+// a proxying distributor node that they are awaiting
+// literal data from a client. The amount of awaited data
+// is sent along this signal.
+func (c *Connection) SignalAwaitingLiteral(awaiting int) error {
+
+	var err error
+
+	// Indicate how many bytes of literal data are awaited.
+	_, err = fmt.Fprintf(c.Conn, "> literal: %d <\n", awaiting)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Terminate tears down the state of a connection.
 // This includes closing contained connection items.
 // It returns nil or eventual errors.

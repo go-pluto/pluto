@@ -2,10 +2,13 @@ package imap
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
+	"encoding/base64"
 	"path/filepath"
 
 	"github.com/numbleroot/maildir"
@@ -13,6 +16,8 @@ import (
 )
 
 // Functions
+
+// Mailbox functions
 
 // Select sets the current mailbox based on supplied
 // payload to user-instructed value. A return value of
@@ -25,6 +30,7 @@ import (
 // the client and still return true.
 func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool {
 
+	log.Println()
 	log.Printf("Serving SELECT '%s'...\n", req.Tag)
 
 	// Lock worker exclusively and unlock whenever
@@ -118,12 +124,8 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 // taken from payload of request.
 func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool {
 
+	log.Println()
 	log.Printf("Serving CREATE '%s'...\n", req.Tag)
-
-	// Lock worker exclusively and unlock whenever
-	// this handler exits.
-	worker.lock.Lock()
-	defer worker.lock.Unlock()
 
 	// Split payload on every space character.
 	posMailboxes := strings.Split(req.Payload, " ")
@@ -140,6 +142,11 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 
 		return true
 	}
+
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
 
 	// Trim supplied mailbox name of hierarchy separator if
 	// it was sent with a trailing one.
@@ -178,6 +185,14 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 	// TODO: Check and handle UIDVALIDITY behaviour is correct.
 	//       I. a. make sure to assign correct new UIDs.
 
+	// TODO: RFC 3501 says that not yet existing parent folders
+	//       of a mailbox name containing at least one hierarchy
+	//       symbol 'SHOULD' be created as well. It is certainly
+	//       not required in pluto but there might other servers
+	//       or agents which might require such additional beahviour.
+	//       Think about adding this functionality and remember to
+	//       adjust RENAME behaviour as well.
+
 	// Create a new Maildir on stable storage.
 	posMaildir := maildir.Dir(filepath.Join(string(worker.Contexts[clientID].UserMaildirPath), posMailbox))
 
@@ -194,7 +209,6 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 	if err != nil {
 
 		// Perform clean up.
-
 		log.Printf("[imap.Create] Fail: %s\n", err.Error())
 		log.Printf("[imap.Create] Removing just created Maildir completely...\n")
 
@@ -219,7 +233,6 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 	if err != nil {
 
 		// Perform clean up.
-
 		log.Printf("[imap.Create] Fail: %s\n", err.Error())
 		log.Printf("[imap.Create] Removing just created Maildir completely...\n")
 
@@ -250,12 +263,8 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 // all included content in CRDT as well as file system.
 func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool {
 
+	log.Println()
 	log.Printf("Serving DELETE '%s'...\n", req.Tag)
-
-	// Lock worker exclusively and unlock whenever
-	// this handler exits.
-	worker.lock.Lock()
-	defer worker.lock.Unlock()
 
 	// Split payload on every space character.
 	delMailboxes := strings.Split(req.Payload, " ")
@@ -272,6 +281,11 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 
 		return true
 	}
+
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
 
 	// Trim supplied mailbox name of hierarchy separator if
 	// it was sent with a trailing one.
@@ -348,6 +362,284 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 
 	// Send success answer.
 	err = c.Send(fmt.Sprintf("%s OK DELETE completed", req.Tag))
+	if err != nil {
+		c.Error("Encountered send error", err)
+		return false
+	}
+
+	return true
+}
+
+// Rename attempts to rename a supplied mailbox to
+// a new name including all possibly contained subfolders.
+func (worker *Worker) Rename(c *Connection, req *Request, clientID string) bool {
+
+	/*
+		log.Println()
+		log.Printf("Serving RENAME '%s'...\n", req.Tag)
+
+		// Split payload on every space character.
+		renMailboxes := strings.Split(req.Payload, " ")
+
+		if len(renMailboxes) != 2 {
+
+			// If payload did not contain exactly two elements,
+			// this is a client error. Return BAD statement.
+			err := c.Send(fmt.Sprintf("%s BAD Command RENAME was not sent with exactly two parameters", req.Tag))
+			if err != nil {
+				c.Error("Encountered send error", err)
+				return false
+			}
+
+			return true
+		}
+
+		// Lock worker exclusively and unlock whenever
+		// this handler exits.
+		worker.lock.Lock()
+		defer worker.lock.Unlock()
+
+		// Trim supplied mailbox names of hierarchy separator if
+		// it they were sent with a trailing one.
+		oldMailbox := strings.TrimSuffix(renMailboxes[0], worker.Config.IMAP.HierarchySeparator)
+		newMailbox := strings.TrimSuffix(renMailboxes[1], worker.Config.IMAP.HierarchySeparator)
+
+		// TODO: Add missing behaviour.
+
+	*/
+
+	// Send success answer.
+	err := c.Send(fmt.Sprintf("%s OK RENAME completed", req.Tag))
+	if err != nil {
+		c.Error("Encountered send error", err)
+		return false
+	}
+
+	return true
+}
+
+// Mail functions
+
+// Append puts supplied message into specified mailbox.
+func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool {
+
+	// Arguments of append command.
+	var mailbox string
+	var flagsRaw string
+	var flags []string
+	var dateTimeRaw string
+	var numBytesRaw string
+
+	log.Println()
+	log.Printf("Serving APPEND '%s'...\n", req.Tag)
+
+	// Split payload on every space character.
+	appendArgs := strings.Split(req.Payload, " ")
+	lenAppendArgs := len(appendArgs)
+
+	if (lenAppendArgs < 2) || (lenAppendArgs > 4) {
+
+		// If payload did not contain between two and four
+		// elements, this is a client error.
+		// Return BAD statement.
+		err := c.Send(fmt.Sprintf("%s BAD Command APPEND was not sent with appropriate number of parameters", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Depending on amount of arguments, store them.
+	switch lenAppendArgs {
+
+	case 2:
+		mailbox = appendArgs[0]
+		numBytesRaw = appendArgs[1]
+
+	case 3:
+		mailbox = appendArgs[0]
+		flagsRaw = appendArgs[1]
+		numBytesRaw = appendArgs[2]
+
+	case 4:
+		mailbox = appendArgs[0]
+		flagsRaw = appendArgs[1]
+		dateTimeRaw = appendArgs[2]
+		numBytesRaw = appendArgs[3]
+	}
+
+	mailbox = strings.ToUpper(mailbox)
+
+	// If flags were supplied, parse them.
+	if flagsRaw != "" {
+
+		// Remove leading and trailing parenthesis.
+		flagsRaw = strings.TrimLeft(flagsRaw, "(")
+		flagsRaw = strings.TrimRight(flagsRaw, ")")
+
+		// Split at space symbols.
+		flags = strings.Split(flagsRaw, " ")
+
+		// TODO: Handle errors.
+		log.Printf("flags: %#v\n", flags)
+	}
+
+	// If date-time was supplied, parse it.
+	if dateTimeRaw != "" {
+
+		// TODO: Parse time and do something with it.
+	}
+
+	// Parse out how many bytes we are expecting.
+	numBytesString := strings.TrimLeft(numBytesRaw, "{")
+	numBytesString = strings.TrimRight(numBytesString, "}")
+
+	// Convert string number to int.
+	numBytes, err := strconv.Atoi(numBytesString)
+	if err != nil {
+
+		// If we were not able to parse out the number,
+		// it was probably a client error. Send tagged BAD.
+		err := c.Send(fmt.Sprintf("%s BAD Command APPEND did not contain proper literal data byte number", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Lock worker.
+	worker.lock.Lock()
+
+	// Save user's mailbox structure CRDT to more
+	// conveniently use it hereafter.
+	userMainCRDT := worker.MailboxStructure[worker.Contexts[clientID].UserName]["Structure"]
+
+	if userMainCRDT.Lookup(mailbox, true) != true {
+
+		// If mailbox to append message to does not exist,
+		// this is a client error. Return NO response.
+		err := c.Send(fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			worker.lock.Unlock()
+			return false
+		}
+
+		// Unlock worker again.
+		worker.lock.Unlock()
+
+		return true
+	}
+
+	// Unlock worker again.
+	worker.lock.Unlock()
+
+	// Send command continuation to client.
+	err = c.Send("+ Ready for literal data")
+	if err != nil {
+		c.Error("Encountered send error", err)
+		return false
+	}
+
+	// Signal proxying distributor that we expect an
+	// inbound answer from the client.
+	err = c.SignalAwaitingLiteral(numBytes)
+	if err != nil {
+		c.Error("Encountered send error", err)
+		return false
+	}
+
+	// Reserve space for exact amount of expected data.
+	msgBuffer := make([]byte, numBytes)
+
+	// Read in that amount from connection to distributor.
+	_, err = io.ReadFull(c.Reader, msgBuffer)
+	if err != nil {
+		c.Error("Encountered error while reading distributor literal data", err)
+		return false
+	}
+
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
+
+	// Construct path to maildir on storage.
+	var appMaildir maildir.Dir
+	if mailbox == "INBOX" {
+		appMaildir = worker.Contexts[clientID].UserMaildirPath
+	} else {
+		appMaildir = maildir.Dir(filepath.Join(string(worker.Contexts[clientID].UserMaildirPath), mailbox))
+	}
+
+	// Open a new Maildir delivery.
+	appDelivery, err := appMaildir.NewDelivery()
+	if err != nil {
+		c.Error("Error during delivery creation", err)
+		return false
+	}
+
+	// Write actual message contents to file.
+	err = appDelivery.Write(msgBuffer)
+	if err != nil {
+		c.Error("Error while writing message during delivery", err)
+		return false
+	}
+
+	// Close and move just created message.
+	newKey, err := appDelivery.Close()
+	if err != nil {
+		c.Error("Error while finishing delivery of new message", err)
+		return false
+	}
+
+	// Follow Maildir's renaming procedure.
+	_, err = appMaildir.Unseen()
+	if err != nil {
+		c.Error("Could not Unseen() recently delivered messages", err)
+		return false
+	}
+
+	// Find file name of just delivered mail.
+	mailFileNamePath, err := appMaildir.Filename(newKey)
+	if err != nil {
+		c.Error("Finding file name of new message failed", err)
+		return false
+	}
+	mailFileName := filepath.Base(mailFileNamePath)
+
+	// Retrieve CRDT of mailbox to append mail to.
+	appMailboxCRDT := worker.MailboxStructure[worker.Contexts[clientID].UserName][mailbox]
+
+	// Add new mail to mailbox' CRDT and send update
+	// message to other replicas.
+	err = appMailboxCRDT.Add(mailFileName, func(payload string) {
+		worker.SyncSendChan <- fmt.Sprintf("append|%s|%s|%s;%s", worker.Contexts[clientID].UserName, mailbox, payload, base64.StdEncoding.EncodeToString(msgBuffer))
+	})
+	if err != nil {
+
+		// Perform clean up.
+		log.Printf("[imap.Append] Fail: %s\n", err.Error())
+		log.Printf("[imap.Append] Removing just appended mail message...\n")
+
+		err := os.Remove(mailFileNamePath)
+		if err != nil {
+			log.Printf("[imap.Append] ... failed: %s\n", err.Error())
+			log.Printf("[imap.Append] Exiting.\n")
+		} else {
+			log.Printf("[imap.Append] ... done. Exiting.\n")
+		}
+
+		// Exit worker.
+		os.Exit(1)
+	}
+
+	// Send success answer.
+	err = c.Send(fmt.Sprintf("%s OK APPEND completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false

@@ -3,7 +3,9 @@ package imap
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
+	"strconv"
 	"strings"
 )
 
@@ -241,7 +243,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	// As long as the responsible worker has not
 	// indicated the end of the current operation,
 	// continue to buffer answers.
-	for (curResp != "> done <") && (curResp != "> error <") {
+	for (curResp != "> done <") && (curResp != "> error <") && (strings.HasPrefix(curResp, "> literal: ") != true) {
 
 		// Append it to answer buffer.
 		bufResp = append(bufResp, curResp)
@@ -257,13 +259,82 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 
 	for i := range bufResp {
 
-		log.Printf("Sending back: %s\n", bufResp[i])
-
 		// Send all buffered worker answers to client.
 		err = c.Send(bufResp[i])
 		if err != nil {
 			c.Error("Encountered send error to client", err)
 			return false
+		}
+	}
+
+	// Special case: We expect literal data in form of a
+	// RFC defined mail message.
+	if strings.HasPrefix(curResp, "> literal: ") {
+
+		// Strip off left and right elements of signal.
+		// This leaves the awaited amount of bytes.
+		numBytesString := strings.TrimLeft(curResp, "> literal: ")
+		numBytesString = strings.TrimRight(numBytesString, " <")
+
+		// Convert string amount to int.
+		numBytes, err := strconv.Atoi(numBytesString)
+		if err != nil {
+			c.Error("Encountered conversion error for string to int", err)
+			return false
+		}
+
+		// Reserve space for exact amount of expected data.
+		msgBuffer := make([]byte, numBytes)
+
+		// Read in that amount from connection to client.
+		_, err = io.ReadFull(c.Reader, msgBuffer)
+		if err != nil {
+			c.Error("Encountered error while reading client literal data", err)
+			return false
+		}
+
+		// Pass on data to worker.
+		if _, err := fmt.Fprintf(connWorker, "%s\n", msgBuffer); err != nil {
+			c.Error("Encountered passing send error to worker", err)
+			return false
+		}
+
+		// Reserve space for answer buffer.
+		bufResp := make([]string, 0, 2)
+
+		// Receive incoming worker response.
+		curResp, err := readerWorker.ReadString('\n')
+		if err != nil {
+			c.Error("Encountered receive error from worker after literal data was sent", err)
+			return false
+		}
+		curResp = strings.TrimRight(curResp, "\n")
+
+		// As long as the responsible worker has not
+		// indicated the end of the current operation,
+		// continue to buffer answers.
+		for (curResp != "> done <") && (curResp != "> error <") {
+
+			// Append it to answer buffer.
+			bufResp = append(bufResp, curResp)
+
+			// Receive incoming worker response.
+			curResp, err = readerWorker.ReadString('\n')
+			if err != nil {
+				c.Error("Encountered receive error from worker after literal data was sent", err)
+				return false
+			}
+			curResp = strings.TrimRight(curResp, "\n")
+		}
+
+		for i := range bufResp {
+
+			// Send all buffered worker answers to client.
+			err = c.Send(bufResp[i])
+			if err != nil {
+				c.Error("Encountered send error to client after literal data was sent", err)
+				return false
+			}
 		}
 	}
 

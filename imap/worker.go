@@ -274,6 +274,28 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 				}
 			}
 
+		case req.Command == "RENAME":
+			if ok := worker.Rename(c, req, clientID); ok {
+
+				// If successful, signal end of operation to distributor.
+				err := c.SignalSessionDone(nil)
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error", err)
+					return
+				}
+			}
+
+		case req.Command == "APPEND":
+			if ok := worker.Append(c, req, clientID); ok {
+
+				// If successful, signal end of operation to distributor.
+				err := c.SignalSessionDone(nil)
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error", err)
+					return
+				}
+			}
+
 		default:
 			// Client sent inappropriate command. Signal tagged error.
 			err := c.Send(fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))

@@ -28,6 +28,8 @@ type Element struct {
 
 // Mailbox messages.
 
+// TODO: All Mailbox elements have to base64 encoded as well.
+
 type CreateMsg struct {
 	User       string
 	Mailbox    string
@@ -366,11 +368,17 @@ func ParseRename(payload string) (*RenameMsg, error) {
 			return nil, fmt.Errorf("decoding base64 value of RENAME message failed: %s\n", err.Error())
 		}
 
+		// Decode contents part of message encoded in base64.
+		decContents, err := base64.StdEncoding.DecodeString(element[contents])
+		if err != nil {
+			return nil, fmt.Errorf("decoding base64 contents of RENAME message failed: %s\n", err.Error())
+		}
+
 		// Create a new Element of current pair.
 		element := &Element{
 			Value:    string(decValue),
 			Tag:      elements[tag],
-			Contents: elements[contents],
+			Contents: string(decContents),
 		}
 
 		// Insert it into addMails slice.
@@ -410,13 +418,19 @@ func ParseAppend(payload string) (*AppendMsg, error) {
 		return nil, fmt.Errorf("decoding base64 value of APPEND message failed: %s\n", err.Error())
 	}
 
+	// Decode contents part of message encoded in base64.
+	decContents, err := base64.StdEncoding.DecodeString(element[2])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 contents of APPEND message failed: %s\n", err.Error())
+	}
+
 	return &AppendMsg{
 		User:    parts[0],
 		Mailbox: parts[1],
 		AddMail: &Element{
 			Value:    string(decValue),
 			Tag:      element[1],
-			Contents: element[2],
+			Contents: string(decContents),
 		},
 	}, nil
 }
@@ -534,6 +548,12 @@ func ParseStore(payload string) (*StoreMsg, error) {
 		return nil, fmt.Errorf("decoding base64 value of STORE message failed: %s\n", err.Error())
 	}
 
+	// Decode contents part of message encoded in base64.
+	decAddContents, err := base64.StdEncoding.DecodeString(element[2])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 contents of STORE message failed: %s\n", err.Error())
+	}
+
 	return &StoreMsg{
 		User:    parts[0],
 		Mailbox: parts[1],
@@ -541,7 +561,7 @@ func ParseStore(payload string) (*StoreMsg, error) {
 		AddMail: &Element{
 			Value:    string(decAddValue),
 			Tag:      element[1],
-			Contents: element[2],
+			Contents: string(decAddContents),
 		},
 	}, nil
 }
@@ -580,11 +600,17 @@ func ParseCopy(payload string) (*CopyMsg, error) {
 			return nil, fmt.Errorf("decoding base64 value of COPY message failed: %s\n", err.Error())
 		}
 
+		// Decode contents part of message encoded in base64.
+		decContents, err := base64.StdEncoding.DecodeString(elements[contents])
+		if err != nil {
+			return nil, fmt.Errorf("decoding base64 contents of COPY message failed: %s\n", err.Error())
+		}
+
 		// Create a new Element of current pair.
 		element := &Element{
 			Value:    string(decValue),
 			Tag:      elements[tag],
-			Contents: elements[contents],
+			Contents: string(decContents),
 		}
 
 		// Insert it into addMails slice.

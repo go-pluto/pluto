@@ -62,6 +62,16 @@ var deleteTests = []struct {
 	{"l LOGOUT", "* BYE Terminating connection\nl OK LOGOUT completed"},
 }
 
+/*
+var renameTests = []struct {
+	in  string
+	out string
+}{
+	{"a LOGIN user1 password1", "a OK Logged in"},
+	{"l LOGOUT", "* BYE Terminating connection\nl OK LOGOUT completed"},
+}
+*/
+
 // Functions
 
 // TestSelect executes a black-box table test on the
@@ -294,3 +304,82 @@ func TestDelete(t *testing.T) {
 
 	time.Sleep(1400 * time.Millisecond)
 }
+
+/*
+// TestRename executes a black-box table test on the
+// implemented Rename() function.
+func TestRename(t *testing.T) {
+
+	// Create needed test environment.
+	config, tlsConfig, err := utils.CreateTestEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Start a storage node in background.
+	go utils.RunStorageWithTimeout(config, 2200)
+	time.Sleep(400 * time.Millisecond)
+
+	// Start a worker node in background.
+	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
+	time.Sleep(400 * time.Millisecond)
+
+	// Start a distributor node in background.
+	go utils.RunDistributorWithTimeout(config, 1400)
+	time.Sleep(400 * time.Millisecond)
+
+	// Connect to IMAP server.
+	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
+	if err != nil {
+		t.Fatalf("[imap.TestRename] Error during connection attempt to IMAP server: %s\n", err.Error())
+	}
+
+	// Create new connection struct.
+	c := imap.NewConnection(conn)
+
+	// Consume mandatory IMAP greeting.
+	_, err = c.Receive()
+	if err != nil {
+		t.Errorf("[imap.TestRename] Error during receiving initial server greeting: %s\n", err.Error())
+	}
+
+	for i, tt := range renameTests {
+
+		var answer string
+
+		// Table test: send 'in' part of each line.
+		err = c.Send(tt.in)
+		if err != nil {
+			t.Fatalf("[imap.TestRename] Sending message to server failed with: %s\n", err.Error())
+		}
+
+		// Receive answer to RENAME request.
+		renameAnswer, err := c.Receive()
+		if err != nil {
+			t.Errorf("[imap.TestRename] Error during receiving table test RENAME: %s\n", err.Error())
+		}
+
+		if i == (len(renameTests) - 1) {
+
+			// Receive command termination message from distributor.
+			okAnswer, err := c.Receive()
+			if err != nil {
+				t.Errorf("[imap.TestRename] Error during receiving table test RENAME: %s\n", err.Error())
+			}
+
+			answer = fmt.Sprintf("%s\n%s", renameAnswer, okAnswer)
+		} else {
+			answer = renameAnswer
+		}
+
+		if answer != tt.out {
+			t.Fatalf("[imap.TestRename] Expected '%s' but received '%s'\n", tt.out, answer)
+		}
+	}
+
+	// At the end of each test, terminate connection.
+	c.Terminate()
+
+	time.Sleep(1400 * time.Millisecond)
+}
+*/
