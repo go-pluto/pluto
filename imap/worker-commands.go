@@ -30,7 +30,6 @@ import (
 // the client and still return true.
 func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool {
 
-	log.Println()
 	log.Printf("Serving SELECT '%s'...\n", req.Tag)
 
 	// Lock worker exclusively and unlock whenever
@@ -124,7 +123,6 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 // taken from payload of request.
 func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool {
 
-	log.Println()
 	log.Printf("Serving CREATE '%s'...\n", req.Tag)
 
 	// Split payload on every space character.
@@ -205,7 +203,7 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 	posMailboxCRDTPath := filepath.Join(worker.Contexts[clientID].UserCRDTPath, fmt.Sprintf("%s.log", posMailbox))
 
 	// Initialize new ORSet for new mailbox.
-	_, err = crdt.InitORSetWithFile(posMailboxCRDTPath)
+	posMailboxCRDT, err := crdt.InitORSetWithFile(posMailboxCRDTPath)
 	if err != nil {
 
 		// Perform clean up.
@@ -225,6 +223,9 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 		os.Exit(1)
 	}
 
+	// Place newly created CRDT in mailbox structure.
+	worker.MailboxStructure[worker.Contexts[clientID].UserName][posMailbox] = posMailboxCRDT
+
 	// If succeeded, add a new folder in user's main CRDT
 	// and synchronise it to other replicas.
 	err = userMainCRDT.Add(posMailbox, func(payload string) {
@@ -234,7 +235,12 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 
 		// Perform clean up.
 		log.Printf("[imap.Create] Fail: %s\n", err.Error())
-		log.Printf("[imap.Create] Removing just created Maildir completely...\n")
+		log.Printf("[imap.Create] Removing added CRDT from mailbox structure...\n")
+
+		// Remove just added CRDT of new maildir from mailbox structure.
+		delete(worker.MailboxStructure[worker.Contexts[clientID].UserName], posMailbox)
+
+		log.Printf("[imap.Create] ... done. Removing just created Maildir completely...\n")
 
 		// Attempt to remove Maildir.
 		err = posMaildir.Remove()
@@ -263,7 +269,6 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 // all included content in CRDT as well as file system.
 func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool {
 
-	log.Println()
 	log.Printf("Serving DELETE '%s'...\n", req.Tag)
 
 	// Split payload on every space character.
@@ -340,6 +345,9 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 		os.Exit(1)
 	}
 
+	// Remove CRDT from mailbox structure.
+	delete(worker.MailboxStructure[worker.Contexts[clientID].UserName], delMailbox)
+
 	// Construct path to CRDT file to delete.
 	delMailboxCRDTPath := filepath.Join(worker.Contexts[clientID].UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
 
@@ -382,7 +390,6 @@ func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool 
 	var dateTimeRaw string
 	var numBytesRaw string
 
-	log.Println()
 	log.Printf("Serving APPEND '%s'...\n", req.Tag)
 
 	// Split payload on every space character.
@@ -422,7 +429,10 @@ func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool 
 		numBytesRaw = appendArgs[3]
 	}
 
-	mailbox = strings.ToUpper(mailbox)
+	// If user specified inbox, set it accordingly.
+	if strings.ToUpper(mailbox) == "INBOX" {
+		mailbox = "INBOX"
+	}
 
 	// If flags were supplied, parse them.
 	if flagsRaw != "" {

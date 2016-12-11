@@ -293,8 +293,9 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 			return false
 		}
 
-		// Pass on data to worker.
-		if _, err := fmt.Fprintf(connWorker, "%s\n", msgBuffer); err != nil {
+		// Pass on data to worker. Mails have to be ended by
+		// newline symbol.
+		if _, err := fmt.Fprintf(connWorker, "%s", msgBuffer); err != nil {
 			c.Error("Encountered passing send error to worker", err)
 			return false
 		}

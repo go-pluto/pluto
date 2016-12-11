@@ -14,6 +14,17 @@ import (
 
 // Structs
 
+var msg1 string = `Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)
+From: Fred Foobar <foobar@Blurdybloop.COM>
+Subject: afternoon meeting
+To: mooch@owatagu.siam.edu
+Message-Id: <B27397-0100000@Blurdybloop.COM>
+MIME-Version: 1.0
+Content-Type: TEXT/PLAIN; CHARSET=US-ASCII
+
+Hello Joe, do you think we can meet at 3:30 tomorrow?
+`
+
 var selectTests = []struct {
 	in  string
 	out string
@@ -62,15 +73,22 @@ var deleteTests = []struct {
 	{"l LOGOUT", "* BYE Terminating connection\nl OK LOGOUT completed"},
 }
 
-/*
-var renameTests = []struct {
+var appendTests = []struct {
 	in  string
 	out string
 }{
-	{"a LOGIN user1 password1", "a OK Logged in"},
-	{"l LOGOUT", "* BYE Terminating connection\nl OK LOGOUT completed"},
+	{"a LOGIN user2 password2", "a OK Logged in"},
+	{"b APPEND DoesNotExist {301}", "b NO [TRYCREATE] Mailbox to append to does not exist"},
+	{"c APPEND inbox {301}", "+ Ready for literal data"},
+	{msg1, "c OK APPEND completed"},
+	{"d APPEND INBOX {301}", "+ Ready for literal data"},
+	{msg1, "d OK APPEND completed"},
+	{"e CREATE University", "e OK CREATE completed"},
+	{"f APPEND University {301}", "+ Ready for literal data"},
+	{msg1, "f OK APPEND completed"},
+	{"f APPEND university {301}", "f NO [TRYCREATE] Mailbox to append to does not exist"},
+	{"z LOGOUT", "* BYE Terminating connection\nz OK LOGOUT completed"},
 }
-*/
 
 // Functions
 
@@ -305,10 +323,9 @@ func TestDelete(t *testing.T) {
 	time.Sleep(1400 * time.Millisecond)
 }
 
-/*
-// TestRename executes a black-box table test on the
-// implemented Rename() function.
-func TestRename(t *testing.T) {
+// TestAppend executes a black-box table test on the
+// implemented Append() function.
+func TestAppend(t *testing.T) {
 
 	// Create needed test environment.
 	config, tlsConfig, err := utils.CreateTestEnv()
@@ -331,7 +348,7 @@ func TestRename(t *testing.T) {
 	// Connect to IMAP server.
 	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
 	if err != nil {
-		t.Fatalf("[imap.TestRename] Error during connection attempt to IMAP server: %s\n", err.Error())
+		t.Fatalf("[imap.TestAppend] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
@@ -340,40 +357,52 @@ func TestRename(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestRename] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Errorf("[imap.TestAppend] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
-	for i, tt := range renameTests {
+	for i, tt := range appendTests {
+
+		log.Printf("sending: '%s'\n", tt.in)
 
 		var answer string
 
-		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
-		if err != nil {
-			t.Fatalf("[imap.TestRename] Sending message to server failed with: %s\n", err.Error())
+		if (i == 3) || (i == 5) || (i == 8) {
+
+			// Send mail message without additional newline.
+			_, err = fmt.Fprintf(c.Conn, "%s", tt.in)
+			if err != nil {
+				t.Fatalf("[imap.TestAppend] Sending mail message to server failed with: %s\n", err.Error())
+			}
+		} else {
+
+			// Table test: send 'in' part of each line.
+			err = c.Send(tt.in)
+			if err != nil {
+				t.Fatalf("[imap.TestAppend] Sending message to server failed with: %s\n", err.Error())
+			}
 		}
 
-		// Receive answer to RENAME request.
-		renameAnswer, err := c.Receive()
+		// Receive answer to APPEND request.
+		appendAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestRename] Error during receiving table test RENAME: %s\n", err.Error())
+			t.Errorf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
 		}
 
-		if i == (len(renameTests) - 1) {
+		if i == (len(appendTests) - 1) {
 
 			// Receive command termination message from distributor.
 			okAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestRename] Error during receiving table test RENAME: %s\n", err.Error())
+				t.Errorf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
 			}
 
-			answer = fmt.Sprintf("%s\n%s", renameAnswer, okAnswer)
+			answer = fmt.Sprintf("%s\n%s", appendAnswer, okAnswer)
 		} else {
-			answer = renameAnswer
+			answer = appendAnswer
 		}
 
 		if answer != tt.out {
-			t.Fatalf("[imap.TestRename] Expected '%s' but received '%s'\n", tt.out, answer)
+			t.Fatalf("[imap.TestAppend] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
 
@@ -382,4 +411,3 @@ func TestRename(t *testing.T) {
 
 	time.Sleep(1400 * time.Millisecond)
 }
-*/

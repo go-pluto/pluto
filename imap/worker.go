@@ -300,8 +300,8 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 			}
 		}
 
-		// Receive next incoming client command.
-		rawReq, err = c.Receive()
+		// Receive next incoming proxied request.
+		opening, err = c.Receive()
 		if err != nil {
 			c.ErrorLogOnly("Encountered receive error", err)
 			return

@@ -162,7 +162,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			posMailboxCRDTPath := filepath.Join(storage.Config.Storage.CRDTLayerRoot, createUpd.User, fmt.Sprintf("%s.log", createUpd.Mailbox))
 
 			// Initialize new ORSet for new mailbox.
-			_, err = crdt.InitORSetWithFile(posMailboxCRDTPath)
+			posMailboxCRDT, err := crdt.InitORSetWithFile(posMailboxCRDTPath)
 			if err != nil {
 
 				// Perform clean up.
@@ -182,13 +182,21 @@ func (storage *Storage) ApplyCRDTUpd() error {
 				os.Exit(1)
 			}
 
+			// Place newly created CRDT in mailbox structure.
+			storage.MailboxStructure[createUpd.User][createUpd.Mailbox] = posMailboxCRDT
+
 			// If succeeded, add a new folder in user's main CRDT.
 			err = userMainCRDT.AddEffect(createUpd.AddMailbox.Value, createUpd.AddMailbox.Tag, true, true)
 			if err != nil {
 
 				// Perform clean up.
 				log.Printf("[imap.ApplyCRDTUpd] CREATE fail: %s\n", err.Error())
-				log.Printf("[imap.ApplyCRDTUpd] Removing just created Maildir completely...\n")
+				log.Printf("[imap.Create] Removing added CRDT from mailbox structure...\n")
+
+				// Remove just added CRDT of new maildir from mailbox structure.
+				delete(storage.MailboxStructure[createUpd.User], createUpd.Mailbox)
+
+				log.Printf("[imap.Create] ... done. Removing just created Maildir completely...\n")
 
 				// Attempt to remove Maildir.
 				err = posMaildir.Remove()
@@ -226,6 +234,9 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			if err != nil {
 				return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to remove elements from user's main CRDT: %s\n", err.Error())
 			}
+
+			// Remove CRDT from mailbox structure.
+			delete(storage.MailboxStructure[deleteUpd.User], deleteUpd.Mailbox)
 
 			// Construct path to CRDT file to delete.
 			delMailboxCRDTPath := filepath.Join(storage.Config.Storage.CRDTLayerRoot, deleteUpd.User, fmt.Sprintf("%s.log", deleteUpd.Mailbox))
