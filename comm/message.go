@@ -20,6 +20,8 @@ type Message struct {
 	Payload string
 }
 
+// Element contains the actual ORSet two-tupel elements
+// and possible file contents of the element.
 type Element struct {
 	Value    string
 	Tag      string
@@ -28,20 +30,24 @@ type Element struct {
 
 // Mailbox messages.
 
-// TODO: All Mailbox elements have to base64 encoded as well.
-
+// CreateMsg represents information needed in executing
+// a remote CREATE operation on an ORSet CRDT.
 type CreateMsg struct {
 	User       string
 	Mailbox    string
 	AddMailbox *Element
 }
 
+// DeleteMsg represents information needed in executing
+// a remote DELETE operation on an ORSet CRDT.
 type DeleteMsg struct {
 	User       string
 	Mailbox    string
 	RmvMailbox []*Element
 }
 
+// RenameMsg represents information needed in executing
+// a remote RENAME operation on an ORSet CRDT.
 type RenameMsg struct {
 	User       string
 	Mailbox    string
@@ -52,18 +58,24 @@ type RenameMsg struct {
 
 // Mail messages.
 
+// AppendMsg represents information needed in executing
+// a remote APPEND operation on an ORSet CRDT.
 type AppendMsg struct {
 	User    string
 	Mailbox string
 	AddMail *Element
 }
 
+// ExpungeMsg represents information needed in executing
+// a remote EXPUNGE operation on an ORSet CRDT.
 type ExpungeMsg struct {
 	User     string
 	Mailbox  string
 	RmvMails []*Element
 }
 
+// StoreMsg represents information needed in executing
+// a remote STORE operation on an ORSet CRDT.
 type StoreMsg struct {
 	User    string
 	Mailbox string
@@ -71,6 +83,8 @@ type StoreMsg struct {
 	AddMail *Element
 }
 
+// CopyMsg represents information needed in executing
+// a remote COPY operation on an ORSet CRDT.
 type CopyMsg struct {
 	User     string
 	Mailbox  string
@@ -199,12 +213,20 @@ func ParseOp(payload string) (string, string, error) {
 	return parts[0], parts[1], nil
 }
 
+// ParseCreate takes in the remaining payload from ParseOp
+// and attempts to parse it into a CreateMsg struct.
 func ParseCreate(payload string) (*CreateMsg, error) {
 
 	// Split payload at delimiter (pipe symbol).
 	parts := strings.Split(payload, "|")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid CREATE message: incorrect amount of pipe symbols")
+	}
+
+	// Decode mailbox part of message encoded in base64.
+	decMailbox, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 mailbox of CREATE message failed: %s\n", err.Error())
 	}
 
 	// Split element at delimiter (semicolon).
@@ -221,7 +243,7 @@ func ParseCreate(payload string) (*CreateMsg, error) {
 
 	return &CreateMsg{
 		User:    parts[0],
-		Mailbox: parts[1],
+		Mailbox: string(decMailbox),
 		AddMailbox: &Element{
 			Value: string(decValue),
 			Tag:   element[1],
@@ -229,12 +251,20 @@ func ParseCreate(payload string) (*CreateMsg, error) {
 	}, nil
 }
 
+// ParseDelete takes in the remaining payload from ParseOp
+// and attempts to parse it into a DeleteMsg struct.
 func ParseDelete(payload string) (*DeleteMsg, error) {
 
 	// Split payload at delimiter (pipe symbol).
 	parts := strings.Split(payload, "|")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid DELETE message: incorrect amount of pipe symbols")
+	}
+
+	// Decode mailbox part of message encoded in base64.
+	decMailbox, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 mailbox of DELETE message failed: %s\n", err.Error())
 	}
 
 	// Split elements at delimiter (semicolon).
@@ -277,17 +307,25 @@ func ParseDelete(payload string) (*DeleteMsg, error) {
 
 	return &DeleteMsg{
 		User:       parts[0],
-		Mailbox:    parts[1],
+		Mailbox:    string(decMailbox),
 		RmvMailbox: mailbox,
 	}, nil
 }
 
+// ParseRename takes in the remaining payload from ParseOp
+// and attempts to parse it into a RenameMsg struct.
 func ParseRename(payload string) (*RenameMsg, error) {
 
 	// Split payload at delimiter (pipe symbol).
 	parts := strings.Split(payload, "|")
 	if len(parts) != 5 {
 		return nil, fmt.Errorf("invalid RENAME message: incorrect amount of pipe symbols")
+	}
+
+	// Decode mailbox part of message encoded in base64.
+	decMailbox, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 mailbox of RENAME message failed: %s\n", err.Error())
 	}
 
 	// Split elements of mailbox to remove at
@@ -388,7 +426,7 @@ func ParseRename(payload string) (*RenameMsg, error) {
 
 	return &RenameMsg{
 		User:       parts[0],
-		Mailbox:    parts[1],
+		Mailbox:    string(decMailbox),
 		RmvMailbox: rmvMailbox,
 		AddMailbox: &Element{
 			Value: string(decAddValue),
@@ -398,12 +436,20 @@ func ParseRename(payload string) (*RenameMsg, error) {
 	}, nil
 }
 
+// ParseAppend takes in the remaining payload from ParseOp
+// and attempts to parse it into a AppendMsg struct.
 func ParseAppend(payload string) (*AppendMsg, error) {
 
 	// Split payload at delimiter (pipe symbol).
 	parts := strings.Split(payload, "|")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid APPEND message: incorrect amount of pipe symbols")
+	}
+
+	// Decode mailbox part of message encoded in base64.
+	decMailbox, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 mailbox of APPEND message failed: %s\n", err.Error())
 	}
 
 	// Split element at delimiter (semicolon).
@@ -426,7 +472,7 @@ func ParseAppend(payload string) (*AppendMsg, error) {
 
 	return &AppendMsg{
 		User:    parts[0],
-		Mailbox: parts[1],
+		Mailbox: string(decMailbox),
 		AddMail: &Element{
 			Value:    string(decValue),
 			Tag:      element[1],
@@ -435,12 +481,20 @@ func ParseAppend(payload string) (*AppendMsg, error) {
 	}, nil
 }
 
+// ParseExpunge takes in the remaining payload from ParseOp
+// and attempts to parse it into a ExpungeMsg struct.
 func ParseExpunge(payload string) (*ExpungeMsg, error) {
 
 	// Split payload at delimiter (pipe symbol).
 	parts := strings.Split(payload, "|")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid EXPUNGE message: incorrect amount of pipe symbols")
+	}
+
+	// Decode mailbox part of message encoded in base64.
+	decMailbox, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 mailbox of EXPUNGE message failed: %s\n", err.Error())
 	}
 
 	// Split elements at delimiter (semicolon).
@@ -483,17 +537,25 @@ func ParseExpunge(payload string) (*ExpungeMsg, error) {
 
 	return &ExpungeMsg{
 		User:     parts[0],
-		Mailbox:  parts[1],
+		Mailbox:  string(decMailbox),
 		RmvMails: mails,
 	}, nil
 }
 
+// ParseStore takes in the remaining payload from ParseOp
+// and attempts to parse it into a StoreMsg struct.
 func ParseStore(payload string) (*StoreMsg, error) {
 
 	// Split payload at delimiter (pipe symbol).
 	parts := strings.Split(payload, "|")
 	if len(parts) != 4 {
 		return nil, fmt.Errorf("invalid STORE message: incorrect amount of pipe symbols")
+	}
+
+	// Decode mailbox part of message encoded in base64.
+	decMailbox, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 mailbox of STORE message failed: %s\n", err.Error())
 	}
 
 	// Split elements of mails to remove at
@@ -556,7 +618,7 @@ func ParseStore(payload string) (*StoreMsg, error) {
 
 	return &StoreMsg{
 		User:    parts[0],
-		Mailbox: parts[1],
+		Mailbox: string(decMailbox),
 		RmvMail: rmvMails,
 		AddMail: &Element{
 			Value:    string(decAddValue),
@@ -566,12 +628,20 @@ func ParseStore(payload string) (*StoreMsg, error) {
 	}, nil
 }
 
+// ParseCopy takes in the remaining payload from ParseOp
+// and attempts to parse it into a CopyMsg struct.
 func ParseCopy(payload string) (*CopyMsg, error) {
 
 	// Split payload at delimiter (pipe symbol).
 	parts := strings.Split(payload, "|")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid COPY message: incorrect amount of pipe symbols")
+	}
+
+	// Decode mailbox part of message encoded in base64.
+	decMailbox, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 mailbox of COPY message failed: %s\n", err.Error())
 	}
 
 	// Split elements of mails to copy at
@@ -620,7 +690,7 @@ func ParseCopy(payload string) (*CopyMsg, error) {
 
 	return &CopyMsg{
 		User:     parts[0],
-		Mailbox:  parts[1],
+		Mailbox:  string(decMailbox),
 		AddMails: addMails,
 	}, nil
 }

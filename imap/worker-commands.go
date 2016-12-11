@@ -228,7 +228,7 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 	// If succeeded, add a new folder in user's main CRDT
 	// and synchronise it to other replicas.
 	err = userMainCRDT.Add(posMailbox, func(payload string) {
-		worker.SyncSendChan <- fmt.Sprintf("create|%s|%s|%s", worker.Contexts[clientID].UserName, posMailbox, payload)
+		worker.SyncSendChan <- fmt.Sprintf("create|%s|%s|%s", worker.Contexts[clientID].UserName, base64.StdEncoding.EncodeToString([]byte(posMailbox)), payload)
 	})
 	if err != nil {
 
@@ -314,7 +314,7 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 	// Remove element from user's main CRDT and send out
 	// remove update operations to all other replicas.
 	err := userMainCRDT.Remove(delMailbox, func(payload string) {
-		worker.SyncSendChan <- fmt.Sprintf("delete|%s|%s|%s", worker.Contexts[clientID].UserName, delMailbox, payload)
+		worker.SyncSendChan <- fmt.Sprintf("delete|%s|%s|%s", worker.Contexts[clientID].UserName, base64.StdEncoding.EncodeToString([]byte(delMailbox)), payload)
 	})
 	if err != nil {
 
@@ -362,54 +362,6 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 
 	// Send success answer.
 	err = c.Send(fmt.Sprintf("%s OK DELETE completed", req.Tag))
-	if err != nil {
-		c.Error("Encountered send error", err)
-		return false
-	}
-
-	return true
-}
-
-// Rename attempts to rename a supplied mailbox to
-// a new name including all possibly contained subfolders.
-func (worker *Worker) Rename(c *Connection, req *Request, clientID string) bool {
-
-	/*
-		log.Println()
-		log.Printf("Serving RENAME '%s'...\n", req.Tag)
-
-		// Split payload on every space character.
-		renMailboxes := strings.Split(req.Payload, " ")
-
-		if len(renMailboxes) != 2 {
-
-			// If payload did not contain exactly two elements,
-			// this is a client error. Return BAD statement.
-			err := c.Send(fmt.Sprintf("%s BAD Command RENAME was not sent with exactly two parameters", req.Tag))
-			if err != nil {
-				c.Error("Encountered send error", err)
-				return false
-			}
-
-			return true
-		}
-
-		// Lock worker exclusively and unlock whenever
-		// this handler exits.
-		worker.lock.Lock()
-		defer worker.lock.Unlock()
-
-		// Trim supplied mailbox names of hierarchy separator if
-		// it they were sent with a trailing one.
-		oldMailbox := strings.TrimSuffix(renMailboxes[0], worker.Config.IMAP.HierarchySeparator)
-		newMailbox := strings.TrimSuffix(renMailboxes[1], worker.Config.IMAP.HierarchySeparator)
-
-		// TODO: Add missing behaviour.
-
-	*/
-
-	// Send success answer.
-	err := c.Send(fmt.Sprintf("%s OK RENAME completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -618,7 +570,7 @@ func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool 
 	// Add new mail to mailbox' CRDT and send update
 	// message to other replicas.
 	err = appMailboxCRDT.Add(mailFileName, func(payload string) {
-		worker.SyncSendChan <- fmt.Sprintf("append|%s|%s|%s;%s", worker.Contexts[clientID].UserName, mailbox, payload, base64.StdEncoding.EncodeToString(msgBuffer))
+		worker.SyncSendChan <- fmt.Sprintf("append|%s|%s|%s;%s", worker.Contexts[clientID].UserName, base64.StdEncoding.EncodeToString([]byte(mailbox)), payload, base64.StdEncoding.EncodeToString(msgBuffer))
 	})
 	if err != nil {
 
