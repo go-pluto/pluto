@@ -27,7 +27,7 @@ type Worker struct {
 	Connections      map[string]*tls.Conn
 	Contexts         map[string]*Context
 	MailboxStructure map[string]map[string]*crdt.ORSet
-	MailboxContents  map[string]map[string][]string
+	MailboxContents  map[string]map[string]*[]string
 	ApplyCRDTUpdChan chan string
 	DoneCRDTUpdChan  chan bool
 	Config           *config.Config
@@ -50,7 +50,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		Connections:      make(map[string]*tls.Conn),
 		Contexts:         make(map[string]*Context),
 		MailboxStructure: make(map[string]map[string]*crdt.ORSet),
-		MailboxContents:  make(map[string]map[string][]string),
+		MailboxContents:  make(map[string]map[string]*[]string),
 		ApplyCRDTUpdChan: make(chan string),
 		DoneCRDTUpdChan:  make(chan bool),
 		Config:           config,
@@ -100,7 +100,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 			worker.MailboxStructure[userName]["Structure"] = userMainCRDT
 
 			// Already initialize slice to track order in mailbox.
-			worker.MailboxContents[userName] = make(map[string][]string)
+			worker.MailboxContents[userName] = make(map[string]*[]string)
 
 			// Retrieve all mailboxes the user possesses
 			// according to main CRDT.
@@ -120,7 +120,8 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 
 				// Read in mails in respective mailbox in order to
 				// allow sequence numbers actions.
-				worker.MailboxContents[userName][userMailbox] = userMailboxCRDT.GetAllValues()
+				allMails := userMailboxCRDT.GetAllValues()
+				worker.MailboxContents[userName][userMailbox] = &allMails
 			}
 		}
 	}
@@ -297,6 +298,17 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 
 		case req.Command == "EXPUNGE":
 			if ok := worker.Expunge(c, req, clientID); ok {
+
+				// If successful, signal end of operation to distributor.
+				err := c.SignalSessionDone(nil)
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error", err)
+					return
+				}
+			}
+
+		case req.Command == "STORE":
+			if ok := worker.Store(c, req, clientID); ok {
 
 				// If successful, signal end of operation to distributor.
 				err := c.SignalSessionDone(nil)

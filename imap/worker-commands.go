@@ -107,7 +107,7 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 	// Set selected mailbox in context to supplied one
 	// and advance IMAP state of connection to MAILBOX.
 	worker.Contexts[clientID].IMAPState = MAILBOX
-	worker.Contexts[clientID].SelectedMailbox = mailbox
+	worker.Contexts[clientID].SelectedMailbox = filepath.Base(string(mailbox))
 
 	// Build up answer to client.
 	answer := ""
@@ -224,13 +224,10 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 	// Place newly created CRDT in mailbox structure.
 	worker.MailboxStructure[worker.Contexts[clientID].UserName][posMailbox] = posMailboxCRDT
 
-	log.Printf("BEFORE: worker.MailboxContents: %#v\n", worker.MailboxContents[worker.Contexts[clientID].UserName])
-
 	// Initialize contents slice for new mailbox to track
 	// message sequence numbers in it.
-	worker.MailboxContents[worker.Contexts[clientID].UserName][posMailbox] = make([]string, 0, 6)
-
-	log.Printf("AFTER: worker.MailboxContents: %#v\n", worker.MailboxContents[worker.Contexts[clientID].UserName])
+	mailboxContents := make([]string, 0, 6)
+	worker.MailboxContents[worker.Contexts[clientID].UserName][posMailbox] = &mailboxContents
 
 	// If succeeded, add a new folder in user's main CRDT
 	// and synchronise it to other replicas.
@@ -353,14 +350,10 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 		os.Exit(1)
 	}
 
-	log.Printf("BEFORE: worker.MailboxContents: %#v\n", worker.MailboxContents[worker.Contexts[clientID].UserName])
-
 	// Remove CRDT from mailbox structure and corresponding
 	// mail contents slice.
 	delete(worker.MailboxStructure[worker.Contexts[clientID].UserName], delMailbox)
 	delete(worker.MailboxContents[worker.Contexts[clientID].UserName], delMailbox)
-
-	log.Printf("AFTER: worker.MailboxContents: %#v\n", worker.MailboxContents[worker.Contexts[clientID].UserName])
 
 	// Construct path to CRDT file to delete.
 	delMailboxCRDTPath := filepath.Join(worker.Contexts[clientID].UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
@@ -591,12 +584,8 @@ func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool 
 	// Retrieve CRDT of mailbox to append mail to.
 	appMailboxCRDT := worker.MailboxStructure[worker.Contexts[clientID].UserName][mailbox]
 
-	log.Printf("BEFORE: worker.MailboxContents: %#v\n", worker.MailboxContents[worker.Contexts[clientID].UserName])
-
 	// Append new mail to mailbox' contents CRDT.
-	worker.MailboxContents[worker.Contexts[clientID].UserName][mailbox] = append(worker.MailboxContents[worker.Contexts[clientID].UserName][mailbox], mailFileName)
-
-	log.Printf("AFTER: worker.MailboxContents: %#v\n", worker.MailboxContents[worker.Contexts[clientID].UserName])
+	*worker.MailboxContents[worker.Contexts[clientID].UserName][mailbox] = append(*worker.MailboxContents[worker.Contexts[clientID].UserName][mailbox], mailFileName)
 
 	// Add new mail to mailbox' CRDT and send update
 	// message to other replicas.
@@ -638,6 +627,11 @@ func (worker *Worker) Expunge(c *Connection, req *Request, clientID string) bool
 
 	log.Printf("Serving EXPUNGE '%s'...\n", req.Tag)
 
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
+
 	if worker.Contexts[clientID].IMAPState != MAILBOX {
 
 		// If connection was not correct state when this
@@ -651,11 +645,6 @@ func (worker *Worker) Expunge(c *Connection, req *Request, clientID string) bool
 
 		return true
 	}
-
-	// Lock worker exclusively and unlock whenever
-	// this handler exits.
-	worker.lock.Lock()
-	defer worker.lock.Unlock()
 
 	// Send success answer.
 	err := c.Send(fmt.Sprintf("%s OK EXPUNGE completed", req.Tag))
@@ -672,7 +661,14 @@ func (worker *Worker) Expunge(c *Connection, req *Request, clientID string) bool
 // attributes for these mails throughout the system.
 func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 
+	var err error
+
 	log.Printf("Serving STORE '%s'...\n", req.Tag)
+
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
 
 	if worker.Contexts[clientID].IMAPState != MAILBOX {
 
@@ -688,13 +684,47 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 		return true
 	}
 
-	// Lock worker exclusively and unlock whenever
-	// this handler exits.
-	worker.lock.Lock()
-	defer worker.lock.Unlock()
+	// Split payload on every space character.
+	storeArgs := strings.Split(req.Payload, " ")
+
+	if len(storeArgs) != 3 {
+
+		// If payload did not contain exactly three
+		// elements, this is a client error.
+		// Return BAD statement.
+		err := c.Send(fmt.Sprintf("%s BAD Command STORE was not sent with exactly three parameters", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Parse sequence numbers argument.
+	var msgNums *[]int
+	msgNums, err = ParseSeqNumbers(storeArgs[0], worker.MailboxContents[worker.Contexts[clientID].UserName][worker.Contexts[clientID].SelectedMailbox])
+	if err != nil {
+
+		// Parsing sequence numbers from STORE request produced
+		// an error. Return tagged BAD response.
+		err := c.Send(fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	log.Printf("msgNums: %#v\n", *msgNums)
+
+	// Parse data item type.
+
+	// Parse flag argument.
 
 	// Send success answer.
-	err := c.Send(fmt.Sprintf("%s OK STORE completed", req.Tag))
+	err = c.Send(fmt.Sprintf("%s OK STORE completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false

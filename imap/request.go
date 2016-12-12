@@ -2,6 +2,8 @@ package imap
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -79,4 +81,116 @@ func ParseRequest(req string) (*Request, error) {
 	}
 
 	return finalReq, nil
+}
+
+// ParseSeqNumbers returns complete and normalized list
+// of message sequence numbers for use in e.g. STORE command.
+func ParseSeqNumbers(recv string, mailboxContents *[]string) (*[]int, error) {
+
+	// Initialize needed data stores.
+	var err error
+	msgNums := make([]int, 0, 6)
+	seenMsgNums := make(map[int]bool)
+
+	// Split into sequence ranges or sequence numbers.
+	msgNumsSet := strings.Split(recv, ",")
+
+	for _, numsSet := range msgNumsSet {
+
+		var numStart int
+		var numEnd int
+
+		// Split into sequence numbers if not already done.
+		msgNumsRange := strings.Split(numsSet, ":")
+
+		if msgNumsRange[0] == "*" {
+
+			// If wildcard symbol was set as beginning range
+			// number, replace it with maximum number in mailbox.
+			numStart = len(*mailboxContents)
+
+			if numStart == 0 {
+
+				// Wildcard symbol used although selected mailbox is empty.
+				// Client error, return tagged BAD response.
+				return nil, fmt.Errorf("Cannot select mail in empty mailbox")
+			}
+		} else {
+
+			// Convert string to numer.
+			numStart, err = strconv.Atoi(msgNumsRange[0])
+			if err != nil {
+
+				// Number parameter was invalid, client error.
+				// Send tagged BAD response.
+				return nil, fmt.Errorf("Command STORE was sent with an invalid number parameter")
+			}
+		}
+
+		if len(msgNumsRange) == 1 {
+
+			if _, seen := seenMsgNums[numStart]; !seen {
+
+				// Sequence number specified, append it if
+				// we have not yet seen this value.
+				msgNums = append(msgNums, numStart)
+
+				// Set corresponding seen value to true.
+				seenMsgNums[numStart] = true
+			}
+
+		} else {
+
+			if msgNumsRange[1] == "*" {
+
+				// If wildcard symbol was set as end number of range,
+				// replace it with maximum number in mailbox.
+				numEnd = len(*mailboxContents)
+
+				if numEnd == 0 {
+
+					// Wildcard symbol used although selected mailbox is empty.
+					// Client error, return tagged BAD response.
+					return nil, fmt.Errorf("Cannot select mail in empty mailbox")
+				}
+			} else {
+
+				// Convert string to numer.
+				numEnd, err = strconv.Atoi(msgNumsRange[1])
+				if err != nil {
+
+					// Number parameter was invalid, client error.
+					// Send tagged BAD response.
+					return nil, fmt.Errorf("Command STORE was sent with an invalid number parameter")
+				}
+			}
+
+			if numEnd < numStart {
+
+				// If end range number is bigger than start
+				// range number, exchange both values.
+				numTmp := numEnd
+				numEnd = numStart
+				numStart = numTmp
+			}
+
+			for u := numStart; u <= numEnd; u++ {
+
+				if _, seen := seenMsgNums[u]; !seen {
+
+					// Sequence number specified, append it if
+					// we have not yet seen this value.
+					msgNums = append(msgNums, u)
+
+					// Set corresponding seen value to true.
+					seenMsgNums[u] = true
+				}
+			}
+		}
+	}
+
+	// Sort resulting numbers list.
+	sort.Ints(msgNums)
+
+	return &msgNums, nil
 }

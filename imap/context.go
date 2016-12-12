@@ -19,7 +19,7 @@ type Context struct {
 	UserName        string
 	UserCRDTPath    string
 	UserMaildirPath maildir.Dir
-	SelectedMailbox maildir.Dir
+	SelectedMailbox string
 }
 
 // Functions
