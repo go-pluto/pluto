@@ -224,6 +224,14 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 	// Place newly created CRDT in mailbox structure.
 	worker.MailboxStructure[worker.Contexts[clientID].UserName][posMailbox] = posMailboxCRDT
 
+	log.Printf("BEFORE: worker.MailboxContents: %#v\n", worker.MailboxContents[worker.Contexts[clientID].UserName])
+
+	// Initialize contents slice for new mailbox to track
+	// message sequence numbers in it.
+	worker.MailboxContents[worker.Contexts[clientID].UserName][posMailbox] = make([]string, 0, 6)
+
+	log.Printf("AFTER: worker.MailboxContents: %#v\n", worker.MailboxContents[worker.Contexts[clientID].UserName])
+
 	// If succeeded, add a new folder in user's main CRDT
 	// and synchronise it to other replicas.
 	err = userMainCRDT.Add(posMailbox, func(payload string) {
@@ -235,8 +243,10 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 		log.Printf("[imap.Create] Fail: %s\n", err.Error())
 		log.Printf("[imap.Create] Removing added CRDT from mailbox structure...\n")
 
-		// Remove just added CRDT of new maildir from mailbox structure.
+		// Remove just added CRDT of new maildir from mailbox structure
+		// and corresponding contents slice.
 		delete(worker.MailboxStructure[worker.Contexts[clientID].UserName], posMailbox)
+		delete(worker.MailboxContents[worker.Contexts[clientID].UserName], posMailbox)
 
 		log.Printf("[imap.Create] ... done. Removing just created Maildir completely...\n")
 
@@ -343,8 +353,14 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 		os.Exit(1)
 	}
 
-	// Remove CRDT from mailbox structure.
+	log.Printf("BEFORE: worker.MailboxContents: %#v\n", worker.MailboxContents[worker.Contexts[clientID].UserName])
+
+	// Remove CRDT from mailbox structure and corresponding
+	// mail contents slice.
 	delete(worker.MailboxStructure[worker.Contexts[clientID].UserName], delMailbox)
+	delete(worker.MailboxContents[worker.Contexts[clientID].UserName], delMailbox)
+
+	log.Printf("AFTER: worker.MailboxContents: %#v\n", worker.MailboxContents[worker.Contexts[clientID].UserName])
 
 	// Construct path to CRDT file to delete.
 	delMailboxCRDTPath := filepath.Join(worker.Contexts[clientID].UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
@@ -574,6 +590,13 @@ func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool 
 
 	// Retrieve CRDT of mailbox to append mail to.
 	appMailboxCRDT := worker.MailboxStructure[worker.Contexts[clientID].UserName][mailbox]
+
+	log.Printf("BEFORE: worker.MailboxContents: %#v\n", worker.MailboxContents[worker.Contexts[clientID].UserName])
+
+	// Append new mail to mailbox' contents CRDT.
+	worker.MailboxContents[worker.Contexts[clientID].UserName][mailbox] = append(worker.MailboxContents[worker.Contexts[clientID].UserName][mailbox], mailFileName)
+
+	log.Printf("AFTER: worker.MailboxContents: %#v\n", worker.MailboxContents[worker.Contexts[clientID].UserName])
 
 	// Add new mail to mailbox' CRDT and send update
 	// message to other replicas.

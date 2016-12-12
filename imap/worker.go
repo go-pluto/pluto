@@ -114,10 +114,13 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 					return nil, fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %s\n", err.Error())
 				}
 
-				// Store each read-in CRDT in map under
+				// Store each read-in CRDT in map under the respective
+				// mailbox name in user's main CRDT.
 				worker.MailboxStructure[userName][userMailbox] = userMailboxCRDT
 
-				// TODO: Finish and add to storage.
+				// Read in mails in respective mailbox in order to
+				// allow sequence numbers actions.
+				worker.MailboxContents[userName][userMailbox] = userMailboxCRDT.GetAllValues()
 			}
 		}
 	}

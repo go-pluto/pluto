@@ -3,6 +3,7 @@ package crdt
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 
@@ -201,6 +202,9 @@ func (s *ORSet) GetAllValues() []string {
 			seenValues[value] = true
 		}
 	}
+
+	// Sort slice of strings.
+	sort.Strings(allValues)
 
 	return allValues
 }
