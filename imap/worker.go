@@ -27,7 +27,7 @@ type Worker struct {
 	Connections      map[string]*tls.Conn
 	Contexts         map[string]*Context
 	MailboxStructure map[string]map[string]*crdt.ORSet
-	MailboxContents  map[string]map[string]*[]string
+	MailboxContents  map[string]map[string][]string
 	ApplyCRDTUpdChan chan string
 	DoneCRDTUpdChan  chan bool
 	Config           *config.Config
@@ -50,7 +50,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		Connections:      make(map[string]*tls.Conn),
 		Contexts:         make(map[string]*Context),
 		MailboxStructure: make(map[string]map[string]*crdt.ORSet),
-		MailboxContents:  make(map[string]map[string]*[]string),
+		MailboxContents:  make(map[string]map[string][]string),
 		ApplyCRDTUpdChan: make(chan string),
 		DoneCRDTUpdChan:  make(chan bool),
 		Config:           config,
@@ -100,7 +100,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 			worker.MailboxStructure[userName]["Structure"] = userMainCRDT
 
 			// Already initialize slice to track order in mailbox.
-			worker.MailboxContents[userName] = make(map[string]*[]string)
+			worker.MailboxContents[userName] = make(map[string][]string)
 
 			// Retrieve all mailboxes the user possesses
 			// according to main CRDT.
@@ -120,8 +120,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 
 				// Read in mails in respective mailbox in order to
 				// allow sequence numbers actions.
-				allMails := userMailboxCRDT.GetAllValues()
-				worker.MailboxContents[userName][userMailbox] = &allMails
+				worker.MailboxContents[userName][userMailbox] = userMailboxCRDT.GetAllValues()
 			}
 		}
 	}

@@ -226,8 +226,7 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 
 	// Initialize contents slice for new mailbox to track
 	// message sequence numbers in it.
-	mailboxContents := make([]string, 0, 6)
-	worker.MailboxContents[worker.Contexts[clientID].UserName][posMailbox] = &mailboxContents
+	worker.MailboxContents[worker.Contexts[clientID].UserName][posMailbox] = make([]string, 0, 6)
 
 	// If succeeded, add a new folder in user's main CRDT
 	// and synchronise it to other replicas.
@@ -393,7 +392,6 @@ func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool 
 	// Arguments of append command.
 	var mailbox string
 	var flagsRaw string
-	var flags []string
 	var dateTimeRaw string
 	var numBytesRaw string
 
@@ -444,14 +442,20 @@ func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool 
 	// If flags were supplied, parse them.
 	if flagsRaw != "" {
 
-		// Remove leading and trailing parenthesis.
-		flagsRaw = strings.TrimLeft(flagsRaw, "(")
-		flagsRaw = strings.TrimRight(flagsRaw, ")")
+		flags, err := ParseFlags(flagsRaw)
+		if err != nil {
 
-		// Split at space symbols.
-		flags = strings.Split(flagsRaw, " ")
+			// Parsing flags from APPEND request produced
+			// an error. Return tagged BAD response.
+			err := c.Send(fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
+			if err != nil {
+				c.Error("Encountered send error", err)
+				return false
+			}
 
-		// TODO: Handle errors.
+			return true
+		}
+
 		log.Printf("flags: %#v\n", flags)
 	}
 
@@ -585,7 +589,7 @@ func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool 
 	appMailboxCRDT := worker.MailboxStructure[worker.Contexts[clientID].UserName][mailbox]
 
 	// Append new mail to mailbox' contents CRDT.
-	*worker.MailboxContents[worker.Contexts[clientID].UserName][mailbox] = append(*worker.MailboxContents[worker.Contexts[clientID].UserName][mailbox], mailFileName)
+	worker.MailboxContents[worker.Contexts[clientID].UserName][mailbox] = append(worker.MailboxContents[worker.Contexts[clientID].UserName][mailbox], mailFileName)
 
 	// Add new mail to mailbox' CRDT and send update
 	// message to other replicas.
@@ -685,14 +689,14 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 	}
 
 	// Split payload on every space character.
-	storeArgs := strings.Split(req.Payload, " ")
+	storeArgs := strings.SplitN(req.Payload, " ", 3)
 
-	if len(storeArgs) != 3 {
+	if len(storeArgs) < 3 {
 
-		// If payload did not contain exactly three
+		// If payload did not contain at least three
 		// elements, this is a client error.
 		// Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command STORE was not sent with exactly three parameters", req.Tag))
+		err := c.Send(fmt.Sprintf("%s BAD Command STORE was not sent with three parameters", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -702,8 +706,7 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 	}
 
 	// Parse sequence numbers argument.
-	var msgNums *[]int
-	msgNums, err = ParseSeqNumbers(storeArgs[0], worker.MailboxContents[worker.Contexts[clientID].UserName][worker.Contexts[clientID].SelectedMailbox])
+	msgNums, err := ParseSeqNumbers(storeArgs[0], worker.MailboxContents[worker.Contexts[clientID].UserName][worker.Contexts[clientID].SelectedMailbox])
 	if err != nil {
 
 		// Parsing sequence numbers from STORE request produced
@@ -717,11 +720,29 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 		return true
 	}
 
-	log.Printf("msgNums: %#v\n", *msgNums)
+	log.Printf("msgNums: %#v\n", msgNums)
 
 	// Parse data item type.
+	dataItemType := storeArgs[1]
+
+	log.Printf("dataItemType: %#v\n", dataItemType)
 
 	// Parse flag argument.
+	flags, err := ParseFlags(storeArgs[2])
+	if err != nil {
+
+		// Parsing flags from STORE request produced
+		// an error. Return tagged BAD response.
+		err := c.Send(fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	log.Printf("flags: %#v\n", flags)
 
 	// Send success answer.
 	err = c.Send(fmt.Sprintf("%s OK STORE completed", req.Tag))

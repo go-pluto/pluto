@@ -85,7 +85,10 @@ func ParseRequest(req string) (*Request, error) {
 
 // ParseSeqNumbers returns complete and normalized list
 // of message sequence numbers for use in e.g. STORE command.
-func ParseSeqNumbers(recv string, mailboxContents *[]string) (*[]int, error) {
+func ParseSeqNumbers(recv string, mailboxContents []string) ([]int, error) {
+
+	// TODO: Check for each value if it is a valid sequence
+	//       number inside the provided mail list.
 
 	// Initialize needed data stores.
 	var err error
@@ -107,7 +110,7 @@ func ParseSeqNumbers(recv string, mailboxContents *[]string) (*[]int, error) {
 
 			// If wildcard symbol was set as beginning range
 			// number, replace it with maximum number in mailbox.
-			numStart = len(*mailboxContents)
+			numStart = len(mailboxContents)
 
 			if numStart == 0 {
 
@@ -145,7 +148,7 @@ func ParseSeqNumbers(recv string, mailboxContents *[]string) (*[]int, error) {
 
 				// If wildcard symbol was set as end number of range,
 				// replace it with maximum number in mailbox.
-				numEnd = len(*mailboxContents)
+				numEnd = len(mailboxContents)
 
 				if numEnd == 0 {
 
@@ -192,5 +195,32 @@ func ParseSeqNumbers(recv string, mailboxContents *[]string) (*[]int, error) {
 	// Sort resulting numbers list.
 	sort.Ints(msgNums)
 
-	return &msgNums, nil
+	return msgNums, nil
+}
+
+// ParseFlags takes in the string representation of
+// a parenthesized list of IMAP flags and returns a
+// slice consisting of individual ones.
+func ParseFlags(recv string) ([]string, error) {
+
+	if strings.HasPrefix(recv, "(") {
+
+		// Remove leading parenthesis.
+		recv = strings.TrimLeft(recv, "(")
+	} else {
+		return nil, fmt.Errorf("Command STORE was sent with invalid parenthesized flags list")
+	}
+
+	if strings.HasSuffix(recv, ")") {
+
+		// Remove trailing parenthesis.
+		recv = strings.TrimRight(recv, ")")
+	} else {
+		return nil, fmt.Errorf("Command STORE was sent with invalid parenthesized flags list")
+	}
+
+	// Split at space symbols.
+	flags := strings.Split(recv, " ")
+
+	return flags, nil
 }

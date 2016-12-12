@@ -23,7 +23,7 @@ import (
 type Storage struct {
 	Socket           net.Listener
 	MailboxStructure map[string]map[string]*crdt.ORSet
-	MailboxContents  map[string]map[string]*[]string
+	MailboxContents  map[string]map[string][]string
 	ApplyCRDTUpdChan chan string
 	DoneCRDTUpdChan  chan bool
 	Config           *config.Config
@@ -41,7 +41,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 	// Initialize and set fields.
 	storage := &Storage{
 		MailboxStructure: make(map[string]map[string]*crdt.ORSet),
-		MailboxContents:  make(map[string]map[string]*[]string),
+		MailboxContents:  make(map[string]map[string][]string),
 		ApplyCRDTUpdChan: make(chan string),
 		DoneCRDTUpdChan:  make(chan bool),
 		Config:           config,
@@ -78,7 +78,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 			storage.MailboxStructure[userName]["Structure"] = userMainCRDT
 
 			// Already initialize slice to track order in mailbox.
-			storage.MailboxContents[userName] = make(map[string]*[]string)
+			storage.MailboxContents[userName] = make(map[string][]string)
 
 			// Retrieve all mailboxes the user possesses
 			// according to main CRDT.
@@ -98,8 +98,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 
 				// Read in mails in respective mailbox in order to
 				// allow sequence numbers actions.
-				allMails := userMailboxCRDT.GetAllValues()
-				storage.MailboxContents[userName][userMailbox] = &allMails
+				storage.MailboxContents[userName][userMailbox] = userMailboxCRDT.GetAllValues()
 			}
 		}
 	}
@@ -198,8 +197,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 
 			// Initialize contents slice for new mailbox to track
 			// message sequence numbers in it.
-			mailboxContents := make([]string, 0, 6)
-			storage.MailboxContents[createUpd.User][createUpd.Mailbox] = &mailboxContents
+			storage.MailboxContents[createUpd.User][createUpd.Mailbox] = make([]string, 0, 6)
 
 			// If succeeded, add a new folder in user's main CRDT.
 			err = userMainCRDT.AddEffect(createUpd.AddMailbox.Value, createUpd.AddMailbox.Tag, true, true)
@@ -354,7 +352,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 					}
 
 					// Append new mail to mailbox' contents CRDT.
-					*storage.MailboxContents[appendUpd.User][appendUpd.Mailbox] = append(*storage.MailboxContents[appendUpd.User][appendUpd.Mailbox], appendUpd.AddMail.Value)
+					storage.MailboxContents[appendUpd.User][appendUpd.Mailbox] = append(storage.MailboxContents[appendUpd.User][appendUpd.Mailbox], appendUpd.AddMail.Value)
 
 					// If succeeded, add new mail to mailbox' CRDT.
 					err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true, true)
