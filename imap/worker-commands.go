@@ -189,17 +189,6 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 		return true
 	}
 
-	// TODO: Check and handle UIDVALIDITY behaviour is correct.
-	//       I. a. make sure to assign correct new UIDs.
-
-	// TODO: RFC 3501 says that not yet existing parent folders
-	//       of a mailbox name containing at least one hierarchy
-	//       symbol 'SHOULD' be created as well. It is certainly
-	//       not required in pluto but there might other servers
-	//       or agents which might require such additional beahviour.
-	//       Think about adding this functionality and remember to
-	//       adjust RENAME behaviour as well.
-
 	// Create a new Maildir on stable storage.
 	posMaildir := maildir.Dir(filepath.Join(string(worker.Contexts[clientID].UserMaildirPath), posMailbox))
 
@@ -647,6 +636,42 @@ func (worker *Worker) Expunge(c *Connection, req *Request, clientID string) bool
 
 	// Send success answer.
 	err := c.Send(fmt.Sprintf("%s OK EXPUNGE completed", req.Tag))
+	if err != nil {
+		c.Error("Encountered send error", err)
+		return false
+	}
+
+	return true
+}
+
+// Store takes in message sequence numbers and some set
+// of flags to change in those messages and changes the
+// attributes for these mails throughout the system.
+func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
+
+	log.Printf("Serving STORE '%s'...\n", req.Tag)
+
+	if worker.Contexts[clientID].IMAPState != MAILBOX {
+
+		// If connection was not correct state when this
+		// command was executed, this is a client error.
+		// Send tagged BAD response.
+		err := c.Send(fmt.Sprintf("%s BAD No mailbox selected for store", req.Tag))
+		if err != nil {
+			c.ErrorLogOnly("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
+
+	// Send success answer.
+	err := c.Send(fmt.Sprintf("%s OK STORE completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false

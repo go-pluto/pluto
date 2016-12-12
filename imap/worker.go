@@ -27,6 +27,7 @@ type Worker struct {
 	Connections      map[string]*tls.Conn
 	Contexts         map[string]*Context
 	MailboxStructure map[string]map[string]*crdt.ORSet
+	MailboxContents  map[string]map[string][]string
 	ApplyCRDTUpdChan chan string
 	DoneCRDTUpdChan  chan bool
 	Config           *config.Config
@@ -49,6 +50,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		Connections:      make(map[string]*tls.Conn),
 		Contexts:         make(map[string]*Context),
 		MailboxStructure: make(map[string]map[string]*crdt.ORSet),
+		MailboxContents:  make(map[string]map[string][]string),
 		ApplyCRDTUpdChan: make(chan string),
 		DoneCRDTUpdChan:  make(chan bool),
 		Config:           config,
@@ -97,6 +99,9 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 			worker.MailboxStructure[userName] = make(map[string]*crdt.ORSet)
 			worker.MailboxStructure[userName]["Structure"] = userMainCRDT
 
+			// Already initialize slice to track order in mailbox.
+			worker.MailboxContents[userName] = make(map[string][]string)
+
 			// Retrieve all mailboxes the user possesses
 			// according to main CRDT.
 			userMailboxes := userMainCRDT.GetAllValues()
@@ -111,6 +116,8 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 
 				// Store each read-in CRDT in map under
 				worker.MailboxStructure[userName][userMailbox] = userMailboxCRDT
+
+				// TODO: Finish and add to storage.
 			}
 		}
 	}
