@@ -37,9 +37,18 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 	worker.lock.Lock()
 	defer worker.lock.Unlock()
 
-	// Check if connection is in correct state.
 	if (worker.Contexts[clientID].IMAPState != AUTHENTICATED) && (worker.Contexts[clientID].IMAPState != MAILBOX) {
-		return false
+
+		// If connection was not correct state when this
+		// command was executed, this is a client error.
+		// Send tagged BAD response.
+		err := c.Send(fmt.Sprintf("%s BAD Command SELECT cannot be executed in this state", req.Tag))
+		if err != nil {
+			c.ErrorLogOnly("Encountered send error", err)
+			return false
+		}
+
+		return true
 	}
 
 	// Save maildir for later use.
@@ -602,6 +611,42 @@ func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool 
 
 	// Send success answer.
 	err = c.Send(fmt.Sprintf("%s OK APPEND completed", req.Tag))
+	if err != nil {
+		c.Error("Encountered send error", err)
+		return false
+	}
+
+	return true
+}
+
+// Expunge deletes messages permanently from currently
+// selected mailbox that have been flagged as Deleted
+// prior to calling this function.
+func (worker *Worker) Expunge(c *Connection, req *Request, clientID string) bool {
+
+	log.Printf("Serving EXPUNGE '%s'...\n", req.Tag)
+
+	if worker.Contexts[clientID].IMAPState != MAILBOX {
+
+		// If connection was not correct state when this
+		// command was executed, this is a client error.
+		// Send tagged BAD response.
+		err := c.Send(fmt.Sprintf("%s BAD No mailbox selected to expunge", req.Tag))
+		if err != nil {
+			c.ErrorLogOnly("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
+
+	// Send success answer.
+	err := c.Send(fmt.Sprintf("%s OK EXPUNGE completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false

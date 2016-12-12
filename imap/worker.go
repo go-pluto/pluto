@@ -285,6 +285,17 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 				}
 			}
 
+		case req.Command == "EXPUNGE":
+			if ok := worker.Expunge(c, req, clientID); ok {
+
+				// If successful, signal end of operation to distributor.
+				err := c.SignalSessionDone(nil)
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error", err)
+					return
+				}
+			}
+
 		default:
 			// Client sent inappropriate command. Signal tagged error.
 			err := c.Send(fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))

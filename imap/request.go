@@ -37,10 +37,12 @@ func init() {
 	SupportedCommands["LOGOUT"] = true
 	SupportedCommands["SELECT"] = true
 	SupportedCommands["CREATE"] = true
+	SupportedCommands["DELETE"] = true
+	SupportedCommands["LIST"] = true
 	SupportedCommands["APPEND"] = true
-	SupportedCommands["STORE"] = true
-	SupportedCommands["COPY"] = true
+	SupportedCommands["CLOSE"] = true
 	SupportedCommands["EXPUNGE"] = true
+	SupportedCommands["STORE"] = true
 }
 
 // ParseRequest takes in a raw string representing
