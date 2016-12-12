@@ -52,7 +52,7 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 	}
 
 	// Save maildir for later use.
-	mailbox := worker.Contexts[clientID].UserMaildirPath
+	mailboxPath := worker.Contexts[clientID].UserMaildirPath
 
 	if len(req.Payload) < 1 {
 
@@ -86,8 +86,11 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 	// If any other mailbox than INBOX was specified,
 	// append it to mailbox in order to check it.
 	if mailboxes[0] != "INBOX" {
-		mailbox = maildir.Dir(filepath.Join(string(mailbox), mailboxes[0]))
+		mailboxPath = filepath.Join(mailboxPath, mailboxes[0])
 	}
+
+	// Transform into real Maildir.
+	mailbox := maildir.Dir(mailboxPath)
 
 	// Check if mailbox is existing and a conformant maildir folder.
 	err := mailbox.Check()
@@ -107,7 +110,7 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 	// Set selected mailbox in context to supplied one
 	// and advance IMAP state of connection to MAILBOX.
 	worker.Contexts[clientID].IMAPState = MAILBOX
-	worker.Contexts[clientID].SelectedMailbox = filepath.Base(string(mailbox))
+	worker.Contexts[clientID].SelectedMailbox = filepath.Base(mailboxPath)
 
 	// Build up answer to client.
 	answer := ""
@@ -190,7 +193,7 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 	}
 
 	// Create a new Maildir on stable storage.
-	posMaildir := maildir.Dir(filepath.Join(string(worker.Contexts[clientID].UserMaildirPath), posMailbox))
+	posMaildir := maildir.Dir(filepath.Join(worker.Contexts[clientID].UserMaildirPath, posMailbox))
 
 	err := posMaildir.Create()
 	if err != nil {
@@ -366,7 +369,7 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 
 	// Remove files associated with deleted mailbox
 	// from stable storage.
-	delMaildir := maildir.Dir(filepath.Join(string(worker.Contexts[clientID].UserMaildirPath), delMailbox))
+	delMaildir := maildir.Dir(filepath.Join(worker.Contexts[clientID].UserMaildirPath, delMailbox))
 
 	err = delMaildir.Remove()
 	if err != nil {
@@ -544,9 +547,9 @@ func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool 
 	// Construct path to maildir on storage.
 	var appMaildir maildir.Dir
 	if mailbox == "INBOX" {
-		appMaildir = worker.Contexts[clientID].UserMaildirPath
+		appMaildir = maildir.Dir(worker.Contexts[clientID].UserMaildirPath)
 	} else {
-		appMaildir = maildir.Dir(filepath.Join(string(worker.Contexts[clientID].UserMaildirPath), mailbox))
+		appMaildir = maildir.Dir(filepath.Join(worker.Contexts[clientID].UserMaildirPath, mailbox))
 	}
 
 	// Open a new Maildir delivery.
@@ -743,6 +746,17 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 	}
 
 	log.Printf("flags: %#v\n", flags)
+
+	// Construct path and Maildir for selected mailbox.
+	mailMaildir := maildir.Dir(filepath.Join(worker.Contexts[clientID].UserMaildirPath, worker.Contexts[clientID].SelectedMailbox))
+
+	for _, msgNum := range msgNums {
+
+		// Retrieve mail file name.
+		mailFileName := worker.MailboxContents[worker.Contexts[clientID].UserName][worker.Contexts[clientID].SelectedMailbox][msgNum]
+		mailFlags, err := mailMaildir.Flags(mailFileName, false)
+		log.Printf("mailFileName: %#v, flags: %#v, err: %#v\n", mailFileName, mailFlags, err)
+	}
 
 	// Send success answer.
 	err = c.Send(fmt.Sprintf("%s OK STORE completed", req.Tag))

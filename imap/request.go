@@ -136,7 +136,7 @@ func ParseSeqNumbers(recv string, mailboxContents []string) ([]int, error) {
 
 				// Sequence number specified, append it if
 				// we have not yet seen this value.
-				msgNums = append(msgNums, numStart)
+				msgNums = append(msgNums, (numStart - 1))
 
 				// Set corresponding seen value to true.
 				seenMsgNums[numStart] = true
@@ -183,7 +183,7 @@ func ParseSeqNumbers(recv string, mailboxContents []string) ([]int, error) {
 
 					// Sequence number specified, append it if
 					// we have not yet seen this value.
-					msgNums = append(msgNums, u)
+					msgNums = append(msgNums, (u - 1))
 
 					// Set corresponding seen value to true.
 					seenMsgNums[u] = true

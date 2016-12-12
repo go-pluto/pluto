@@ -5,8 +5,6 @@ import (
 	"strings"
 
 	"path/filepath"
-
-	"github.com/numbleroot/maildir"
 )
 
 // Structs
@@ -18,7 +16,7 @@ type Context struct {
 	IMAPState       IMAPState
 	UserName        string
 	UserCRDTPath    string
-	UserMaildirPath maildir.Dir
+	UserMaildirPath string
 	SelectedMailbox string
 }
 
@@ -59,7 +57,7 @@ func (worker *Worker) UpdateClientContext(clientIDRaw string) (string, error) {
 			IMAPState:       AUTHENTICATED,
 			UserName:        clientInfo[2],
 			UserCRDTPath:    filepath.Join(worker.Config.Workers[worker.Name].CRDTLayerRoot, clientInfo[2]),
-			UserMaildirPath: maildir.Dir(filepath.Join(worker.Config.Workers[worker.Name].MaildirRoot, clientInfo[2])),
+			UserMaildirPath: filepath.Join(worker.Config.Workers[worker.Name].MaildirRoot, clientInfo[2]),
 		}
 	}
 
