@@ -670,6 +670,10 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 
 	var err error
 
+	// Set updated flags list indicator
+	// initially to false.
+	silent := false
+
 	log.Printf("Serving STORE '%s'...\n", req.Tag)
 
 	// Lock worker exclusively and unlock whenever
@@ -728,7 +732,14 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 	// Parse data item type.
 	dataItemType := storeArgs[1]
 
+	// If client requested not to receive the updated
+	// flags list, set indicator to false.
+	if strings.HasSuffix(dataItemType, ".SILENT") {
+		silent = true
+	}
+
 	log.Printf("dataItemType: %#v\n", dataItemType)
+	log.Printf("silent? %#v\n", silent)
 
 	// Parse flag argument.
 	flags, err := ParseFlags(storeArgs[2])
@@ -752,10 +763,66 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 
 	for _, msgNum := range msgNums {
 
+		var rmvElements string
+
+		// Initialize runes array for new flags of mail.
+		newMailFlags := make([]rune, 0, 5)
+
+		// Depending on the presence of various standard flags
+		// extend newMailFlags further.
+
+		if _, found := flags["\\Draft"]; found {
+			newMailFlags = append(newMailFlags, 'D')
+		}
+
+		if _, found := flags["\\Flagged"]; found {
+			newMailFlags = append(newMailFlags, 'F')
+		}
+
+		if _, found := flags["\\Answered"]; found {
+			newMailFlags = append(newMailFlags, 'R')
+		}
+
+		if _, found := flags["\\Seen"]; found {
+			newMailFlags = append(newMailFlags, 'S')
+		}
+
+		if _, found := flags["\\Deleted"]; found {
+			newMailFlags = append(newMailFlags, 'T')
+		}
+
 		// Retrieve mail file name.
 		mailFileName := worker.MailboxContents[worker.Contexts[clientID].UserName][worker.Contexts[clientID].SelectedMailbox][msgNum]
+
+		// Retrieve flags included in mail file name.
 		mailFlags, err := mailMaildir.Flags(mailFileName, false)
-		log.Printf("mailFileName: %#v, flags: %#v, err: %#v\n", mailFileName, mailFlags, err)
+		if err != nil {
+			c.Error("Error while retrieving flags from mail file", err)
+			return false
+		}
+
+		log.Printf("mailFileName: %#v, flags: %#v, newMailFlags: %#v\n", mailFileName, mailFlags, newMailFlags)
+
+		if (dataItemType == "+FLAGS") || (dataItemType == "+FLAGS.SILENT") {
+			// TODO: Add missing flags to newMailFlags.
+		}
+
+		if (dataItemType == "-FLAGS") || (dataItemType == "-FLAGS.SILENT") {
+			// TODO: Remove flags from newMailFlags from mail's flags.
+		}
+
+		newMailFileName := ""
+
+		storeMailboxCRDT := worker.MailboxStructure[worker.Contexts[clientID].UserName][worker.Contexts[clientID].SelectedMailbox]
+		storeMailboxCRDT.Remove(mailFileName, func(payload string) {
+			rmvElements = payload
+		})
+
+		storeMailboxCRDT.Add(newMailFileName, func(payload string) {
+			worker.SyncSendChan <- fmt.Sprintf("store|%s|%s|%s|%s", worker.Contexts[clientID].UserName, base64.StdEncoding.EncodeToString([]byte(worker.Contexts[clientID].SelectedMailbox)), rmvElements, payload)
+		})
+
+		worker.MailboxContents[worker.Contexts[clientID].UserName][worker.Contexts[clientID].SelectedMailbox][msgNum] = newMailFileName
 	}
 
 	// Send success answer.

@@ -200,8 +200,11 @@ func ParseSeqNumbers(recv string, mailboxContents []string) ([]int, error) {
 
 // ParseFlags takes in the string representation of
 // a parenthesized list of IMAP flags and returns a
-// slice consisting of individual ones.
-func ParseFlags(recv string) ([]string, error) {
+// map containing all found flags.
+func ParseFlags(recv string) (map[string]struct{}, error) {
+
+	// Reserve space.
+	flags := make(map[string]struct{})
 
 	if strings.HasPrefix(recv, "(") {
 
@@ -220,7 +223,11 @@ func ParseFlags(recv string) ([]string, error) {
 	}
 
 	// Split at space symbols.
-	flags := strings.Split(recv, " ")
+	flagsRaw := strings.Split(recv, " ")
+
+	for _, flag := range flagsRaw {
+		flags[flag] = struct{}{}
+	}
 
 	return flags, nil
 }
