@@ -765,11 +765,11 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 
 		var rmvElements string
 
-		// Initialize runes array for new flags of mail.
+		// Initialize runes slice for new flags of mail.
 		newMailFlags := make([]rune, 0, 5)
 
-		// Depending on the presence of various standard flags
-		// extend newMailFlags further.
+		// Depending on the presence of various standard
+		// flags extend newMailFlags further.
 
 		if _, found := flags["\\Draft"]; found {
 			newMailFlags = append(newMailFlags, 'D')
@@ -804,14 +804,46 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 		log.Printf("mailFileName: %#v, flags: %#v, newMailFlags: %#v\n", mailFileName, mailFlags, newMailFlags)
 
 		if (dataItemType == "+FLAGS") || (dataItemType == "+FLAGS.SILENT") {
-			// TODO: Add missing flags to newMailFlags.
+
+			newMailFlagsString := string(newMailFlags)
+
+			log.Printf("newMailFlagsString: %s\n", newMailFlagsString)
+
+			for _, char := range mailFlags {
+				log.Printf("char +: %#v\n", char)
+
+				if strings.ContainsRune(newMailFlagsString, char) != true {
+					newMailFlags = append(newMailFlags, char)
+				}
+			}
+
+			log.Printf("newMailFlags at end of add: %#v\n", newMailFlags)
 		}
 
 		if (dataItemType == "-FLAGS") || (dataItemType == "-FLAGS.SILENT") {
-			// TODO: Remove flags from newMailFlags from mail's flags.
+
+			tmpNewMailFlags := mailFlags
+
+			for _, char := range newMailFlags {
+				log.Printf("char -: %#v\n", char)
+
+				if strings.ContainsRune(mailFlags, char) {
+					tmpNewMailFlags = strings.Replace(tmpNewMailFlags, string(char), "", -1)
+				}
+			}
+
+			newMailFlags = []rune(tmpNewMailFlags)
+
+			log.Printf("newMailFlags at end of minus: %#v\n", newMailFlags)
 		}
 
-		newMailFileName := ""
+		newMailFileName, err := mailMaildir.SetFlags(mailFileName, string(newMailFlags), false)
+		if err != nil {
+			c.Error("Error renaming mail file in STORE operation", err)
+			return false
+		}
+
+		log.Printf("newMailFileName: %#v\n", newMailFileName)
 
 		storeMailboxCRDT := worker.MailboxStructure[worker.Contexts[clientID].UserName][worker.Contexts[clientID].SelectedMailbox]
 		storeMailboxCRDT.Remove(mailFileName, func(payload string) {
