@@ -29,7 +29,7 @@ type Worker struct {
 	MailboxStructure map[string]map[string]*crdt.ORSet
 	MailboxContents  map[string]map[string][]string
 	ApplyCRDTUpdChan chan string
-	DoneCRDTUpdChan  chan bool
+	DoneCRDTUpdChan  chan struct{}
 	Config           *config.Config
 }
 
@@ -52,7 +52,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		MailboxStructure: make(map[string]map[string]*crdt.ORSet),
 		MailboxContents:  make(map[string]map[string][]string),
 		ApplyCRDTUpdChan: make(chan string),
-		DoneCRDTUpdChan:  make(chan bool),
+		DoneCRDTUpdChan:  make(chan struct{}),
 		Config:           config,
 	}
 
@@ -244,12 +244,11 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 		switch {
 
 		case rawReq == "> done <":
-			// TODO: Trigger state-dependent behaviour when user logged out.
-			log.Printf("%s: done.", clientID)
-
-		case rawReq == "> changed <":
-			// TODO: Trigger state-dependent behaviour when session changed.
-			log.Printf("%s: session changed.", clientID)
+			// Remove context of connection for this client
+			// from structure that keeps track of it.
+			// Effectively destroying all authentication and
+			// IMAP state information about this client.
+			delete(worker.Contexts, clientID)
 
 		case req.Command == "SELECT":
 			if ok := worker.Select(c, req, clientID); ok {

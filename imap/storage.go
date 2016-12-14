@@ -27,7 +27,7 @@ type Storage struct {
 	MailboxStructure map[string]map[string]*crdt.ORSet
 	MailboxContents  map[string]map[string][]string
 	ApplyCRDTUpdChan chan string
-	DoneCRDTUpdChan  chan bool
+	DoneCRDTUpdChan  chan struct{}
 	Config           *config.Config
 }
 
@@ -46,7 +46,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 		MailboxStructure: make(map[string]map[string]*crdt.ORSet),
 		MailboxContents:  make(map[string]map[string][]string),
 		ApplyCRDTUpdChan: make(chan string),
-		DoneCRDTUpdChan:  make(chan bool),
+		DoneCRDTUpdChan:  make(chan struct{}),
 		Config:           config,
 	}
 
@@ -652,6 +652,6 @@ func (storage *Storage) ApplyCRDTUpd() error {
 		}
 
 		// Signal receiver that update was performed.
-		storage.DoneCRDTUpdChan <- true
+		storage.DoneCRDTUpdChan <- struct{}{}
 	}
 }

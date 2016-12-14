@@ -137,20 +137,10 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 		}
 	}
 
-	// Build up answer to client.
-	var answer string
-
-	// Include part for standard flags.
-	answer = fmt.Sprintf("%s* %d EXISTS\n", answer, len(selMailboxContents))
-	answer = fmt.Sprintf("%s* %d RECENT\n", answer, recentMails)
-	answer = fmt.Sprintf("%s* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n", answer)
-	answer = fmt.Sprintf("%s* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\n", answer)
-	answer = fmt.Sprintf("%s%s OK [READ-WRITE] SELECT completed", answer, req.Tag)
-
 	// TODO: Add other SELECT response elements if needed.
 
-	// Send prepared answer to requesting client.
-	err = c.Send(answer)
+	// Send answer to requesting client.
+	err = c.Send(fmt.Sprintf("* %d EXISTS\n* %d RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\n%s OK [READ-WRITE] SELECT completed", len(selMailboxContents), recentMails, req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -520,7 +510,7 @@ func (worker *Worker) List(c *Connection, req *Request, clientID string) bool {
 
 				// Either always include a mailbox in the response
 				// or only when it is a top level mailbox.
-				listAnswerLines = append(listAnswerLines, fmt.Sprintf("* LIST () \"/\" %s", mailbox))
+				listAnswerLines = append(listAnswerLines, fmt.Sprintf("* LIST () \"%s\" %s", worker.Config.IMAP.HierarchySeparator, mailbox))
 			}
 		}
 	}

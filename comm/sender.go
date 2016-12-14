@@ -20,7 +20,7 @@ type Sender struct {
 	lock      *sync.Mutex
 	name      string
 	inc       chan string
-	msgInLog  chan bool
+	msgInLog  chan struct{}
 	writeLog  *os.File
 	updLog    *os.File
 	incVClock chan string
@@ -42,7 +42,7 @@ func InitSender(name string, logFilePath string, incVClock chan string, updVCloc
 	// and one to signal that a new message was written
 	// to log and is ready to be send out.
 	inc := make(chan string)
-	msgInLog := make(chan bool, 1)
+	msgInLog := make(chan struct{}, 1)
 
 	// Create and initialize what we need for
 	// a CRDT sender routine.
@@ -78,7 +78,7 @@ func InitSender(name string, logFilePath string, incVClock chan string, updVCloc
 
 	// If we just started the application, perform an
 	// initial run to check if log file contains elements.
-	sender.msgInLog <- true
+	sender.msgInLog <- struct{}{}
 
 	// Return this channel to pass to processes.
 	return inc, nil
@@ -123,7 +123,7 @@ func (sender *Sender) BrokerMsgs() {
 		// Inidicate consecutive loop iterations
 		// that a message is waiting in log.
 		if len(sender.msgInLog) < 1 {
-			sender.msgInLog <- true
+			sender.msgInLog <- struct{}{}
 		}
 	}
 }
@@ -255,7 +255,7 @@ func (sender *Sender) SendMsgs() {
 		// log file. Therefore attempt to send next one and if
 		// it does not exist, the loop iteration will abort.
 		if len(sender.msgInLog) < 1 {
-			sender.msgInLog <- true
+			sender.msgInLog <- struct{}{}
 		}
 	}
 }

@@ -19,7 +19,7 @@ import (
 type Receiver struct {
 	lock             *sync.Mutex
 	name             string
-	msgInLog         chan bool
+	msgInLog         chan struct{}
 	socket           net.Listener
 	writeLog         *os.File
 	updLog           *os.File
@@ -27,7 +27,7 @@ type Receiver struct {
 	updVClock        chan map[string]int
 	vclock           map[string]int
 	applyCRDTUpdChan chan string
-	doneCRDTUpdChan  chan bool
+	doneCRDTUpdChan  chan struct{}
 	nodes            []string
 }
 
@@ -36,11 +36,11 @@ type Receiver struct {
 // InitReceiver initializes above struct and sets
 // default values. It starts involved background
 // routines and send initial channel trigger.
-func InitReceiver(name string, logFilePath string, socket net.Listener, applyCRDTUpdChan chan string, doneCRDTUpdChan chan bool, nodes []string) (chan string, chan map[string]int, error) {
+func InitReceiver(name string, logFilePath string, socket net.Listener, applyCRDTUpdChan chan string, doneCRDTUpdChan chan struct{}, nodes []string) (chan string, chan map[string]int, error) {
 
 	// Make a channel to communicate over with local
 	// processes intending to process received messages.
-	msgInLog := make(chan bool, 1)
+	msgInLog := make(chan struct{}, 1)
 
 	// Make a channel to return and be used in sender
 	// to indicate a particular vector clock entry is
@@ -102,7 +102,7 @@ func InitReceiver(name string, logFilePath string, socket net.Listener, applyCRD
 
 	// If we just started the application, perform an
 	// initial run to check if log file contains elements.
-	recv.msgInLog <- true
+	recv.msgInLog <- struct{}{}
 
 	// Accept incoming messages in background.
 	go recv.AcceptIncMsgs()
@@ -204,7 +204,7 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn) {
 		// Indicate to applying routine that a new message
 		// is available to process.
 		if len(recv.msgInLog) < 1 {
-			recv.msgInLog <- true
+			recv.msgInLog <- struct{}{}
 		}
 
 		// Read next CRDT message until newline character is received.
@@ -275,7 +275,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 
 			// Send signal again to check for next log items.
 			if len(recv.msgInLog) < 1 {
-				recv.msgInLog <- true
+				recv.msgInLog <- struct{}{}
 			}
 
 			// Go to next loop iteration.
@@ -350,10 +350,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				recv.applyCRDTUpdChan <- msg.Payload
 
 				// Wait for done signal from node.
-				done := <-recv.doneCRDTUpdChan
-
-				log.Printf("[comm.ApplyStoredMsgs] node said %#v\n", done)
-
+				<-recv.doneCRDTUpdChan
 			} else {
 				log.Printf("[comm.ApplyStoredMsgs] OLD message, duplicate: %s", msgRaw)
 			}
@@ -419,7 +416,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 		// log file. Therefore attempt to process next one and
 		// if it does not exist, the loop iteration will abort.
 		if len(recv.msgInLog) < 1 {
-			recv.msgInLog <- true
+			recv.msgInLog <- struct{}{}
 		}
 	}
 }

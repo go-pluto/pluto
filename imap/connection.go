@@ -92,18 +92,6 @@ func (c *Connection) SignalSessionPrefix(worker *tls.Conn) error {
 	return nil
 }
 
-// SignalSessionChanged indicates to worker node that a session
-// experienced a major change and therefore allows workers to take
-// corresponding actions such as closing IMAP state.
-func (c *Connection) SignalSessionChanged(worker *tls.Conn) error {
-
-	if _, err := fmt.Fprintf(worker, "> changed <\n"); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // SignalSessionError can be used by distributor or worker nodes
 // to signal the other side that an fatal error occurred during
 // processing a request.

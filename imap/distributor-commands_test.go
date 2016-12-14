@@ -18,47 +18,46 @@ var capabilityTests = []struct {
 	in  string
 	out string
 }{
-	{"a001 CAPABILITY", "* CAPABILITY IMAP4rev1 AUTH=PLAIN\na001 OK CAPABILITY completed"},
-	{"1337 capability", "* CAPABILITY IMAP4rev1 AUTH=PLAIN\n1337 OK CAPABILITY completed"},
-	{"tag CAPABILITY   ", "tag BAD Command CAPABILITY was sent with extra parameters"},
+	{"a CAPABILITY", "* CAPABILITY IMAP4rev1 AUTH=PLAIN\na OK CAPABILITY completed"},
+	{"b capability", "* CAPABILITY IMAP4rev1 AUTH=PLAIN\nb OK CAPABILITY completed"},
+	{"c CAPABILITY   ", "c BAD Command CAPABILITY was sent with extra parameters"},
 	{"CAPABILITY", "* BAD Received invalid IMAP command"},
-}
-
-var loginTests = []struct {
-	in  string
-	out string
-}{
-	{"blub1 LOGIN user1 password1", "blub1 OK LOGIN completed"},
-	{"blub2 LOGIN user1 password1", "blub2 OK LOGIN completed"},
-	{"blub3 LOGIN user1 password1", "blub3 OK LOGIN completed"},
-	{"blargh login user2 password2", "blargh OK LOGIN completed"},
-	{"xyz LOGIN smith sesame", "xyz NO Name and / or password wrong"},
-	{"zyx login smith sesame", "zyx NO Name and / or password wrong"},
-	{"a1b2c3   LOGIN    user3 password3", "a1b2c3 BAD Received invalid IMAP command"},
-	{"LOGIN ernie bert", "* BAD Received invalid IMAP command"},
-	{"12345 LOL ernie bert", "12345 BAD Received invalid IMAP command"},
-	{"uuu LOGIN let me in please", "uuu BAD Command LOGIN was not sent with exactly two parameters"},
 }
 
 var logoutTests = []struct {
 	in  string
 	out string
 }{
-	{"iiqqee LOGOUT", "* BYE Terminating connection\niiqqee OK LOGOUT completed"},
-	{"lol logout", "* BYE Terminating connection\nlol OK LOGOUT completed"},
-	{"5   LOGOUT    ", "5 BAD Received invalid IMAP command"},
+	{"a LOGOUT", "* BYE Terminating connection\na OK LOGOUT completed"},
+	{"b logout", "* BYE Terminating connection\nb OK LOGOUT completed"},
+	{"c   LOGOUT    ", "c BAD Received invalid IMAP command"},
 	{"LOGOUT some more parameters", "* BAD Received invalid IMAP command"},
-	{"b01 LOGOUT some more parameters", "b01 BAD Command LOGOUT was sent with extra parameters"},
+	{"d LOGOUT some more parameters", "d BAD Command LOGOUT was sent with extra parameters"},
 }
 
 var starttlsTests = []struct {
 	in  string
 	out string
 }{
-	{"yyy STARTTLS", "yyy BAD TLS is already active"},
-	{"qwerty starttls", "qwerty BAD TLS is already active"},
-	{"1 STARTTLS   ", "1 BAD Command STARTTLS was sent with extra parameters"},
+	{"a STARTTLS", "a BAD TLS is already active"},
+	{"b starttls", "b BAD TLS is already active"},
+	{"c STARTTLS   ", "c BAD Command STARTTLS was sent with extra parameters"},
 	{"STARTTLS", "* BAD Received invalid IMAP command"},
+}
+
+var loginTests = []struct {
+	in  string
+	out string
+}{
+	{"a LOGIN smith sesame", "a NO Name and / or password wrong"},
+	{"b login smith sesame", "b NO Name and / or password wrong"},
+	{"c   LOGIN    user3 password3", "c BAD Received invalid IMAP command"},
+	{"LOGIN ernie bert", "* BAD Received invalid IMAP command"},
+	{"d LOL ernie bert", "d BAD Received invalid IMAP command"},
+	{"e LOGIN let me in please", "e BAD Command LOGIN was not sent with exactly two parameters"},
+	{"f LOGIN user1 password1", "f OK LOGIN completed"},
+	{"g LOGIN user1 password1", "g BAD Command LOGIN cannot be executed in this state"},
+	{"h LOGIN user1 password1", "h BAD Command LOGIN cannot be executed in this state"},
 }
 
 // Functions
@@ -131,70 +130,6 @@ func TestCapability(t *testing.T) {
 
 		if answer != tt.out {
 			t.Fatalf("[imap.TestCapability] Expected '%s' but received '%s'\n", tt.out, answer)
-		}
-	}
-
-	// At the end of each test, terminate connection.
-	c.Terminate()
-
-	time.Sleep(1200 * time.Millisecond)
-}
-
-// TestLogin executes a black-box table test on the
-// implemented Login() function.
-func TestLogin(t *testing.T) {
-
-	time.Sleep(1 * time.Second)
-
-	// Create needed test environment.
-	config, tlsConfig, err := utils.CreateTestEnv()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 2200)
-	time.Sleep(400 * time.Millisecond)
-
-	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
-	time.Sleep(400 * time.Millisecond)
-
-	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 1400)
-	time.Sleep(400 * time.Millisecond)
-
-	// Connect to IMAP distributor.
-	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
-	if err != nil {
-		t.Fatalf("[imap.TestLogin] Error during connection attempt to IMAP distributor: %s\n", err.Error())
-	}
-
-	// Create new connection struct.
-	c := imap.NewConnection(conn)
-
-	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
-	if err != nil {
-		t.Errorf("[imap.TestLogin] Error during receiving initial distributor greeting: %s\n", err.Error())
-	}
-
-	for _, tt := range loginTests {
-
-		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
-		if err != nil {
-			t.Fatalf("[imap.TestLogin] Sending message to distributor failed with: %s\n", err.Error())
-		}
-
-		// Receive successful LOGIN message.
-		answer, err := c.Receive()
-		if err != nil {
-			t.Errorf("[imap.TestLogin] Error during receiving table test LOGIN: %s\n", err.Error())
-		}
-
-		if answer != tt.out {
-			t.Fatalf("[imap.TestLogin] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
 
@@ -337,6 +272,68 @@ func TestStartTLS(t *testing.T) {
 
 		if answer != tt.out {
 			t.Fatalf("[imap.TestStartTLS] Expected '%s' but received '%s'\n", tt.out, answer)
+		}
+	}
+
+	// At the end of each test, terminate connection.
+	c.Terminate()
+
+	time.Sleep(1200 * time.Millisecond)
+}
+
+// TestLogin executes a black-box table test on the
+// implemented Login() function.
+func TestLogin(t *testing.T) {
+
+	// Create needed test environment.
+	config, tlsConfig, err := utils.CreateTestEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Start a storage node in background.
+	go utils.RunStorageWithTimeout(config, 2200)
+	time.Sleep(400 * time.Millisecond)
+
+	// Start a worker node in background.
+	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
+	time.Sleep(400 * time.Millisecond)
+
+	// Start a distributor node in background.
+	go utils.RunDistributorWithTimeout(config, 1400)
+	time.Sleep(400 * time.Millisecond)
+
+	// Connect to IMAP distributor.
+	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
+	if err != nil {
+		t.Fatalf("[imap.TestLogin] Error during connection attempt to IMAP distributor: %s\n", err.Error())
+	}
+
+	// Create new connection struct.
+	c := imap.NewConnection(conn)
+
+	// Consume mandatory IMAP greeting.
+	_, err = c.Receive()
+	if err != nil {
+		t.Errorf("[imap.TestLogin] Error during receiving initial distributor greeting: %s\n", err.Error())
+	}
+
+	for _, tt := range loginTests {
+
+		// Table test: send 'in' part of each line.
+		err = c.Send(tt.in)
+		if err != nil {
+			t.Fatalf("[imap.TestLogin] Sending message to distributor failed with: %s\n", err.Error())
+		}
+
+		// Receive successful LOGIN message.
+		answer, err := c.Receive()
+		if err != nil {
+			t.Errorf("[imap.TestLogin] Error during receiving table test LOGIN: %s\n", err.Error())
+		}
+
+		if answer != tt.out {
+			t.Fatalf("[imap.TestLogin] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
 

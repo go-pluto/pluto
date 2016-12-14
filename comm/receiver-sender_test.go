@@ -25,9 +25,9 @@ func TestSenderReceiver(t *testing.T) {
 
 	// Make needed channels.
 	n1ApplyCRDTUpdChan := make(chan string)
-	n1DoneCRDTUpdChan := make(chan bool)
+	n1DoneCRDTUpdChan := make(chan struct{})
 	n2ApplyCRDTUpdChan := make(chan string)
-	n2DoneCRDTUpdChan := make(chan bool)
+	n2DoneCRDTUpdChan := make(chan struct{})
 
 	// Create needed test environment.
 	config, _, err := utils.CreateTestEnv()
@@ -78,7 +78,7 @@ func TestSenderReceiver(t *testing.T) {
 			log.Printf("[comm_test.TestSenderReceiver] %s: Would apply update from message here: %s\n", n1, updMsg)
 
 			// Signal success.
-			n1DoneCRDTUpdChan <- true
+			n1DoneCRDTUpdChan <- struct{}{}
 		}
 	}()
 
@@ -101,7 +101,7 @@ func TestSenderReceiver(t *testing.T) {
 			log.Printf("[comm_test.TestSenderReceiver] %s: Would apply update from message here: %s\n", n2, updMsg)
 
 			// Signal success.
-			n2DoneCRDTUpdChan <- true
+			n2DoneCRDTUpdChan <- struct{}{}
 		}
 	}()
 

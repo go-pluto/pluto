@@ -181,9 +181,6 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 		case req.Command == "CAPABILITY":
 			distr.Capability(c, req)
 
-		case req.Command == "LOGIN":
-			distr.Login(c, req)
-
 		case req.Command == "LOGOUT":
 			if ok := distr.Logout(c, req); ok {
 				// A LOGOUT marks connection termination.
@@ -192,6 +189,9 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 
 		case req.Command == "STARTTLS":
 			distr.StartTLS(c, req)
+
+		case req.Command == "LOGIN":
+			distr.Login(c, req)
 
 		case c.Worker != "":
 			distr.Proxy(c, rawReq)

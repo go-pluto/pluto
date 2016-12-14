@@ -33,16 +33,15 @@ func init() {
 	// a map to have quick access.
 	SupportedCommands = make(map[string]bool)
 
-	SupportedCommands["STARTTLS"] = true
-	SupportedCommands["LOGIN"] = true
 	SupportedCommands["CAPABILITY"] = true
 	SupportedCommands["LOGOUT"] = true
+	SupportedCommands["STARTTLS"] = true
+	SupportedCommands["LOGIN"] = true
 	SupportedCommands["SELECT"] = true
 	SupportedCommands["CREATE"] = true
 	SupportedCommands["DELETE"] = true
 	SupportedCommands["LIST"] = true
 	SupportedCommands["APPEND"] = true
-	SupportedCommands["CLOSE"] = true
 	SupportedCommands["EXPUNGE"] = true
 	SupportedCommands["STORE"] = true
 }

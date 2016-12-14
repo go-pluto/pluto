@@ -44,82 +44,6 @@ func (distr *Distributor) Capability(c *Connection, req *Request) bool {
 	return true
 }
 
-// Login performs the authentication mechanism specified
-// as part of the distributor config.
-func (distr *Distributor) Login(c *Connection, req *Request) bool {
-
-	log.Println()
-	log.Printf("Serving LOGIN '%s'...\n", req.Tag)
-
-	// Split payload on every space character.
-	userCredentials := strings.Split(req.Payload, " ")
-
-	if len(userCredentials) != 2 {
-
-		// If payload did not contain exactly two elements,
-		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command LOGIN was not sent with exactly two parameters", req.Tag))
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
-	}
-
-	id, clientID, err := distr.AuthAdapter.AuthenticatePlain(userCredentials[0], userCredentials[1], c.Conn.RemoteAddr().String())
-	if err != nil {
-
-		// If supplied credentials failed to authenticate client,
-		// they are invalid. Return NO statement.
-		err := c.Send(fmt.Sprintf("%s NO Name and / or password wrong", req.Tag))
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
-	}
-
-	// Signal success to client.
-	err = c.Send(fmt.Sprintf("%s OK LOGIN completed", req.Tag))
-	if err != nil {
-		c.Error("Encountered send error", err)
-		return false
-	}
-
-	// Find worker node responsible for this connection.
-	respWorker, err := distr.AuthAdapter.GetWorkerForUser(distr.Config.Workers, id)
-	if err != nil {
-		c.Error("Authentication error", err)
-		return false
-	}
-
-	// If the client authenticated a second time during
-	// a connection and user names differ, send changed
-	// notice to worker and exchange user names.
-	if (c.Worker != "") && (userCredentials[0] != c.UserName) {
-
-		if err := c.SignalSessionPrefix(distr.Connections[c.Worker]); err != nil {
-			c.Error("Encountered send error when distributor signalled context to worker", err)
-			return false
-		}
-
-		err = c.SignalSessionChanged(distr.Connections[c.Worker])
-		if err != nil {
-			c.Error("Encountered send error when distributor signalled changed session to worker", err)
-			return false
-		}
-	}
-
-	// Save context to connection.
-	c.Worker = respWorker
-	c.UserToken = clientID
-	c.UserName = userCredentials[0]
-
-	return true
-}
-
 // Logout correctly ends a connection with a client.
 // Also necessarily created management structures will
 // get shut down gracefully.
@@ -198,6 +122,79 @@ func (distr *Distributor) StartTLS(c *Connection, req *Request) bool {
 	// As the connection is already TLS encrypted,
 	// tell client that a TLS session is active.
 	err := c.Send(fmt.Sprintf("%s BAD TLS is already active", req.Tag))
+	if err != nil {
+		c.Error("Encountered send error", err)
+		return false
+	}
+
+	return true
+}
+
+// Login performs the authentication mechanism specified
+// as part of the distributor config.
+func (distr *Distributor) Login(c *Connection, req *Request) bool {
+
+	log.Println()
+	log.Printf("Serving LOGIN '%s'...\n", req.Tag)
+
+	if (c.Worker != "") && (c.UserToken != "") && (c.UserName != "") {
+
+		// Connection was already once authenticated,
+		// cannot do that a second time, client error.
+		// Send tagged BAD response.
+		err := c.Send(fmt.Sprintf("%s BAD Command LOGIN cannot be executed in this state", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Split payload on every space character.
+	userCredentials := strings.Split(req.Payload, " ")
+
+	if len(userCredentials) != 2 {
+
+		// If payload did not contain exactly two elements,
+		// this is a client error. Return BAD statement.
+		err := c.Send(fmt.Sprintf("%s BAD Command LOGIN was not sent with exactly two parameters", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	id, clientID, err := distr.AuthAdapter.AuthenticatePlain(userCredentials[0], userCredentials[1], c.Conn.RemoteAddr().String())
+	if err != nil {
+
+		// If supplied credentials failed to authenticate client,
+		// they are invalid. Return NO statement.
+		err := c.Send(fmt.Sprintf("%s NO Name and / or password wrong", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Find worker node responsible for this connection.
+	respWorker, err := distr.AuthAdapter.GetWorkerForUser(distr.Config.Workers, id)
+	if err != nil {
+		c.Error("Authentication error", err)
+		return false
+	}
+
+	// Save context to connection.
+	c.Worker = respWorker
+	c.UserToken = clientID
+	c.UserName = userCredentials[0]
+
+	// Signal success to client.
+	err = c.Send(fmt.Sprintf("%s OK LOGIN completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false

@@ -80,11 +80,11 @@ var listTests = []struct {
 	outTwo string
 }{
 	{"a LOGIN user1 password1", "a OK LOGIN completed", "a OK LOGIN completed"},
-	{"b LIST \"\" *", "* LIST () \"/\" INBOX\n* LIST () \"/\" university\nb OK LIST completed", "* LIST () \"/\" university\n* LIST () \"/\" INBOX\nb OK LIST completed"},
+	{"b LIST \"\" *", "* LIST () \".\" INBOX\n* LIST () \".\" university\nb OK LIST completed", "* LIST () \".\" university\n* LIST () \".\" INBOX\nb OK LIST completed"},
 	{"c CREATE university.Modul1", "c OK CREATE completed", "c OK CREATE completed"},
-	{"d LIST \"\" %", "* LIST () \"/\" INBOX\n* LIST () \"/\" university\nd OK LIST completed", "* LIST () \"/\" INBOX\n* LIST () \"/\" university\nd OK LIST completed"},
+	{"d LIST \"\" %", "* LIST () \".\" INBOX\n* LIST () \".\" university\nd OK LIST completed", "* LIST () \".\" INBOX\n* LIST () \".\" university\nd OK LIST completed"},
 	{"e DELETE university", "e OK DELETE completed", "e OK DELETE completed"},
-	{"f LIST \"\" *", "* LIST () \"/\" INBOX\n* LIST () \"/\" university.Modul1\nf OK LIST completed", "* LIST () \"/\" university.Modul1\n* LIST () \"/\" INBOX\nf OK LIST completed"},
+	{"f LIST \"\" *", "* LIST () \".\" INBOX\n* LIST () \".\" university.Modul1\nf OK LIST completed", "* LIST () \".\" university.Modul1\n* LIST () \".\" INBOX\nf OK LIST completed"},
 	{"g LOGOUT", "* BYE Terminating connection\ng OK LOGOUT completed", "* BYE Terminating connection\ng OK LOGOUT completed"},
 }
 
