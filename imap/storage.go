@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync"
 
 	"crypto/tls"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 // Storage struct bundles information needed in
 // operation of a storage node.
 type Storage struct {
+	lock             *sync.RWMutex
 	Socket           net.Listener
 	MailboxStructure map[string]map[string]*crdt.ORSet
 	MailboxContents  map[string]map[string][]string
@@ -40,6 +42,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 
 	// Initialize and set fields.
 	storage := &Storage{
+		lock:             new(sync.RWMutex),
 		MailboxStructure: make(map[string]map[string]*crdt.ORSet),
 		MailboxContents:  make(map[string]map[string][]string),
 		ApplyCRDTUpdChan: make(chan string),
@@ -156,6 +159,9 @@ func (storage *Storage) ApplyCRDTUpd() error {
 				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing CREATE update from sync message: %s\n", err.Error())
 			}
 
+			// Lock storage exclusively.
+			storage.lock.Lock()
+
 			// Save user's mailbox structure CRDT to more
 			// conveniently use it hereafter.
 			userMainCRDT := storage.MailboxStructure[createUpd.User]["Structure"]
@@ -165,6 +171,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 
 			err = posMaildir.Create()
 			if err != nil {
+				storage.lock.Unlock()
 				return fmt.Errorf("[imap.ApplyCRDTUpd] Maildir for new mailbox could not be created: %s\n", err.Error())
 			}
 
@@ -189,6 +196,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 				}
 
 				// Exit worker.
+				storage.lock.Unlock()
 				os.Exit(1)
 			}
 
@@ -224,8 +232,12 @@ func (storage *Storage) ApplyCRDTUpd() error {
 				}
 
 				// Exit worker.
+				storage.lock.Unlock()
 				os.Exit(1)
 			}
+
+			// Unlock storage.
+			storage.lock.Unlock()
 
 		case "delete":
 
@@ -234,6 +246,9 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			if err != nil {
 				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing DELETE update from sync message: %s\n", err.Error())
 			}
+
+			// Lock storage exclusively.
+			storage.lock.Lock()
 
 			// Save user's mailbox structure CRDT to more
 			// conveniently use it hereafter.
@@ -248,6 +263,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			// Remove received pairs from user's main CRDT.
 			err = userMainCRDT.RemoveEffect(rSet, true, true)
 			if err != nil {
+				storage.lock.Unlock()
 				return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to remove elements from user's main CRDT: %s\n", err.Error())
 			}
 
@@ -262,6 +278,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			// Remove CRDT file of mailbox.
 			err = os.Remove(delMailboxCRDTPath)
 			if err != nil {
+				storage.lock.Unlock()
 				return fmt.Errorf("[imap.ApplyCRDTUpd] CRDT file of mailbox could not be deleted: %s\n", err.Error())
 			}
 
@@ -271,8 +288,12 @@ func (storage *Storage) ApplyCRDTUpd() error {
 
 			err = delMaildir.Remove()
 			if err != nil {
+				storage.lock.Unlock()
 				return fmt.Errorf("[imap.ApplyCRDTUpd] Maildir could not be deleted: %s\n", err.Error())
 			}
+
+			// Unlock storage.
+			storage.lock.Unlock()
 
 		case "append":
 
@@ -281,6 +302,9 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			if err != nil {
 				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing APPEND update from sync message: %s\n", err.Error())
 			}
+
+			// Lock storage exclusively.
+			storage.lock.Lock()
 
 			// Save user's mailbox structure CRDT to more
 			// conveniently use it hereafter.
@@ -307,6 +331,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 					// If so, place file contents at correct location.
 					appendFile, err := os.Create(appendFileName)
 					if err != nil {
+						storage.lock.Unlock()
 						return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to create file for mail to append: %s\n", err.Error())
 					}
 
@@ -327,6 +352,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 						}
 
 						// Exit worker.
+						storage.lock.Unlock()
 						os.Exit(1)
 					}
 
@@ -348,6 +374,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 						}
 
 						// Exit worker.
+						storage.lock.Unlock()
 						os.Exit(1)
 					}
 
@@ -372,6 +399,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 						}
 
 						// Exit worker.
+						storage.lock.Unlock()
 						os.Exit(1)
 					}
 				} else {
@@ -379,12 +407,18 @@ func (storage *Storage) ApplyCRDTUpd() error {
 					// Add new mail to mailbox' CRDT.
 					err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true, true)
 					if err != nil {
-						log.Fatalf("[imap.ApplyCRDTUpd] APPEND fail: %s. Exiting.\n", err.Error())
+						storage.lock.Unlock()
+						return fmt.Errorf("[imap.ApplyCRDTUpd] APPEND fail: %s. Exiting.\n", err.Error())
 					}
 				}
 			}
 
+			// Unlock storage.
+			storage.lock.Unlock()
+
 		case "expunge":
+
+			// Parse received payload message into expunge message struct.
 			expungeUpd, err := comm.ParseExpunge(opPayload)
 			if err != nil {
 				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing EXPUNGE update from sync message: %s\n", err.Error())
@@ -393,20 +427,167 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			log.Printf("APPLY HERE: EXPUNGE %#v\n", expungeUpd.RmvMails)
 
 		case "store":
+
+			// Parse received payload message into store message struct.
 			storeUpd, err := comm.ParseStore(opPayload)
 			if err != nil {
 				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing STORE update from sync message: %s\n", err.Error())
 			}
 
-			log.Printf("APPLY HERE: STORE %#v\n", storeUpd.AddMail)
+			// Lock storage exclusively.
+			storage.lock.Lock()
 
-		case "copy":
-			copyUpd, err := comm.ParseCopy(opPayload)
-			if err != nil {
-				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing COPY update from sync message: %s\n", err.Error())
+			// Save user's mailbox structure CRDT to more
+			// conveniently use it hereafter.
+			userMainCRDT := storage.MailboxStructure[storeUpd.User]["Structure"]
+
+			// Check if specified mailbox from store message is present
+			// in user's main CRDT on this node.
+			if userMainCRDT.Lookup(storeUpd.Mailbox, true) {
+
+				// Store concerned mailbox CRDT.
+				userMailboxCRDT := storage.MailboxStructure[storeUpd.User][storeUpd.Mailbox]
+
+				// Construct remove set from received values.
+				rSet := make(map[string]string)
+				for _, element := range storeUpd.RmvMail {
+					rSet[element.Tag] = element.Value
+				}
+
+				// Delete supplied elements from mailbox.
+				err := userMailboxCRDT.RemoveEffect(rSet, true, true)
+				if err != nil {
+					storage.lock.Unlock()
+					return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to remove mail elements from respective mailbox CRDT: %s\n", err.Error())
+				}
+
+				// Check if just removed elements marked all
+				// instances of mail file.
+				if userMailboxCRDT.Lookup(storeUpd.RmvMail[0].Value, true) != true {
+
+					// Construct path to old file.
+					var delFileName string
+					if storeUpd.Mailbox == "INBOX" {
+						delFileName = filepath.Join(storage.Config.Storage.MaildirRoot, storeUpd.User, "cur", storeUpd.RmvMail[0].Value)
+					} else {
+						delFileName = filepath.Join(storage.Config.Storage.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.RmvMail[0].Value)
+					}
+
+					// Remove the file.
+					err := os.Remove(delFileName)
+					if err != nil {
+						storage.lock.Unlock()
+						return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to remove underlying mail file during STORE update: %s\n", err.Error())
+					}
+				}
+
+				// Check if new mail name is not yet present
+				// on this node.
+				if userMailboxCRDT.Lookup(storeUpd.AddMail.Value, true) != true {
+
+					// Construct path to new file.
+					var storeFileName string
+					if storeUpd.Mailbox == "INBOX" {
+						storeFileName = filepath.Join(storage.Config.Storage.MaildirRoot, storeUpd.User, "cur", storeUpd.AddMail.Value)
+					} else {
+						storeFileName = filepath.Join(storage.Config.Storage.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.AddMail.Value)
+					}
+
+					// If not yet present on node, place file
+					// contents at correct location.
+					storeFile, err := os.Create(storeFileName)
+					if err != nil {
+						storage.lock.Unlock()
+						return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to create file for mail of STORE operation: %s\n", err.Error())
+					}
+
+					_, err = storeFile.WriteString(storeUpd.AddMail.Contents)
+					if err != nil {
+
+						// Perform clean up.
+						log.Printf("[imap.ApplyCRDTUpd] STORE fail: %s\n", err.Error())
+						log.Printf("[imap.ApplyCRDTUpd] Removing just created mail file...\n")
+
+						// Remove just created mail file.
+						err = os.Remove(storeFileName)
+						if err != nil {
+							log.Printf("[imap.ApplyCRDTUpd] ... failed: %s\n", err.Error())
+							log.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
+						} else {
+							log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
+						}
+
+						// Exit worker.
+						storage.lock.Unlock()
+						os.Exit(1)
+					}
+
+					// Sync contents to stable storage.
+					err = storeFile.Sync()
+					if err != nil {
+
+						// Perform clean up.
+						log.Printf("[imap.ApplyCRDTUpd] STORE fail: %s\n", err.Error())
+						log.Printf("[imap.ApplyCRDTUpd] Removing just created mail file...\n")
+
+						// Remove just created mail file.
+						err = os.Remove(storeFileName)
+						if err != nil {
+							log.Printf("[imap.ApplyCRDTUpd] ... failed: %s\n", err.Error())
+							log.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
+						} else {
+							log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
+						}
+
+						// Exit worker.
+						storage.lock.Unlock()
+						os.Exit(1)
+					}
+
+					// If succeeded, add renamed mail to mailbox' CRDT.
+					err = userMailboxCRDT.AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true, true)
+					if err != nil {
+
+						// Perform clean up.
+						log.Printf("[imap.ApplyCRDTUpd] STORE fail: %s\n", err.Error())
+						log.Printf("[imap.ApplyCRDTUpd] Removing just created mail file...\n")
+
+						// Remove just created mail file.
+						err = os.Remove(storeFileName)
+						if err != nil {
+							log.Printf("[imap.ApplyCRDTUpd] ... failed: %s\n", err.Error())
+							log.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
+						} else {
+							log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
+						}
+
+						// Exit worker.
+						storage.lock.Unlock()
+						os.Exit(1)
+					}
+				} else {
+
+					// Add renamed mail to mailbox' CRDT.
+					err = userMailboxCRDT.AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true, true)
+					if err != nil {
+						storage.lock.Unlock()
+						return fmt.Errorf("[imap.ApplyCRDTUpd] STORE fail: %s. Exiting.\n", err.Error())
+					}
+				}
+
+				// Find old mail file's sequence number.
+				for msgNum, msgName := range storage.MailboxContents[storeUpd.User][storeUpd.Mailbox] {
+
+					if msgName == storeUpd.RmvMail[0].Value {
+
+						// Replace old file name with renamed new one.
+						storage.MailboxContents[storeUpd.User][storeUpd.Mailbox][msgNum] = storeUpd.AddMail.Value
+					}
+				}
 			}
 
-			log.Printf("APPLY HERE: COPY %#v\n", copyUpd.AddMails)
+			// Unlock storage.
+			storage.lock.Unlock()
 
 		}
 
