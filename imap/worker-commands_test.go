@@ -31,7 +31,7 @@ var selectTests = []struct {
 	out string
 }{
 	{"a LOGIN user0 password0", "a OK LOGIN completed"},
-	{"b SELECT INBOX", "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\nb OK [READ-WRITE] SELECT completed"},
+	{"b SELECT INBOX", "* 0 EXISTS\n* 0 RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\nb OK [READ-WRITE] SELECT completed"},
 	{"c SELECT", "c BAD Command SELECT was sent without a mailbox to select"},
 	{"d SELECT lol rofl nope", "d BAD Command SELECT was sent with multiple mailbox names instead of only one"},
 	{"e LOGOUT", "* BYE Terminating connection\ne OK LOGOUT completed"},
@@ -108,7 +108,7 @@ var storeTests = []struct {
 	{"g APPEND Sports {301}", "+ Ready for literal data"},
 	{msg1, "g OK APPEND completed"},
 	{"h STORE anything", "h BAD No mailbox selected for store"},
-	{"i SELECT Sports", "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\ni OK [READ-WRITE] SELECT completed"},
+	{"i SELECT Sports", "* 5 EXISTS\n* 5 RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\ni OK [READ-WRITE] SELECT completed"},
 	{"j STORE too few", "j BAD Command STORE was not sent with three parameters"},
 	{"k STORE one,two FLAGS (\\Seen)", "k BAD Command STORE was sent with an invalid number parameter"},
 	{"l STORE 2,4:* WHYNOTTHIS? (\\Seen)", "l BAD Unknown data item type specified"},
@@ -137,7 +137,7 @@ var expungeTests = []struct {
 	{"g APPEND Monday {301}", "+ Ready for literal data"},
 	{msg1, "g OK APPEND completed"},
 	{"h EXPUNGE", "h BAD No mailbox selected to expunge"},
-	{"i SELECT Monday", "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\ni OK [READ-WRITE] SELECT completed"},
+	{"i SELECT Monday", "* 5 EXISTS\n* 5 RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\ni OK [READ-WRITE] SELECT completed"},
 	{"j EXPUNGE", "j OK EXPUNGE completed"},
 	{"k STORE 1:* +FLAGS (\\Deleted)", "* 1 FETCH (FLAGS (\\Deleted))\n* 2 FETCH (FLAGS (\\Deleted))\n* 3 FETCH (FLAGS (\\Deleted))\n* 4 FETCH (FLAGS (\\Deleted))\n* 5 FETCH (FLAGS (\\Deleted))\nk OK STORE completed"},
 	{"l EXPUNGE", "* 5 EXPUNGE\n* 4 EXPUNGE\n* 3 EXPUNGE\n* 2 EXPUNGE\n* 1 EXPUNGE\nl OK EXPUNGE completed"},

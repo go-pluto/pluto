@@ -84,6 +84,8 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 		return true
 	}
 
+	// Check if mailbox exists.
+
 	// If any other mailbox than INBOX was specified,
 	// append it to mailbox in order to check it.
 	if mailboxes[0] != "INBOX" {
@@ -111,17 +113,41 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 	// Set selected mailbox in context to supplied one
 	// and advance IMAP state of connection to MAILBOX.
 	worker.Contexts[clientID].IMAPState = MAILBOX
-	worker.Contexts[clientID].SelectedMailbox = filepath.Base(mailboxPath)
+	worker.Contexts[clientID].SelectedMailbox = mailboxes[0]
+
+	// Store contents structure of selected mailbox for
+	// later convenient use.
+	selMailboxContents := worker.MailboxContents[worker.Contexts[clientID].UserName][mailboxes[0]]
+
+	// Count how many mails do not have the \Seen
+	// flag attached, i.e. recent mails.
+	recentMails := 0
+	for _, mail := range selMailboxContents {
+
+		// Retrieve flags of mail.
+		mailFlags, err := mailbox.Flags(mail, false)
+		if err != nil {
+			c.Error("Error while retrieving flags for mail", err)
+			return false
+		}
+
+		// Check if \Seen flag is present.
+		if strings.ContainsRune(mailFlags, 'S') != true {
+			recentMails += 1
+		}
+	}
 
 	// Build up answer to client.
-	answer := ""
+	var answer string
 
 	// Include part for standard flags.
+	answer = fmt.Sprintf("%s* %d EXISTS\n", answer, len(selMailboxContents))
+	answer = fmt.Sprintf("%s* %d RECENT\n", answer, recentMails)
 	answer = fmt.Sprintf("%s* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n", answer)
 	answer = fmt.Sprintf("%s* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\n", answer)
 	answer = fmt.Sprintf("%s%s OK [READ-WRITE] SELECT completed", answer, req.Tag)
 
-	// TODO: Add all other required answer parts.
+	// TODO: Add other SELECT response elements if needed.
 
 	// Send prepared answer to requesting client.
 	err = c.Send(answer)
