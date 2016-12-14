@@ -424,7 +424,67 @@ func (storage *Storage) ApplyCRDTUpd() error {
 				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing EXPUNGE update from sync message: %s\n", err.Error())
 			}
 
-			log.Printf("APPLY HERE: EXPUNGE %#v\n", expungeUpd.RmvMails)
+			// Lock storage exclusively.
+			storage.lock.Lock()
+
+			// Save user's mailbox structure CRDT to more
+			// conveniently use it hereafter.
+			userMainCRDT := storage.MailboxStructure[expungeUpd.User]["Structure"]
+
+			// Check if specified mailbox from expunge message is
+			// present in user's main CRDT on this node.
+			if userMainCRDT.Lookup(expungeUpd.Mailbox, true) {
+
+				// Store concerned mailbox CRDT.
+				userMailboxCRDT := storage.MailboxStructure[expungeUpd.User][expungeUpd.Mailbox]
+
+				// Construct remove set from received values.
+				rSet := make(map[string]string)
+				for _, element := range expungeUpd.RmvMail {
+					rSet[element.Tag] = element.Value
+				}
+
+				// Delete supplied elements from mailbox.
+				err := userMailboxCRDT.RemoveEffect(rSet, true, true)
+				if err != nil {
+					storage.lock.Unlock()
+					return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to remove mail elements from respective mailbox CRDT: %s\n", err.Error())
+				}
+
+				// Check if just removed elements marked all
+				// instances of mail file.
+				if userMailboxCRDT.Lookup(expungeUpd.RmvMail[0].Value, true) != true {
+
+					// Construct path to old file.
+					var delFileName string
+					if expungeUpd.Mailbox == "INBOX" {
+						delFileName = filepath.Join(storage.Config.Storage.MaildirRoot, expungeUpd.User, "cur", expungeUpd.RmvMail[0].Value)
+					} else {
+						delFileName = filepath.Join(storage.Config.Storage.MaildirRoot, expungeUpd.User, expungeUpd.Mailbox, "cur", expungeUpd.RmvMail[0].Value)
+					}
+
+					// Remove the file.
+					err := os.Remove(delFileName)
+					if err != nil {
+						storage.lock.Unlock()
+						return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to remove underlying mail file during EXPUNGE update: %s\n", err.Error())
+					}
+				}
+
+				for msgNum, msgName := range storage.MailboxContents[expungeUpd.User][expungeUpd.Mailbox] {
+
+					// Find removed mail file's sequence number.
+					if msgName == expungeUpd.RmvMail[0].Value {
+
+						// Delete mail's sequence number from contents structure.
+						realMsgNum := msgNum + 1
+						storage.MailboxContents[expungeUpd.User][expungeUpd.Mailbox] = append(storage.MailboxContents[expungeUpd.User][expungeUpd.Mailbox][:msgNum], storage.MailboxContents[expungeUpd.User][expungeUpd.Mailbox][realMsgNum:]...)
+					}
+				}
+			}
+
+			// Unlock storage.
+			storage.lock.Unlock()
 
 		case "store":
 
@@ -575,9 +635,9 @@ func (storage *Storage) ApplyCRDTUpd() error {
 					}
 				}
 
-				// Find old mail file's sequence number.
 				for msgNum, msgName := range storage.MailboxContents[storeUpd.User][storeUpd.Mailbox] {
 
+					// Find old mail file's sequence number.
 					if msgName == storeUpd.RmvMail[0].Value {
 
 						// Replace old file name with renamed new one.

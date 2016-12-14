@@ -82,7 +82,7 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 	}
 
 	// Signal success to client.
-	err = c.Send(fmt.Sprintf("%s OK Logged in", req.Tag))
+	err = c.Send(fmt.Sprintf("%s OK LOGIN completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false

@@ -201,8 +201,6 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn) {
 		// Unlock mutex.
 		recv.lock.Unlock()
 
-		log.Printf("[comm.StoreIncMsgs] Wrote to CRDT log file: %s", msgRaw)
-
 		// Indicate to applying routine that a new message
 		// is available to process.
 		if len(recv.msgInLog) < 1 {

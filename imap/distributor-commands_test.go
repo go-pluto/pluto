@@ -28,10 +28,10 @@ var loginTests = []struct {
 	in  string
 	out string
 }{
-	{"blub1 LOGIN user1 password1", "blub1 OK Logged in"},
-	{"blub2 LOGIN user1 password1", "blub2 OK Logged in"},
-	{"blub3 LOGIN user1 password1", "blub3 OK Logged in"},
-	{"blargh login user2 password2", "blargh OK Logged in"},
+	{"blub1 LOGIN user1 password1", "blub1 OK LOGIN completed"},
+	{"blub2 LOGIN user1 password1", "blub2 OK LOGIN completed"},
+	{"blub3 LOGIN user1 password1", "blub3 OK LOGIN completed"},
+	{"blargh login user2 password2", "blargh OK LOGIN completed"},
 	{"xyz LOGIN smith sesame", "xyz NO Name and / or password wrong"},
 	{"zyx login smith sesame", "zyx NO Name and / or password wrong"},
 	{"a1b2c3   LOGIN    user3 password3", "a1b2c3 BAD Received invalid IMAP command"},

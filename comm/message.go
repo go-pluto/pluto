@@ -69,9 +69,9 @@ type AppendMsg struct {
 // ExpungeMsg represents information needed in executing
 // a remote EXPUNGE operation on an ORSet CRDT.
 type ExpungeMsg struct {
-	User     string
-	Mailbox  string
-	RmvMails []*Element
+	User    string
+	Mailbox string
+	RmvMail []*Element
 }
 
 // StoreMsg represents information needed in executing
@@ -536,9 +536,9 @@ func ParseExpunge(payload string) (*ExpungeMsg, error) {
 	}
 
 	return &ExpungeMsg{
-		User:     parts[0],
-		Mailbox:  string(decMailbox),
-		RmvMails: mails,
+		User:    parts[0],
+		Mailbox: string(decMailbox),
+		RmvMail: mails,
 	}, nil
 }
 

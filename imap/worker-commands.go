@@ -45,7 +45,7 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 		// Send tagged BAD response.
 		err := c.Send(fmt.Sprintf("%s BAD Command SELECT cannot be executed in this state", req.Tag))
 		if err != nil {
-			c.ErrorLogOnly("Encountered send error", err)
+			c.Error("Encountered send error", err)
 			return false
 		}
 
@@ -61,7 +61,7 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 		// this is a client error. Return BAD statement.
 		err := c.Send(fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select", req.Tag))
 		if err != nil {
-			c.ErrorLogOnly("Encountered send error", err)
+			c.Error("Encountered send error", err)
 			return false
 		}
 
@@ -77,7 +77,7 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 		// this is a client error. Return BAD statement.
 		err := c.Send(fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one", req.Tag))
 		if err != nil {
-			c.ErrorLogOnly("Encountered send error", err)
+			c.Error("Encountered send error", err)
 			return false
 		}
 
@@ -101,7 +101,7 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 		// this is a client error. Return NO statement.
 		err := c.Send(fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder", req.Tag))
 		if err != nil {
-			c.ErrorLogOnly("Encountered send error", err)
+			c.Error("Encountered send error", err)
 			return false
 		}
 
@@ -117,15 +117,16 @@ func (worker *Worker) Select(c *Connection, req *Request, clientID string) bool 
 	answer := ""
 
 	// Include part for standard flags.
-	answer = answer + "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n"
-	answer = answer + "* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]"
+	answer = fmt.Sprintf("%s* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n", answer)
+	answer = fmt.Sprintf("%s* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\n", answer)
+	answer = fmt.Sprintf("%s%s OK [READ-WRITE] SELECT completed", answer, req.Tag)
 
 	// TODO: Add all other required answer parts.
 
 	// Send prepared answer to requesting client.
 	err = c.Send(answer)
 	if err != nil {
-		c.ErrorLogOnly("Encountered send error", err)
+		c.Error("Encountered send error", err)
 		return false
 	}
 
@@ -198,7 +199,8 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 
 	err := posMaildir.Create()
 	if err != nil {
-		log.Fatalf("[imap.Create] Maildir for new mailbox could not be created: %s\n", err.Error())
+		c.Error("Error while creating Maildir for new mailbox", err)
+		return false
 	}
 
 	// Construct path to new CRDT file.
@@ -365,7 +367,8 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 	err = os.Remove(delMailboxCRDTPath)
 	if err != nil {
 		// TODO: Maybe think about better way to clean up here?
-		log.Fatalf("[imap.Delete] CRDT file of mailbox could not be deleted: %s\n", err.Error())
+		c.Error("Error while deleting CRDT file of mailbox", err)
+		return false
 	}
 
 	// Remove files associated with deleted mailbox
@@ -375,7 +378,8 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 	err = delMaildir.Remove()
 	if err != nil {
 		// TODO: Maybe think about better way to clean up here?
-		log.Fatalf("[imap.Delete] Maildir could not be deleted: %s\n", err.Error())
+		c.Error("Error while deleting Maildir", err)
+		return false
 	}
 
 	// Send success answer.
@@ -647,11 +651,116 @@ func (worker *Worker) Expunge(c *Connection, req *Request, clientID string) bool
 		// Send tagged BAD response.
 		err := c.Send(fmt.Sprintf("%s BAD No mailbox selected to expunge", req.Tag))
 		if err != nil {
-			c.ErrorLogOnly("Encountered send error", err)
+			c.Error("Encountered send error", err)
 			return false
 		}
 
 		return true
+	}
+
+	if len(req.Payload) > 0 {
+
+		// If payload was not empty to EXPUNGE command,
+		// this is a client error. Return BAD statement.
+		err := c.Send(fmt.Sprintf("%s BAD Command EXPUNGE was sent with extra parameters", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Retrieve CRDT of mailbox to expunge.
+	expMailboxCRDT := worker.MailboxStructure[worker.Contexts[clientID].UserName][worker.Contexts[clientID].SelectedMailbox]
+
+	// Construct path to Maildir to expunge.
+	var expMaildir maildir.Dir
+	if worker.Contexts[clientID].SelectedMailbox == "INBOX" {
+		expMaildir = maildir.Dir(filepath.Join(worker.Contexts[clientID].UserMaildirPath, "cur"))
+	} else {
+		expMaildir = maildir.Dir(filepath.Join(worker.Contexts[clientID].UserMaildirPath, worker.Contexts[clientID].SelectedMailbox, "cur"))
+	}
+
+	// Save all mails possibly to delete and
+	// amount of these files.
+	expMails := worker.MailboxContents[worker.Contexts[clientID].UserName][worker.Contexts[clientID].SelectedMailbox]
+	numExpMails := len(expMails)
+
+	// Reserve space for mails to expunge.
+	expMailNums := make([]int, 0, 6)
+
+	// Declare variable to contain answers of
+	// individual remove operations.
+	var expAnswerLines []string
+
+	// Only do the work if there are any mails
+	// present in mailbox.
+	if numExpMails > 0 {
+
+		// Iterate over all mail files in reverse order.
+		for i := (numExpMails - 1); i >= 0; i-- {
+
+			// Retrieve all flags of fetched mail.
+			mailFlags, err := expMaildir.Flags(expMails[i], false)
+			if err != nil {
+				c.Error("Encountered error while retrieving flags for expunging mails", err)
+				return false
+			}
+
+			// Check for presence of \Deleted flag and
+			// add to delete set if found.
+			if strings.ContainsRune(mailFlags, 'T') {
+				expMailNums = append(expMailNums, i)
+			}
+		}
+
+		// Reserve space for answer lines.
+		expAnswerLines = make([]string, 0, len(expMailNums))
+
+		for _, msgNum := range expMailNums {
+
+			// Remove each mail to expunge from mailbox CRDT.
+			err := expMailboxCRDT.Remove(expMails[msgNum], func(payload string) {
+				worker.SyncSendChan <- fmt.Sprintf("expunge|%s|%s|%s", worker.Contexts[clientID].UserName, base64.StdEncoding.EncodeToString([]byte(worker.Contexts[clientID].SelectedMailbox)), payload)
+			})
+			if err != nil {
+
+				// This is a write-back error of the updated mailbox CRDT
+				// log file. Reverting actions were already taken, log error.
+				log.Printf("[imap.Expunge] Failed to remove mails from user's selected mailbox CRDT: %s\n", err.Error())
+
+				// Exit worker.
+				os.Exit(1)
+			}
+
+			// Construct path to file.
+			expMailPath := filepath.Join(string(expMaildir), expMails[msgNum])
+
+			// Remove the file.
+			err = os.Remove(expMailPath)
+			if err != nil {
+				c.Error("Error while removing expunged mail file from stable storage", err)
+				return false
+			}
+
+			// Immediately remove mail from contents structure.
+			realMsgNum := msgNum + 1
+			expMails = append(expMails[:msgNum], expMails[realMsgNum:]...)
+
+			// Append individual remove answer to answer lines.
+			expAnswerLines = append(expAnswerLines, fmt.Sprintf("* %d EXPUNGE", realMsgNum))
+		}
+
+		// Send out FETCH part with new flags.
+		for _, expAnswerLine := range expAnswerLines {
+
+			err := c.Send(expAnswerLine)
+			if err != nil {
+				c.Error("Encountered send error", err)
+				return false
+			}
+		}
 	}
 
 	// Send success answer.
@@ -689,7 +798,7 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 		// Send tagged BAD response.
 		err := c.Send(fmt.Sprintf("%s BAD No mailbox selected for store", req.Tag))
 		if err != nil {
-			c.ErrorLogOnly("Encountered send error", err)
+			c.Error("Encountered send error", err)
 			return false
 		}
 
@@ -876,15 +985,33 @@ func (worker *Worker) Store(c *Connection, req *Request, clientID string) bool {
 
 			// First, remove the former name of the mail file
 			// but do not yet send out an update operation.
-			storeMailboxCRDT.Remove(mailFileName, func(payload string) {
+			err = storeMailboxCRDT.Remove(mailFileName, func(payload string) {
 				rmvElements = payload
 			})
+			if err != nil {
+
+				// This is a write-back error of the updated mailbox CRDT
+				// log file. Reverting actions were already taken, log error.
+				log.Printf("[imap.Store] Failed to remove old mail name from selected mailbox CRDT: %s\n", err.Error())
+
+				// Exit worker.
+				os.Exit(1)
+			}
 
 			// Second, add the new mail file's name and finally
 			// instruct all other nodes to do the same.
-			storeMailboxCRDT.Add(newMailFileName, func(payload string) {
+			err = storeMailboxCRDT.Add(newMailFileName, func(payload string) {
 				worker.SyncSendChan <- fmt.Sprintf("store|%s|%s|%s|%s;%s", worker.Contexts[clientID].UserName, base64.StdEncoding.EncodeToString([]byte(worker.Contexts[clientID].SelectedMailbox)), rmvElements, payload, base64.StdEncoding.EncodeToString(mailFileContents))
 			})
+			if err != nil {
+
+				// This is a write-back error of the updated mailbox CRDT
+				// log file. Reverting actions were already taken, log error.
+				log.Printf("[imap.Store] Failed to add renamed mail name to selected mailbox CRDT: %s\n", err.Error())
+
+				// Exit worker.
+				os.Exit(1)
+			}
 
 			// If we are done with that, also replace the mail's
 			// file name in the corresponding contents slice.

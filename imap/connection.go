@@ -197,7 +197,7 @@ func (c *Connection) Error(msg string, err error) {
 func (c *Connection) ErrorLogOnly(msg string, err error) {
 
 	// Log error.
-	log.Printf("%s: %s. Signalling error to DISTRIBUTOR.\n", msg, err.Error())
+	log.Printf("%s: %s. Signalling error to distributor.\n", msg, err.Error())
 
 	// Signal error to distributor node.
 	err = c.SignalSessionError(nil)

@@ -220,8 +220,6 @@ func (sender *Sender) SendMsgs() {
 				// Retry transfer.
 				_, err = fmt.Fprintf(conn, "%s\n", marshalledMsg)
 			}
-
-			log.Printf("Sent to '%s': '%s'\n", i, marshalledMsg)
 		}
 
 		// Copy reduced buffer contents back to beginning
