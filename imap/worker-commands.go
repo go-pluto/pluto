@@ -165,6 +165,25 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 
 	log.Printf("Serving CREATE '%s'...\n", req.Tag)
 
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
+
+	if (worker.Contexts[clientID].IMAPState != AUTHENTICATED) && (worker.Contexts[clientID].IMAPState != MAILBOX) {
+
+		// If connection was not correct state when this
+		// command was executed, this is a client error.
+		// Send tagged BAD response.
+		err := c.Send(fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
 	// Split payload on every space character.
 	posMailboxes := strings.Split(req.Payload, " ")
 
@@ -180,11 +199,6 @@ func (worker *Worker) Create(c *Connection, req *Request, clientID string) bool 
 
 		return true
 	}
-
-	// Lock worker exclusively and unlock whenever
-	// this handler exits.
-	worker.lock.Lock()
-	defer worker.lock.Unlock()
 
 	// Trim supplied mailbox name of hierarchy separator if
 	// it was sent with a trailing one.
@@ -307,6 +321,25 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 
 	log.Printf("Serving DELETE '%s'...\n", req.Tag)
 
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
+
+	if (worker.Contexts[clientID].IMAPState != AUTHENTICATED) && (worker.Contexts[clientID].IMAPState != MAILBOX) {
+
+		// If connection was not correct state when this
+		// command was executed, this is a client error.
+		// Send tagged BAD response.
+		err := c.Send(fmt.Sprintf("%s BAD Command DELETE cannot be executed in this state", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
 	// Split payload on every space character.
 	delMailboxes := strings.Split(req.Payload, " ")
 
@@ -322,11 +355,6 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 
 		return true
 	}
-
-	// Lock worker exclusively and unlock whenever
-	// this handler exits.
-	worker.lock.Lock()
-	defer worker.lock.Unlock()
 
 	// Trim supplied mailbox name of hierarchy separator if
 	// it was sent with a trailing one.
@@ -418,6 +446,105 @@ func (worker *Worker) Delete(c *Connection, req *Request, clientID string) bool 
 	return true
 }
 
+// List allows clients to learn about the mailboxes
+// available and also returns the hierarchy delimiter.
+func (worker *Worker) List(c *Connection, req *Request, clientID string) bool {
+
+	log.Printf("Serving LIST '%s'...\n", req.Tag)
+
+	// Lock worker exclusively and unlock whenever
+	// this handler exits.
+	worker.lock.Lock()
+	defer worker.lock.Unlock()
+
+	if (worker.Contexts[clientID].IMAPState != AUTHENTICATED) && (worker.Contexts[clientID].IMAPState != MAILBOX) {
+
+		// If connection was not correct state when this
+		// command was executed, this is a client error.
+		// Send tagged BAD response.
+		err := c.Send(fmt.Sprintf("%s BAD Command LIST cannot be executed in this state", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Split payload on every space character.
+	listArgs := strings.Split(req.Payload, " ")
+
+	if len(listArgs) != 2 {
+
+		// If payload did not contain between exactly two elements,
+		// this is a client error. Return BAD statement.
+		err := c.Send(fmt.Sprintf("%s BAD Command LIST was not sent with exactly two arguments", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	if (listArgs[1] != "%") && (listArgs[1] != "*") {
+
+		// If second argument is not one of two wildcards,
+		// this is a client error. Return BAD statement.
+		err := c.Send(fmt.Sprintf("%s BAD Command LIST needs either '%%' or '*' as mailbox name", req.Tag))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		return true
+	}
+
+	// Save user's mailbox structure CRDT to more
+	// conveniently use it hereafter.
+	userMainCRDT := worker.MailboxStructure[worker.Contexts[clientID].UserName]
+
+	// Reserve space for answer.
+	listAnswerLines := make([]string, 0, (len(userMainCRDT) - 1))
+
+	for mailbox, _ := range userMainCRDT {
+
+		// Do not consider structure element.
+		if mailbox != "Structure" {
+
+			// Split currently considered mailbox name at
+			// defined hierarchy separator.
+			mailboxParts := strings.Split(mailbox, worker.Config.IMAP.HierarchySeparator)
+
+			if (listArgs[1] == "*") || (len(mailboxParts) == 1) {
+
+				// Either always include a mailbox in the response
+				// or only when it is a top level mailbox.
+				listAnswerLines = append(listAnswerLines, fmt.Sprintf("* LIST () \"/\" %s", mailbox))
+			}
+		}
+	}
+
+	// Send out LIST response lines.
+	for _, listAnswerLine := range listAnswerLines {
+
+		err := c.Send(listAnswerLine)
+		if err != nil {
+			c.Error("Encountered send error", err)
+			return false
+		}
+	}
+
+	// Send success answer.
+	err := c.Send(fmt.Sprintf("%s OK LIST completed", req.Tag))
+	if err != nil {
+		c.Error("Encountered send error", err)
+		return false
+	}
+
+	return true
+}
+
 // Mail functions
 
 // Append puts supplied message into specified mailbox.
@@ -430,6 +557,30 @@ func (worker *Worker) Append(c *Connection, req *Request, clientID string) bool 
 	var numBytesRaw string
 
 	log.Printf("Serving APPEND '%s'...\n", req.Tag)
+
+	// Lock worker.
+	worker.lock.Lock()
+
+	if (worker.Contexts[clientID].IMAPState != AUTHENTICATED) && (worker.Contexts[clientID].IMAPState != MAILBOX) {
+
+		// If connection was not correct state when this
+		// command was executed, this is a client error.
+		// Send tagged BAD response.
+		err := c.Send(fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag))
+		if err != nil {
+			worker.lock.Unlock()
+			c.Error("Encountered send error", err)
+			return false
+		}
+
+		// Unlock worker again.
+		worker.lock.Unlock()
+
+		return true
+	}
+
+	// Unlock worker again.
+	worker.lock.Unlock()
 
 	// Split payload on every space character.
 	appendArgs := strings.Split(req.Payload, " ")

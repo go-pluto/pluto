@@ -74,6 +74,20 @@ var deleteTests = []struct {
 	{"l LOGOUT", "* BYE Terminating connection\nl OK LOGOUT completed"},
 }
 
+var listTests = []struct {
+	in     string
+	outOne string
+	outTwo string
+}{
+	{"a LOGIN user1 password1", "a OK LOGIN completed", "a OK LOGIN completed"},
+	{"b LIST \"\" *", "* LIST () \"/\" INBOX\n* LIST () \"/\" university\nb OK LIST completed", "* LIST () \"/\" university\n* LIST () \"/\" INBOX\nb OK LIST completed"},
+	{"c CREATE university.Modul1", "c OK CREATE completed", "c OK CREATE completed"},
+	{"d LIST \"\" %", "* LIST () \"/\" INBOX\n* LIST () \"/\" university\nd OK LIST completed", "* LIST () \"/\" INBOX\n* LIST () \"/\" university\nd OK LIST completed"},
+	{"e DELETE university", "e OK DELETE completed", "e OK DELETE completed"},
+	{"f LIST \"\" *", "* LIST () \"/\" INBOX\n* LIST () \"/\" university.Modul1\nf OK LIST completed", "* LIST () \"/\" university.Modul1\n* LIST () \"/\" INBOX\nf OK LIST completed"},
+	{"g LOGOUT", "* BYE Terminating connection\ng OK LOGOUT completed", "* BYE Terminating connection\ng OK LOGOUT completed"},
+}
+
 var appendTests = []struct {
 	in  string
 	out string
@@ -209,7 +223,7 @@ func TestSelect(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestSelect] Error during receiving table test EXPUNGE: %s\n", err.Error())
+				t.Errorf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
@@ -291,7 +305,7 @@ func TestCreate(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestCreate] Error during receiving table test EXPUNGE: %s\n", err.Error())
+				t.Errorf("[imap.TestCreate] Error during receiving table test CREATE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
@@ -373,7 +387,7 @@ func TestDelete(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestDelete] Error during receiving table test EXPUNGE: %s\n", err.Error())
+				t.Errorf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
@@ -383,6 +397,88 @@ func TestDelete(t *testing.T) {
 
 		if answer != tt.out {
 			t.Fatalf("[imap.TestDelete] Expected '%s' but received '%s'\n", tt.out, answer)
+		}
+	}
+
+	// At the end of each test, terminate connection.
+	c.Terminate()
+
+	time.Sleep(1400 * time.Millisecond)
+}
+
+// TestList executes a black-box table test on the
+// implemented List() function.
+func TestList(t *testing.T) {
+
+	// Create needed test environment.
+	config, tlsConfig, err := utils.CreateTestEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Start a storage node in background.
+	go utils.RunStorageWithTimeout(config, 2200)
+	time.Sleep(400 * time.Millisecond)
+
+	// Start a worker node in background.
+	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
+	time.Sleep(400 * time.Millisecond)
+
+	// Start a distributor node in background.
+	go utils.RunDistributorWithTimeout(config, 1400)
+	time.Sleep(400 * time.Millisecond)
+
+	// Connect to IMAP server.
+	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
+	if err != nil {
+		t.Fatalf("[imap.TestList] Error during connection attempt to IMAP server: %s\n", err.Error())
+	}
+
+	// Create new connection struct.
+	c := imap.NewConnection(conn)
+
+	// Consume mandatory IMAP greeting.
+	_, err = c.Receive()
+	if err != nil {
+		t.Errorf("[imap.TestList] Error during receiving initial server greeting: %s\n", err.Error())
+	}
+
+	for _, tt := range listTests {
+
+		var answer string
+
+		// Table test: send 'in' part of each line.
+		err = c.Send(tt.in)
+		if err != nil {
+			t.Fatalf("[imap.TestList] Sending message to server failed with: %s\n", err.Error())
+		}
+
+		// Receive answer to LIST request.
+		firstAnswer, err := c.Receive()
+		if err != nil {
+			t.Errorf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
+		}
+
+		// As long as the IMAP command termination indicator
+		// was not yet received, continue append answers.
+		for (strings.Contains(firstAnswer, "completed") != true) &&
+			(strings.Contains(firstAnswer, "BAD") != true) &&
+			(strings.Contains(firstAnswer, "NO") != true) &&
+			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
+
+			// Receive next line from distributor.
+			nextAnswer, err := c.Receive()
+			if err != nil {
+				t.Errorf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
+			}
+
+			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+		}
+
+		answer = firstAnswer
+
+		if (answer != tt.outOne) && (answer != tt.outTwo) {
+			t.Fatalf("[imap.TestList] Expected '%s' or '%s' but received '%s'\n", tt.outOne, tt.outTwo, answer)
 		}
 	}
 
@@ -465,7 +561,7 @@ func TestAppend(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestAppend] Error during receiving table test EXPUNGE: %s\n", err.Error())
+				t.Errorf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
