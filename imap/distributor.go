@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 
 	"github.com/numbleroot/pluto/auth"
+	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crypto"
 )
@@ -61,7 +62,7 @@ func InitDistributor(config *config.Config) (*Distributor, error) {
 
 		// Try to connect to mail port of each worker node the
 		// distributor is responsible for.
-		c, err := ReliableConnect("distributor", workerName, workerNode.IP, workerNode.MailPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+		c, err := comm.ReliableConnect("distributor", workerName, workerNode.IP, workerNode.MailPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
 		if err != nil {
 			return nil, err
 		}

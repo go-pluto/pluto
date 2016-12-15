@@ -8,7 +8,11 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
+
+	"io/ioutil"
 )
 
 // Structs
@@ -25,6 +29,7 @@ type Receiver struct {
 	incVClock        chan string
 	updVClock        chan map[string]int
 	vclock           map[string]int
+	vclockLog        *os.File
 	applyCRDTUpdChan chan string
 	doneCRDTUpdChan  chan struct{}
 	nodes            []string
@@ -37,7 +42,7 @@ type Receiver struct {
 // InitReceiver initializes above struct and sets
 // default values. It starts involved background
 // routines and send initial channel trigger.
-func InitReceiver(name string, logFilePath string, socket net.Listener, applyCRDTUpdChan chan string, doneCRDTUpdChan chan struct{}, downRecv chan struct{}, nodes []string) (chan string, chan map[string]int, error) {
+func InitReceiver(name string, logFilePath string, vclockLogPath string, socket net.Listener, applyCRDTUpdChan chan string, doneCRDTUpdChan chan struct{}, downRecv chan struct{}, nodes []string) (chan string, chan map[string]int, error) {
 
 	// Create and initialize new struct.
 	recv := &Receiver{
@@ -83,6 +88,25 @@ func InitReceiver(name string, logFilePath string, socket net.Listener, applyCRD
 	// Including the entry of this node.
 	recv.vclock[name] = 0
 
+	// Open log file of last known vector clock values.
+	vclockLog, err := os.OpenFile(vclockLogPath, (os.O_CREATE | os.O_RDWR), 0600)
+	if err != nil {
+		return nil, nil, fmt.Errorf("[comm.InitReceiver] Opening vector clock log failed with: %s\n", err.Error())
+	}
+	recv.vclockLog = vclockLog
+
+	// Initially, reset position in vector clock file to beginning.
+	_, err = recv.vclockLog.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return nil, nil, fmt.Errorf("[comm.InitReceiver] Could not reset position in vector clock log: %s\n", err.Error())
+	}
+
+	// If vector clock entries were preserved, set them.
+	err = recv.SetVClockEntries()
+	if err != nil {
+		return nil, nil, fmt.Errorf("[comm.InitReceiver] Reading in stored vector clock entries failed: %s\n", err.Error())
+	}
+
 	// Start eventual shutdown routine in background.
 	go recv.Shutdown(downRecv)
 
@@ -104,6 +128,85 @@ func InitReceiver(name string, logFilePath string, socket net.Listener, applyCRD
 	go recv.AcceptIncMsgs()
 
 	return recv.incVClock, recv.updVClock, nil
+}
+
+// SetVClockEntries fetches saved vector clock entries
+// from log file and sets them in internal vector clock.
+// It expects to be the only goroutine currently operating
+// on receiver.
+func (recv *Receiver) SetVClockEntries() error {
+
+	// Read all log contents.
+	storedVClockBytes, err := ioutil.ReadAll(recv.vclockLog)
+	if err != nil {
+		return err
+	}
+	storedVClock := string(storedVClockBytes)
+
+	// If log was empty (e.g., initially), return
+	// success because we do not have anything to set.
+	if storedVClock == "" {
+		return nil
+	}
+
+	// Otherwise, split at semicola.
+	pairs := strings.Split(string(storedVClock), ";")
+
+	for _, pair := range pairs {
+
+		// Split pairs at colon.
+		entry := strings.Split(pair, ":")
+
+		// Convert entry string to int.
+		entryNumber, err := strconv.Atoi(entry[1])
+		if err != nil {
+			return err
+		}
+
+		// Set elements in vector clock of receiver.
+		recv.vclock[entry[0]] = entryNumber
+	}
+
+	return nil
+}
+
+// SaveVClockEntries writes current status of vector
+// clock to log file to recover from later. It expects to
+// be the only goroutine currently operating on receiver.
+func (recv *Receiver) SaveVClockEntries() error {
+
+	vclockString := ""
+
+	// Construct string of current vector clock.
+	for node, entry := range recv.vclock {
+
+		if vclockString == "" {
+			vclockString = fmt.Sprintf("%s:%d", node, entry)
+		} else {
+			vclockString = fmt.Sprintf("%s;%s:%d", vclockString, node, entry)
+		}
+	}
+
+	// Over-write old vector clock log. Reset position
+	// of read-write head to beginning.
+	_, err := recv.vclockLog.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return err
+	}
+
+	// Write vclock string to file.
+	newNumOfBytes, err := recv.vclockLog.WriteString(vclockString)
+	if err != nil {
+		return nil
+	}
+
+	// Truncate file to just written content.
+	err = recv.vclockLog.Truncate(int64(newNumOfBytes))
+	if err != nil {
+		return nil
+	}
+
+	return nil
 }
 
 // Shutdown awaits a receiver global shutdown signal and
@@ -177,6 +280,12 @@ func (recv *Receiver) IncVClockEntry() {
 						updatedVClock[node] = value
 					}
 
+					// Save updated vector clock to log file.
+					err := recv.SaveVClockEntries()
+					if err != nil {
+						log.Fatalf("[comm.IncVClockEntry] Saving updated vector clock to file failed: %s\n", err.Error())
+					}
+
 					// Send back the updated vector clock on other
 					// defined channel to sender.
 					recv.updVClock <- updatedVClock
@@ -246,30 +355,37 @@ func (recv *Receiver) AcceptIncMsgs() error {
 // it into incoming CRDT message log file.
 func (recv *Receiver) StoreIncMsgs(conn net.Conn, downStoring chan struct{}) {
 
+	var err error
+
+	// Initial value for received message in order
+	// to skip past the mandatory ping message.
+	msgRaw := "> ping <\n"
+
 	// Create new buffered reader for connection.
 	r := bufio.NewReader(conn)
 
-	// Read string until newline character is received.
-	msgRaw, err := r.ReadString('\n')
-	if err != nil {
+	for msgRaw == "> ping <\n" {
 
-		if err.Error() == "EOF" {
+		// Read string until newline character is received.
+		msgRaw, err = r.ReadString('\n')
+		if err != nil {
 
-			// Error caused by disconnect. Do not crash.
-			log.Printf("[comm.StoreIncMsgs] Node at %s disconnected...\n", conn.RemoteAddr())
+			if err.Error() == "EOF" {
 
-			// Simply end this function.
-			msgRaw = "> done <"
-		} else {
+				// Error caused by disconnect. Do not crash.
+				log.Printf("[comm.StoreIncMsgs] Node at %s disconnected...\n", conn.RemoteAddr())
 
-			// Fatal error.
-			log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
+				// Simply end this function.
+				msgRaw = "> done <\n"
+			} else {
+				log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
+			}
 		}
 	}
 
 	// Unless we do not receive the signal that continuous CRDT
 	// message transmission is done, we accept new messages.
-	for msgRaw != "> done <" {
+	for msgRaw != "> done <\n" {
 
 		// Lock mutex.
 		recv.lock.Lock()
@@ -289,6 +405,8 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn, downStoring chan struct{}) {
 		// Unlock mutex.
 		recv.lock.Unlock()
 
+		log.Println("[comm.StoreIncMsgs] Wrote a CRDT message to log.")
+
 		// Indicate to applying routine that a new message
 		// is available to process.
 		if len(recv.msgInLog) < 1 {
@@ -300,25 +418,29 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn, downStoring chan struct{}) {
 		case <-downStoring:
 
 			// Break from inifinte loop.
-			msgRaw = "> done <"
+			msgRaw = "> done <\n"
 
 		default:
 
-			// Read next CRDT message until newline character is received.
-			msgRaw, err = r.ReadString('\n')
-			if err != nil {
+			// Reset message to expected ping.
+			msgRaw = "> ping <\n"
 
-				if err.Error() == "EOF" {
+			for msgRaw == "> ping <\n" {
 
-					// Error caused by disconnect. Do not crash.
-					log.Printf("[comm.StoreIncMsgs] Node at %s disconnected...\n", conn.RemoteAddr())
+				// Read next CRDT message until newline character is received.
+				msgRaw, err = r.ReadString('\n')
+				if err != nil {
 
-					// Simply end this function.
-					msgRaw = "> done <"
-				} else {
+					if err.Error() == "EOF" {
 
-					// Fatal error.
-					log.Fatalf("[comm.StoreIncMsgs] Error while reading next sync message: %s\n", err.Error())
+						// Error caused by disconnect. Do not crash.
+						log.Printf("[comm.StoreIncMsgs] Node at %s disconnected...\n", conn.RemoteAddr())
+
+						// Simply end this function.
+						msgRaw = "> done <\n"
+					} else {
+						log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
+					}
 				}
 			}
 		}
@@ -388,8 +510,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 
 				// Account for case when offset reached end of log file.
 				if logSize == curOffset {
-
-					log.Printf("[comm.ApplyStoredMsgs] Reached end of log file, resetting to beginning.\n")
 
 					// Reset position to beginning of file.
 					_, err = recv.updLog.Seek(0, os.SEEK_SET)
@@ -489,6 +609,12 @@ func (recv *Receiver) ApplyStoredMsgs() {
 						if value > recv.vclock[node] {
 							recv.vclock[node] = value
 						}
+					}
+
+					// Save updated vector clock to log file.
+					err := recv.SaveVClockEntries()
+					if err != nil {
+						log.Fatalf("[comm.ApplyStoredMsgs] Saving updated vector clock to file failed: %s\n", err.Error())
 					}
 
 					// Reset head position to curOffset saved at beginning of loop.

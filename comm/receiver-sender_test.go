@@ -64,7 +64,7 @@ func TestSenderReceiver(t *testing.T) {
 	}
 
 	// Initialize receiver in background at worker-1.
-	chanIncN1, chanUpdN1, err := comm.InitReceiver(n1, "../test-comm-receiving-worker-1.log", socketN1, n1ApplyCRDTUpdChan, n1DoneCRDTUpdChan, n1DownRecv, []string{n2})
+	chanIncN1, chanUpdN1, err := comm.InitReceiver(n1, "../test-comm-receiving-worker-1.log", "../test-comm-vclock-worker-1.log", socketN1, n1ApplyCRDTUpdChan, n1DoneCRDTUpdChan, n1DownRecv, []string{n2})
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitReceiver() for worker-1 not to fail but received: %s\n", err.Error())
 	}
@@ -87,7 +87,7 @@ func TestSenderReceiver(t *testing.T) {
 	}()
 
 	// Initialize receiver in foreground at storage.
-	chanIncN2, chanUpdN2, err := comm.InitReceiver(n2, "../test-comm-receiving-storage.log", socketN2, n2ApplyCRDTUpdChan, n2DoneCRDTUpdChan, n2DownRecv, []string{n1})
+	chanIncN2, chanUpdN2, err := comm.InitReceiver(n2, "../test-comm-receiving-storage.log", "../test-comm-vclock-storage.log", socketN2, n2ApplyCRDTUpdChan, n2DoneCRDTUpdChan, n2DownRecv, []string{n1})
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitReceiver() for storage not to fail but received: %s\n", err.Error())
 	}
@@ -133,13 +133,13 @@ func TestSenderReceiver(t *testing.T) {
 	connsN2[n1] = cToN1
 
 	// Initialize sending interface for worker-1.
-	chan1, err := comm.InitSender(n1, "../test-comm-sending-worker-1.log", chanIncN1, chanUpdN1, n1DownSender, connsN1)
+	chan1, err := comm.InitSender(n1, "../test-comm-sending-worker-1.log", internalTLSConfigN1, testEnv.Config.IntlConnWait, chanIncN1, chanUpdN1, n1DownSender, connsN1)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitSender() for worker-1 not to fail but received: %s\n", err.Error())
 	}
 
 	// Initialize sending interface for storage.
-	chan2, err := comm.InitSender(n2, "../test-comm-sending-storage.log", chanIncN2, chanUpdN2, n2DownSender, connsN2)
+	chan2, err := comm.InitSender(n2, "../test-comm-sending-storage.log", internalTLSConfigN2, testEnv.Config.IntlConnWait, chanIncN2, chanUpdN2, n2DownSender, connsN2)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitSender() for storage not to fail but received: %s\n", err.Error())
 	}

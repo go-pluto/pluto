@@ -154,16 +154,17 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	// Construct path to receiving and sending CRDT logs for storage node.
 	recvCRDTLog := filepath.Join(worker.CRDTLayerRoot, "receiving.log")
 	sendCRDTLog := filepath.Join(worker.CRDTLayerRoot, "sending.log")
+	vclockLog := filepath.Join(worker.CRDTLayerRoot, "vclock.log")
 
 	// Initialize receiving goroutine for sync operations.
-	chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(worker.Name, recvCRDTLog, worker.SyncSocket, applyCRDTUpdChan, doneCRDTUpdChan, downRecv, []string{"storage"})
+	chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(worker.Name, recvCRDTLog, vclockLog, worker.SyncSocket, applyCRDTUpdChan, doneCRDTUpdChan, downRecv, []string{"storage"})
 	if err != nil {
 		return nil, err
 	}
 
 	// Try to connect to sync port of storage node to which this node
 	// sends data for long-term storage, but in background.
-	c, err := ReliableConnect(worker.Name, "storage", config.Storage.IP, config.Storage.SyncPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+	c, err := comm.ReliableConnect(worker.Name, "storage", config.Storage.IP, config.Storage.SyncPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +173,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	worker.Connections["storage"] = c
 
 	// Init sending part of CRDT communication and send messages in background.
-	worker.SyncSendChan, err = comm.InitSender(worker.Name, sendCRDTLog, chanIncVClockWorker, chanUpdVClockWorker, downSender, worker.Connections)
+	worker.SyncSendChan, err = comm.InitSender(worker.Name, sendCRDTLog, internalTLSConfig, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, worker.Connections)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +226,7 @@ func InitFailoverWorker(config *config.Config, workerName string) (*FailoverWork
 
 	// Try to connect to mail port of storage node to which this node
 	// forwards all traffic it received from distributor.
-	c, err := ReliableConnect(failoverWorker.Name, "storage", config.Storage.IP, config.Storage.MailPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+	c, err := comm.ReliableConnect(failoverWorker.Name, "storage", config.Storage.IP, config.Storage.MailPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
 	if err != nil {
 		return nil, err
 	}

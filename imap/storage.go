@@ -129,17 +129,18 @@ func InitStorage(config *config.Config) (*Storage, error) {
 		// current worker node.
 		recvCRDTLog := filepath.Join(storage.CRDTLayerRoot, fmt.Sprintf("receiving-%s.log", workerName))
 		sendCRDTLog := filepath.Join(storage.CRDTLayerRoot, fmt.Sprintf("sending-%s.log", workerName))
+		vclockLog := filepath.Join(storage.CRDTLayerRoot, fmt.Sprintf("vclock-%s.log", workerName))
 
 		// Initialize a receiving goroutine for sync operations
 		// for each worker node.
-		chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver("storage", recvCRDTLog, storage.SyncSocket, applyCRDTUpdChan, doneCRDTUpdChan, downRecv, []string{workerName})
+		chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver("storage", recvCRDTLog, vclockLog, storage.SyncSocket, applyCRDTUpdChan, doneCRDTUpdChan, downRecv, []string{workerName})
 		if err != nil {
 			return nil, err
 		}
 
 		// Try to connect to sync port of each worker node this storage
 		// node is serving as long-term storage backend as.
-		c, err := ReliableConnect("storage", workerName, workerNode.IP, workerNode.SyncPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+		c, err := comm.ReliableConnect("storage", workerName, workerNode.IP, workerNode.SyncPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +151,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 		storage.Connections[workerName] = c
 
 		// Init sending part of CRDT communication and send messages in background.
-		storage.SyncSendChans[workerName], err = comm.InitSender("storage", sendCRDTLog, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
+		storage.SyncSendChans[workerName], err = comm.InitSender("storage", sendCRDTLog, internalTLSConfig, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
 		if err != nil {
 			return nil, err
 		}

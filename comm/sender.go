@@ -18,17 +18,19 @@ import (
 // Sender bundles information needed for sending
 // out sync messages via CRDTs.
 type Sender struct {
-	lock      *sync.Mutex
-	name      string
-	inc       chan string
-	msgInLog  chan struct{}
-	writeLog  *os.File
-	updLog    *os.File
-	incVClock chan string
-	updVClock chan map[string]int
-	nodes     map[string]*tls.Conn
-	wg        *sync.WaitGroup
-	shutdown  chan struct{}
+	lock          *sync.Mutex
+	name          string
+	tlsConfig     *tls.Config
+	intlConnRetry int
+	inc           chan string
+	msgInLog      chan struct{}
+	writeLog      *os.File
+	updLog        *os.File
+	incVClock     chan string
+	updVClock     chan map[string]int
+	nodes         map[string]*tls.Conn
+	wg            *sync.WaitGroup
+	shutdown      chan struct{}
 }
 
 // Functions
@@ -38,20 +40,22 @@ type Sender struct {
 // with. It returns a channel local processes can put
 // CRDT changes into, so that those changes will be
 // communicated to connected nodes.
-func InitSender(name string, logFilePath string, incVClock chan string, updVClock chan map[string]int, downSender chan struct{}, nodes map[string]*tls.Conn) (chan string, error) {
+func InitSender(name string, logFilePath string, tlsConfig *tls.Config, retry int, incVClock chan string, updVClock chan map[string]int, downSender chan struct{}, nodes map[string]*tls.Conn) (chan string, error) {
 
 	// Create and initialize what we need for
 	// a CRDT sender routine.
 	sender := &Sender{
-		lock:      new(sync.Mutex),
-		name:      name,
-		inc:       make(chan string),
-		msgInLog:  make(chan struct{}, 1),
-		incVClock: incVClock,
-		updVClock: updVClock,
-		nodes:     nodes,
-		wg:        new(sync.WaitGroup),
-		shutdown:  make(chan struct{}, 2),
+		lock:          new(sync.Mutex),
+		name:          name,
+		tlsConfig:     tlsConfig,
+		intlConnRetry: retry,
+		inc:           make(chan string),
+		msgInLog:      make(chan struct{}, 1),
+		incVClock:     incVClock,
+		updVClock:     updVClock,
+		nodes:         nodes,
+		wg:            new(sync.WaitGroup),
+		shutdown:      make(chan struct{}, 2),
 	}
 
 	// Open log file descriptor for writing.
@@ -276,15 +280,40 @@ func (sender *Sender) SendMsgs() {
 
 					var err error
 
+					// Test long-lived connection.
+					_, err = conn.Write([]byte("> ping <\n"))
+					if err != nil {
+						log.Fatalf("[comm.SendMsgs] Sending ping to node %s failed with: %s\n", i, err.Error())
+					}
+
 					// Write message to TLS connections.
 					_, err = fmt.Fprintf(conn, "%s\n", marshalledMsg)
 					for err != nil {
 
-						// Log fail.
-						log.Printf("[comm.SendMsgs] Sending CRDT update to node %s failed with: %s\n", i, err.Error())
+						log.Printf("[comm.SendMsgs] Sending to node '%s' failed, trying to recover...\n", i)
 
-						// TODO: Take wait times from config.
-						time.Sleep(25 * time.Millisecond)
+						// Define an error we can deal with.
+						okError := fmt.Sprintf("write tcp %s->%s: write: broken pipe", conn.LocalAddr(), conn.RemoteAddr())
+
+						// Extract address to reconnect to.
+						addrParts := strings.Split(conn.RemoteAddr().String(), ":")
+
+						if err.Error() == okError {
+
+							// Connection was lost. Reconnect.
+							conn, err = ReliableConnect(sender.name, i, addrParts[0], addrParts[1], sender.tlsConfig, 0, sender.intlConnRetry)
+							if err != nil {
+								log.Fatalf("[comm.SendMsgs] Could not reestablish connection with %s: %s\n", i, err.Error())
+							}
+
+							// Replace old connection with new.
+							sender.nodes[i] = conn
+						} else {
+							log.Fatalf("[comm.SendMsgs] Could not reestablish connection with %s: %s\n", i, err.Error())
+						}
+
+						// Wait configured time before attempting next transfer.
+						time.Sleep(time.Duration(sender.intlConnRetry) * time.Millisecond)
 
 						// Retry transfer.
 						_, err = fmt.Fprintf(conn, "%s\n", marshalledMsg)
