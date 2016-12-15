@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
 	"runtime"
 
 	"github.com/numbleroot/pluto/config"
@@ -22,6 +23,7 @@ func main() {
 	configFlag := flag.String("config", "config.toml", "Provide path to configuration file in TOML syntax.")
 	distributorFlag := flag.Bool("distributor", false, "Append this flag to indicate that this process should take the role of the distributor.")
 	workerFlag := flag.String("worker", "", "If this process is intended to run as one of the IMAP worker nodes, specify which of the ones defined in your config file this should be.")
+	failoverFlag := flag.Bool("failover", false, "Add this flag to a worker node in order to operate this node as a passthrough-failover node for specified crashed worker node.")
 	storageFlag := flag.Bool("storage", false, "Append this flag to indicate that this process should take the role of the storage node.")
 	flag.Parse()
 
@@ -47,21 +49,34 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+
 	} else if *workerFlag != "" {
 
-		// Initialize worker.
-		worker, err := imap.InitWorker(conf, *workerFlag)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer worker.MailSocket.Close()
-		defer worker.SyncSocket.Close()
+		if *failoverFlag {
 
-		// Loop on incoming requests.
-		err = worker.Run()
-		if err != nil {
-			log.Fatal(err)
+			// Initialize a failover worker node.
+			failoverWorker, err := imap.InitFailoverWorker(conf, *workerFlag)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer failoverWorker.MailSocket.Close()
+		} else {
+
+			// Initialize a normally operating worker.
+			worker, err := imap.InitWorker(conf, *workerFlag)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer worker.MailSocket.Close()
+			defer worker.SyncSocket.Close()
+
+			// Loop on incoming requests.
+			err = worker.Run()
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
+
 	} else if *storageFlag {
 
 		// Initialize storage.
@@ -77,5 +92,13 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+
+	} else {
+
+		// If no flags were specified, print usage
+		// and return with failure value.
+		flag.Usage()
+		os.Exit(1)
+
 	}
 }

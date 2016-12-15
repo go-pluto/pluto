@@ -252,7 +252,19 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn, downStoring chan struct{}) {
 	// Read string until newline character is received.
 	msgRaw, err := r.ReadString('\n')
 	if err != nil {
-		log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
+
+		if err.Error() == "EOF" {
+
+			// Error caused by disconnect. Do not crash.
+			log.Printf("[comm.StoreIncMsgs] Node at %s disconnected...\n", conn.RemoteAddr())
+
+			// Simply end this function.
+			msgRaw = "> done <"
+		} else {
+
+			// Fatal error.
+			log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
+		}
 	}
 
 	// Unless we do not receive the signal that continuous CRDT
@@ -295,7 +307,19 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn, downStoring chan struct{}) {
 			// Read next CRDT message until newline character is received.
 			msgRaw, err = r.ReadString('\n')
 			if err != nil {
-				log.Fatalf("[comm.StoreIncMsgs] Error while reading next sync message: %s\n", err.Error())
+
+				if err.Error() == "EOF" {
+
+					// Error caused by disconnect. Do not crash.
+					log.Printf("[comm.StoreIncMsgs] Node at %s disconnected...\n", conn.RemoteAddr())
+
+					// Simply end this function.
+					msgRaw = "> done <"
+				} else {
+
+					// Fatal error.
+					log.Fatalf("[comm.StoreIncMsgs] Error while reading next sync message: %s\n", err.Error())
+				}
 			}
 		}
 	}

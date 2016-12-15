@@ -24,6 +24,16 @@ type Worker struct {
 	SyncSendChan chan string
 }
 
+// FailoverWorker represents a reduced IMAPNode
+// that simply writes through traffic to storage node.
+type FailoverWorker struct {
+	Name         string
+	MailSocket   net.Listener
+	Connections  map[string]*tls.Conn
+	Config       *config.Config
+	ShutdownChan chan struct{}
+}
+
 // Functions
 
 // InitWorker listens for TLS connections on a TCP socket
@@ -179,6 +189,59 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	log.Printf("[imap.InitWorker] Listening for incoming IMAP requests on %s.\n", worker.MailSocket.Addr())
 
 	return worker, nil
+}
+
+// InitFailoverWorker initializes a worker node that acts as a
+// passthrough-failover of the worker node specified via workerName.
+// This results in a "dumb" proxy node that forwards all received
+// traffic from distributor directly to storage node.
+func InitFailoverWorker(config *config.Config, workerName string) (*FailoverWorker, error) {
+
+	// Initialize and set fields.
+	failoverWorker := &FailoverWorker{
+		Name:        workerName,
+		Connections: make(map[string]*tls.Conn),
+		Config:      config,
+	}
+
+	// Check if supplied worker with workerName actually is configured.
+	if _, ok := config.Workers[failoverWorker.Name]; !ok {
+
+		var workerID string
+
+		// Retrieve first valid worker ID to provide feedback.
+		for workerID = range config.Workers {
+			break
+		}
+
+		return nil, fmt.Errorf("[imap.InitFailoverWorker] Specified worker ID does not exist in config file. Please provide a valid one, for example '%s'.\n", workerID)
+	}
+
+	// Load internal TLS config.
+	internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Workers[failoverWorker.Name].TLS.CertLoc, config.Workers[failoverWorker.Name].TLS.KeyLoc, config.RootCertLoc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Try to connect to mail port of storage node to which this node
+	// forwards all traffic it received from distributor.
+	c, err := ReliableConnect(failoverWorker.Name, "storage", config.Storage.IP, config.Storage.MailPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+	if err != nil {
+		return nil, err
+	}
+
+	// Save connection for later use.
+	failoverWorker.Connections["storage"] = c
+
+	// Start to listen for incoming internal connections on defined IP and mail port.
+	failoverWorker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[failoverWorker.Name].IP, config.Workers[failoverWorker.Name].MailPort), internalTLSConfig)
+	if err != nil {
+		return nil, fmt.Errorf("[imap.InitFailoverWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
+	}
+
+	log.Printf("[imap.InitFailoverWorker] Listening for incoming IMAP requests on %s.\n", failoverWorker.MailSocket.Addr())
+
+	return failoverWorker, nil
 }
 
 // Run loops over incoming requests at worker and

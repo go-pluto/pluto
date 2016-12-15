@@ -32,8 +32,6 @@ type Storage struct {
 // information bundeled in above Storage struct.
 func InitStorage(config *config.Config) (*Storage, error) {
 
-	var err error
-
 	// Initialize and set fields.
 	storage := &Storage{
 		IMAPNode: &IMAPNode{
