@@ -5,7 +5,7 @@ RootCertLoc = "/very/complicated/and/long/path/to/your/root-cert.pem"
 
 # Time in milliseconds to let internal communication
 # attempts wait before first trying.
-IntlConnWait = 2000
+IntlConnWait = 1500
 
 # Time in milliseconds to wait between a failed
 # connection attempt and the next one.

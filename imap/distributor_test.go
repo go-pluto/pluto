@@ -1,12 +1,11 @@
-package imap_test
+package imap
 
 import (
 	"log"
 	"testing"
 	"time"
 
-	"github.com/numbleroot/pluto/imap"
-	"github.com/numbleroot/pluto/utils"
+	"github.com/numbleroot/pluto/config"
 )
 
 // Functions
@@ -15,25 +14,34 @@ import (
 // on the implemented InitDistributor() function.
 func TestInitDistributor(t *testing.T) {
 
-	var err error
-
-	// Create needed test environment.
-	config, _, err := utils.CreateTestEnv()
+	// Read configuration from file.
+	config, err := config.LoadConfig("../test-config.toml")
 	if err != nil {
-		log.Fatal(err)
+		t.Fatalf("[imap.TestInitDistributor] Expected loading of configuration file not to fail but: '%s'\n", err.Error())
 	}
+
+	workerConf := config.Workers["worker-1"]
+
+	// Set different ports for this test to
+	// avoid conflicting binds.
+	config.Distributor.Port = "39933"
+	workerConf.MailPort = "40001"
+	workerConf.SyncPort = "50001"
+	config.Workers["worker-1"] = workerConf
+	config.Storage.MailPort = "41000"
+	config.Storage.SyncPort = "51000"
 
 	go func() {
 
 		// Correct storage initialization.
-		storage, err := imap.InitStorage(config)
+		storage, err := InitStorage(config)
 		if err != nil {
-			t.Fatalf("[imap_test.TestInitDistributor] Expected correct storage initialization but failed with: '%s'\n", err.Error())
+			t.Fatalf("[imap.TestInitDistributor] Expected correct storage initialization but failed with: '%s'\n", err.Error())
 		}
 
 		// Close the socket after 500ms.
 		time.AfterFunc((1000 * time.Millisecond), func() {
-			log.Println("[imap_test.TestInitDistributor] Timeout reached, closing storage socket. BEWARE.")
+			log.Printf("[imap.TestInitDistributor] Closing storage socket.\n")
 			storage.MailSocket.Close()
 			storage.SyncSocket.Close()
 		})
@@ -47,14 +55,14 @@ func TestInitDistributor(t *testing.T) {
 	go func() {
 
 		// Correct worker initialization.
-		worker, err := imap.InitWorker(config, "worker-1")
+		worker, err := InitWorker(config, "worker-1")
 		if err != nil {
-			t.Fatalf("[imap_test.TestInitDistributor] Expected correct worker-1 initialization but failed with: '%s'\n", err.Error())
+			t.Fatalf("[imap.TestInitDistributor] Expected correct worker-1 initialization but failed with: '%s'\n", err.Error())
 		}
 
 		// Close the socket after 500ms.
 		time.AfterFunc((600 * time.Millisecond), func() {
-			log.Println("[imap_test.TestInitDistributor] Timeout reached, closing worker-1 socket. BEWARE.")
+			log.Printf("[imap.TestInitDistributor] Closing worker-1 socket.\n")
 			worker.MailSocket.Close()
 			worker.SyncSocket.Close()
 		})
@@ -66,9 +74,9 @@ func TestInitDistributor(t *testing.T) {
 	time.Sleep(400 * time.Millisecond)
 
 	// Correct distributor initialization.
-	distr, err := imap.InitDistributor(config)
+	distr, err := InitDistributor(config)
 	if err != nil {
-		t.Fatalf("[imap_test.TestInitDistributor] Expected correct distributor initialization but failed with: '%s'\n", err.Error())
+		t.Fatalf("[imap.TestInitDistributor] Expected correct distributor initialization but failed with: '%s'\n", err.Error())
 	}
 
 	distr.Socket.Close()

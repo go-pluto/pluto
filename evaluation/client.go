@@ -20,7 +20,7 @@ func main() {
 
 	// Create environment we need in order to test
 	// against public part of pluto.
-	_, tlsConfig, err := utils.CreateTestEnv()
+	testEnv, err := utils.CreateTestEnv()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func main() {
 	log.Println("Connecting to server...")
 
 	if *mailSSL {
-		c, err = client.DialTLS(fmt.Sprintf("%s:%d", *mailHost, *mailPort), tlsConfig)
+		c, err = client.DialTLS(fmt.Sprintf("%s:%d", *mailHost, *mailPort), testEnv.TLSConfig)
 	} else {
 		c, err = client.Dial(*mailHost + ":" + strconv.Itoa(*mailPort))
 	}

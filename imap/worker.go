@@ -19,16 +19,9 @@ import (
 // Worker struct bundles information needed in
 // operation of a worker node.
 type Worker struct {
-	lock             *sync.RWMutex
-	Name             string
-	MailSocket       net.Listener
-	SyncSocket       net.Listener
-	SyncSendChan     chan string
-	Connections      map[string]*tls.Conn
-	Contexts         map[string]*Context
-	MailboxStructure map[string]map[string]*crdt.ORSet
-	MailboxContents  map[string]map[string][]string
-	Config           *config.Config
+	*IMAPNode
+	Name         string
+	SyncSendChan chan string
 }
 
 // Functions
@@ -43,13 +36,16 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 
 	// Initialize and set fields.
 	worker := &Worker{
-		lock:             new(sync.RWMutex),
-		Name:             workerName,
-		Connections:      make(map[string]*tls.Conn),
-		Contexts:         make(map[string]*Context),
-		MailboxStructure: make(map[string]map[string]*crdt.ORSet),
-		MailboxContents:  make(map[string]map[string][]string),
-		Config:           config,
+		IMAPNode: &IMAPNode{
+			lock:             new(sync.RWMutex),
+			Connections:      make(map[string]*tls.Conn),
+			Contexts:         make(map[string]*Context),
+			MailboxStructure: make(map[string]map[string]*crdt.ORSet),
+			MailboxContents:  make(map[string]map[string][]string),
+			Config:           config,
+		},
+		Name:         workerName,
+		SyncSendChan: make(chan string),
 	}
 
 	// Check if supplied worker with workerName actually is configured.
@@ -65,8 +61,12 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		return nil, fmt.Errorf("[imap.InitWorker] Specified worker ID does not exist in config file. Please provide a valid one, for example '%s'.\n", workerID)
 	}
 
+	// We checked for name existence, now set correct paths.
+	worker.CRDTLayerRoot = config.Workers[workerName].CRDTLayerRoot
+	worker.MaildirRoot = config.Workers[workerName].MaildirRoot
+
 	// Find all files below this node's CRDT root layer.
-	userFolders, err := filepath.Glob(filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "*"))
+	userFolders, err := filepath.Glob(filepath.Join(worker.CRDTLayerRoot, "*"))
 	if err != nil {
 		return nil, fmt.Errorf("[imap.InitWorker] Globbing for CRDT folders of users failed with: %s\n", err.Error())
 	}
@@ -138,13 +138,15 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	// Initialize channels for this node.
 	applyCRDTUpdChan := make(chan string)
 	doneCRDTUpdChan := make(chan struct{})
+	downRecv := make(chan struct{})
+	downSender := make(chan struct{})
 
 	// Construct path to receiving and sending CRDT logs for storage node.
-	recvCRDTLog := filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "receiving.log")
-	sendCRDTLog := filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "sending.log")
+	recvCRDTLog := filepath.Join(worker.CRDTLayerRoot, "receiving.log")
+	sendCRDTLog := filepath.Join(worker.CRDTLayerRoot, "sending.log")
 
 	// Initialize receiving goroutine for sync operations.
-	chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(worker.Name, recvCRDTLog, worker.SyncSocket, applyCRDTUpdChan, doneCRDTUpdChan, []string{"storage"})
+	chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(worker.Name, recvCRDTLog, worker.SyncSocket, applyCRDTUpdChan, doneCRDTUpdChan, downRecv, []string{"storage"})
 	if err != nil {
 		return nil, err
 	}
@@ -160,10 +162,13 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	worker.Connections["storage"] = c
 
 	// Init sending part of CRDT communication and send messages in background.
-	worker.SyncSendChan, err = comm.InitSender(worker.Name, sendCRDTLog, chanIncVClockWorker, chanUpdVClockWorker, worker.Connections)
+	worker.SyncSendChan, err = comm.InitSender(worker.Name, sendCRDTLog, chanIncVClockWorker, chanUpdVClockWorker, downSender, worker.Connections)
 	if err != nil {
 		return nil, err
 	}
+
+	// Apply received CRDT messages in background.
+	go worker.ApplyCRDTUpd(applyCRDTUpdChan, doneCRDTUpdChan)
 
 	// Start to listen for incoming internal connections on defined IP and mail port.
 	worker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].IP, config.Workers[worker.Name].MailPort), internalTLSConfig)
@@ -258,7 +263,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 			delete(worker.Contexts, clientID)
 
 		case req.Command == "SELECT":
-			if ok := worker.Select(c, req, clientID); ok {
+			if ok := worker.Select(c, req, clientID, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
 				err := c.SignalSessionDone(nil)
@@ -269,7 +274,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 			}
 
 		case req.Command == "CREATE":
-			if ok := worker.Create(c, req, clientID); ok {
+			if ok := worker.Create(c, req, clientID, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
 				err := c.SignalSessionDone(nil)
@@ -280,7 +285,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 			}
 
 		case req.Command == "DELETE":
-			if ok := worker.Delete(c, req, clientID); ok {
+			if ok := worker.Delete(c, req, clientID, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
 				err := c.SignalSessionDone(nil)
@@ -291,7 +296,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 			}
 
 		case req.Command == "LIST":
-			if ok := worker.List(c, req, clientID); ok {
+			if ok := worker.List(c, req, clientID, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
 				err := c.SignalSessionDone(nil)
@@ -302,7 +307,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 			}
 
 		case req.Command == "APPEND":
-			if ok := worker.Append(c, req, clientID); ok {
+			if ok := worker.Append(c, req, clientID, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
 				err := c.SignalSessionDone(nil)
@@ -313,7 +318,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 			}
 
 		case req.Command == "EXPUNGE":
-			if ok := worker.Expunge(c, req, clientID); ok {
+			if ok := worker.Expunge(c, req, clientID, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
 				err := c.SignalSessionDone(nil)
@@ -324,7 +329,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 			}
 
 		case req.Command == "STORE":
-			if ok := worker.Store(c, req, clientID); ok {
+			if ok := worker.Store(c, req, clientID, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
 				err := c.SignalSessionDone(nil)

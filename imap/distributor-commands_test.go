@@ -3,14 +3,18 @@ package imap_test
 import (
 	"fmt"
 	"log"
+	"os"
 	"testing"
-	"time"
 
 	"crypto/tls"
 
 	"github.com/numbleroot/pluto/imap"
 	"github.com/numbleroot/pluto/utils"
 )
+
+// Variables
+
+var testEnv *utils.TestEnv
 
 // Structs
 
@@ -62,30 +66,35 @@ var loginTests = []struct {
 
 // Functions
 
-// TestCapability executes a black-box table test on the
-// implemented Capability() function.
-func TestCapability(t *testing.T) {
+func TestMain(m *testing.M) {
+
+	var err error
 
 	// Create needed test environment.
-	config, tlsConfig, err := utils.CreateTestEnv()
+	testEnv, err = utils.CreateTestEnv()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 2400)
-	time.Sleep(100 * time.Millisecond)
+	// Run all nodes in background.
+	utils.RunAllNodes(testEnv, "worker-1")
 
-	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 2300)
-	time.Sleep(100 * time.Millisecond)
+	// Run all tests of this package.
+	success := m.Run()
 
-	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 2200)
-	time.Sleep(600 * time.Millisecond)
+	// Tear down test setup.
+	utils.TearDownNodes(testEnv)
+
+	// Return with test return value.
+	os.Exit(success)
+}
+
+// TestCapability executes a black-box table test on the
+// implemented Capability() function.
+func TestCapability(t *testing.T) {
 
 	// Connect to IMAP distributor.
-	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
+	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.IP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestCapability] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 	}
@@ -135,38 +144,18 @@ func TestCapability(t *testing.T) {
 
 	// At the end of each test, terminate connection.
 	c.Terminate()
-
-	time.Sleep(2000 * time.Millisecond)
 }
 
 // TestLogout executes a black-box table test on the
 // implemented Logout() function.
 func TestLogout(t *testing.T) {
 
-	// Create needed test environment.
-	config, tlsConfig, err := utils.CreateTestEnv()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 2400)
-	time.Sleep(100 * time.Millisecond)
-
-	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 2300)
-	time.Sleep(100 * time.Millisecond)
-
-	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 2200)
-	time.Sleep(600 * time.Millisecond)
-
 	for i, tt := range logoutTests {
 
 		var answer string
 
 		// Connect to IMAP distributor.
-		conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
+		conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.IP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
 		if err != nil {
 			t.Fatalf("[imap.TestLogout] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 		}
@@ -215,34 +204,14 @@ func TestLogout(t *testing.T) {
 			log.Fatal(err)
 		}
 	}
-
-	time.Sleep(2000 * time.Millisecond)
 }
 
 // TestStartTLS executes a black-box table test on the
 // implemented StartTLS() function.
 func TestStartTLS(t *testing.T) {
 
-	// Create needed test environment.
-	config, tlsConfig, err := utils.CreateTestEnv()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 2400)
-	time.Sleep(100 * time.Millisecond)
-
-	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 2300)
-	time.Sleep(100 * time.Millisecond)
-
-	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 2200)
-	time.Sleep(600 * time.Millisecond)
-
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
+	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.IP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestStartTLS] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -277,34 +246,14 @@ func TestStartTLS(t *testing.T) {
 
 	// At the end of each test, terminate connection.
 	c.Terminate()
-
-	time.Sleep(2000 * time.Millisecond)
 }
 
 // TestLogin executes a black-box table test on the
 // implemented Login() function.
 func TestLogin(t *testing.T) {
 
-	// Create needed test environment.
-	config, tlsConfig, err := utils.CreateTestEnv()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 2400)
-	time.Sleep(100 * time.Millisecond)
-
-	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 2300)
-	time.Sleep(100 * time.Millisecond)
-
-	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 2200)
-	time.Sleep(600 * time.Millisecond)
-
 	// Connect to IMAP distributor.
-	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
+	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.IP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestLogin] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 	}
@@ -339,6 +288,4 @@ func TestLogin(t *testing.T) {
 
 	// At the end of each test, terminate connection.
 	c.Terminate()
-
-	time.Sleep(2000 * time.Millisecond)
 }

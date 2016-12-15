@@ -28,39 +28,43 @@ func TestSenderReceiver(t *testing.T) {
 	n1DoneCRDTUpdChan := make(chan struct{})
 	n2ApplyCRDTUpdChan := make(chan string)
 	n2DoneCRDTUpdChan := make(chan struct{})
+	n1DownRecv := make(chan struct{})
+	n1DownSender := make(chan struct{})
+	n2DownRecv := make(chan struct{})
+	n2DownSender := make(chan struct{})
 
 	// Create needed test environment.
-	config, _, err := utils.CreateTestEnv()
+	testEnv, err := utils.CreateTestEnv()
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected test environment creation not to fail but received: %s\n", err.Error())
 	}
 
 	// Load internal TLS config for worker-1.
-	internalTLSConfigN1, err := crypto.NewInternalTLSConfig(config.Workers[n1].TLS.CertLoc, config.Workers[n1].TLS.KeyLoc, config.RootCertLoc)
+	internalTLSConfigN1, err := crypto.NewInternalTLSConfig(testEnv.Config.Workers[n1].TLS.CertLoc, testEnv.Config.Workers[n1].TLS.KeyLoc, testEnv.Config.RootCertLoc)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected no error while loading internal TLS config for worker-1 but received: %s\n", err.Error())
 	}
 
 	// Load internal TLS config for storage.
-	internalTLSConfigN2, err := crypto.NewInternalTLSConfig(config.Storage.TLS.CertLoc, config.Storage.TLS.KeyLoc, config.RootCertLoc)
+	internalTLSConfigN2, err := crypto.NewInternalTLSConfig(testEnv.Config.Storage.TLS.CertLoc, testEnv.Config.Storage.TLS.KeyLoc, testEnv.Config.RootCertLoc)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected no error while loading internal TLS config for storage but received: %s\n", err.Error())
 	}
 
 	// Listen on defined worker-1 socket for TLS connections.
-	socketN1, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[n1].IP, config.Workers[n1].SyncPort), internalTLSConfigN1)
+	socketN1, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", testEnv.Config.Workers[n1].IP, testEnv.Config.Workers[n1].SyncPort), internalTLSConfigN1)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected TLS listen for worker-1 not to fail but received: %s\n", err.Error())
 	}
 
 	// Listen on defined storage socket for TLS connections.
-	socketN2, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.SyncPort), internalTLSConfigN2)
+	socketN2, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", testEnv.Config.Storage.IP, testEnv.Config.Storage.SyncPort), internalTLSConfigN2)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected TLS listen for storage not to fail but received: %s\n", err.Error())
 	}
 
 	// Initialize receiver in background at worker-1.
-	chanIncN1, chanUpdN1, err := comm.InitReceiver(n1, "../test-comm-receiving-worker-1.log", socketN1, n1ApplyCRDTUpdChan, n1DoneCRDTUpdChan, []string{n2})
+	chanIncN1, chanUpdN1, err := comm.InitReceiver(n1, "../test-comm-receiving-worker-1.log", socketN1, n1ApplyCRDTUpdChan, n1DoneCRDTUpdChan, n1DownRecv, []string{n2})
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitReceiver() for worker-1 not to fail but received: %s\n", err.Error())
 	}
@@ -83,7 +87,7 @@ func TestSenderReceiver(t *testing.T) {
 	}()
 
 	// Initialize receiver in foreground at storage.
-	chanIncN2, chanUpdN2, err := comm.InitReceiver(n2, "../test-comm-receiving-storage.log", socketN2, n2ApplyCRDTUpdChan, n2DoneCRDTUpdChan, []string{n1})
+	chanIncN2, chanUpdN2, err := comm.InitReceiver(n2, "../test-comm-receiving-storage.log", socketN2, n2ApplyCRDTUpdChan, n2DoneCRDTUpdChan, n2DownRecv, []string{n1})
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitReceiver() for storage not to fail but received: %s\n", err.Error())
 	}
@@ -109,7 +113,7 @@ func TestSenderReceiver(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Connect via TLS from worker-1 to storage.
-	cToN2, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.SyncPort), internalTLSConfigN1)
+	cToN2, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", testEnv.Config.Storage.IP, testEnv.Config.Storage.SyncPort), internalTLSConfigN1)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected to be able to connect from worker-1 to storage but received: %s\n", err.Error())
 	}
@@ -119,7 +123,7 @@ func TestSenderReceiver(t *testing.T) {
 	connsN1[n2] = cToN2
 
 	// Connect via TLS from storage to worker-1.
-	cToN1, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", config.Workers[n1].IP, config.Workers[n1].SyncPort), internalTLSConfigN2)
+	cToN1, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", testEnv.Config.Workers[n1].IP, testEnv.Config.Workers[n1].SyncPort), internalTLSConfigN2)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected to be able to connect from storage to worker-1 but received: %s\n", err.Error())
 	}
@@ -129,13 +133,13 @@ func TestSenderReceiver(t *testing.T) {
 	connsN2[n1] = cToN1
 
 	// Initialize sending interface for worker-1.
-	chan1, err := comm.InitSender(n1, "../test-comm-sending-worker-1.log", chanIncN1, chanUpdN1, connsN1)
+	chan1, err := comm.InitSender(n1, "../test-comm-sending-worker-1.log", chanIncN1, chanUpdN1, n1DownSender, connsN1)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitSender() for worker-1 not to fail but received: %s\n", err.Error())
 	}
 
 	// Initialize sending interface for storage.
-	chan2, err := comm.InitSender(n2, "../test-comm-sending-storage.log", chanIncN2, chanUpdN2, connsN2)
+	chan2, err := comm.InitSender(n2, "../test-comm-sending-storage.log", chanIncN2, chanUpdN2, n2DownSender, connsN2)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitSender() for storage not to fail but received: %s\n", err.Error())
 	}
