@@ -23,11 +23,13 @@ import (
 // operation of a storage node.
 type Storage struct {
 	lock             *sync.RWMutex
-	Socket           net.Listener
+	MailSocket       net.Listener
+	SyncSocket       net.Listener
+	SyncSendChans    map[string]chan string
+	Connections      map[string]*tls.Conn
+	Contexts         map[string]*Context
 	MailboxStructure map[string]map[string]*crdt.ORSet
 	MailboxContents  map[string]map[string][]string
-	ApplyCRDTUpdChan chan string
-	DoneCRDTUpdChan  chan struct{}
 	Config           *config.Config
 }
 
@@ -43,10 +45,11 @@ func InitStorage(config *config.Config) (*Storage, error) {
 	// Initialize and set fields.
 	storage := &Storage{
 		lock:             new(sync.RWMutex),
+		SyncSendChans:    make(map[string]chan string),
+		Connections:      make(map[string]*tls.Conn),
+		Contexts:         make(map[string]*Context),
 		MailboxStructure: make(map[string]map[string]*crdt.ORSet),
 		MailboxContents:  make(map[string]map[string][]string),
-		ApplyCRDTUpdChan: make(chan string),
-		DoneCRDTUpdChan:  make(chan struct{}),
 		Config:           config,
 	}
 
@@ -113,38 +116,78 @@ func InitStorage(config *config.Config) (*Storage, error) {
 	}
 
 	// Start to listen for incoming internal connections on defined IP and sync port.
-	storage.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.SyncPort), internalTLSConfig)
+	storage.SyncSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.SyncPort), internalTLSConfig)
 	if err != nil {
-		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal TLS connections failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal sync TLS connections failed with: %s\n", err.Error())
 	}
 
-	// Initialize receiving goroutine for sync operations.
-	// TODO: Storage has to iterate over all worker nodes it is serving
-	//       as CRDT backend for and create a 'CRDT-subnet' for each.
-	_, _, err = comm.InitReceiver("storage", filepath.Join(config.Storage.CRDTLayerRoot, "receiving.log"), storage.Socket, storage.ApplyCRDTUpdChan, storage.DoneCRDTUpdChan, []string{"worker-1"})
-	if err != nil {
-		return nil, err
+	log.Printf("[imap.InitStorage] Listening for incoming sync requests on %s.\n", storage.SyncSocket.Addr())
+
+	for workerName, workerNode := range config.Workers {
+
+		// Initialize channels for this node.
+		applyCRDTUpdChan := make(chan string)
+		doneCRDTUpdChan := make(chan struct{})
+
+		// Construct path to receiving and sending CRDT logs for
+		// current worker node.
+		recvCRDTLog := filepath.Join(config.Storage.CRDTLayerRoot, fmt.Sprintf("receiving-%s.log", workerName))
+		sendCRDTLog := filepath.Join(config.Storage.CRDTLayerRoot, fmt.Sprintf("sending-%s.log", workerName))
+
+		// Initialize a receiving goroutine for sync operations
+		// for each worker node.
+		chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver("storage", recvCRDTLog, storage.SyncSocket, applyCRDTUpdChan, doneCRDTUpdChan, []string{workerName})
+		if err != nil {
+			return nil, err
+		}
+
+		// Try to connect to sync port of each worker node this storage
+		// node is serving as long-term storage backend as.
+		c, err := ReliableConnect("storage", workerName, workerNode.IP, workerNode.SyncPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+		if err != nil {
+			return nil, err
+		}
+
+		// Save connection for later use.
+		curCRDTSubnet := make(map[string]*tls.Conn)
+		curCRDTSubnet[workerName] = c
+		storage.Connections[workerName] = c
+
+		// Init sending part of CRDT communication and send messages in background.
+		storage.SyncSendChans[workerName], err = comm.InitSender("storage", sendCRDTLog, chanIncVClockWorker, chanUpdVClockWorker, curCRDTSubnet)
+		if err != nil {
+			return nil, err
+		}
+
+		// Apply received CRDT messages in background.
+		go storage.ApplyCRDTUpd(applyCRDTUpdChan, doneCRDTUpdChan)
 	}
 
-	log.Printf("[imap.InitStorage] Listening for incoming sync requests on %s.\n", storage.Socket.Addr())
+	// Start to listen for incoming internal connections on defined IP and mail port.
+	storage.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.MailPort), internalTLSConfig)
+	if err != nil {
+		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
+	}
+
+	log.Printf("[imap.InitStorage] Listening for incoming IMAP requests on %s.\n", storage.MailSocket.Addr())
 
 	return storage, nil
 }
 
 // ApplyCRDTUpd receives strings representing CRDT
 // update operations from receiver and executes them.
-func (storage *Storage) ApplyCRDTUpd() error {
+func (storage *Storage) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}) {
 
 	for {
 
 		// Receive update message from receiver
 		// via channel.
-		updMsg := <-storage.ApplyCRDTUpdChan
+		updMsg := <-applyChan
 
 		// Parse operation that payload specifies.
 		op, opPayload, err := comm.ParseOp(updMsg)
 		if err != nil {
-			return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing operation from sync message: %s\n", err.Error())
+			log.Fatalf("[imap.ApplyCRDTUpd] Error while parsing operation from sync message: %s\n", err.Error())
 		}
 
 		// Depending on received operation,
@@ -156,7 +199,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			// Parse received payload message into create message struct.
 			createUpd, err := comm.ParseCreate(opPayload)
 			if err != nil {
-				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing CREATE update from sync message: %s\n", err.Error())
+				log.Fatalf("[imap.ApplyCRDTUpd] Error while parsing CREATE update from sync message: %s\n", err.Error())
 			}
 
 			// Lock storage exclusively.
@@ -172,7 +215,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			err = posMaildir.Create()
 			if err != nil {
 				storage.lock.Unlock()
-				return fmt.Errorf("[imap.ApplyCRDTUpd] Maildir for new mailbox could not be created: %s\n", err.Error())
+				log.Fatalf("[imap.ApplyCRDTUpd] Maildir for new mailbox could not be created: %s\n", err.Error())
 			}
 
 			// Construct path to new CRDT file.
@@ -195,7 +238,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 					log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
 				}
 
-				// Exit worker.
+				// Exit storage.
 				storage.lock.Unlock()
 				os.Exit(1)
 			}
@@ -231,7 +274,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 					log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
 				}
 
-				// Exit worker.
+				// Exit storage.
 				storage.lock.Unlock()
 				os.Exit(1)
 			}
@@ -244,7 +287,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			// Parse received payload message into delete message struct.
 			deleteUpd, err := comm.ParseDelete(opPayload)
 			if err != nil {
-				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing DELETE update from sync message: %s\n", err.Error())
+				log.Fatalf("[imap.ApplyCRDTUpd] Error while parsing DELETE update from sync message: %s\n", err.Error())
 			}
 
 			// Lock storage exclusively.
@@ -264,7 +307,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			err = userMainCRDT.RemoveEffect(rSet, true, true)
 			if err != nil {
 				storage.lock.Unlock()
-				return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to remove elements from user's main CRDT: %s\n", err.Error())
+				log.Fatalf("[imap.ApplyCRDTUpd] Failed to remove elements from user's main CRDT: %s\n", err.Error())
 			}
 
 			// Remove CRDT from mailbox structure and corresponding
@@ -279,7 +322,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			err = os.Remove(delMailboxCRDTPath)
 			if err != nil {
 				storage.lock.Unlock()
-				return fmt.Errorf("[imap.ApplyCRDTUpd] CRDT file of mailbox could not be deleted: %s\n", err.Error())
+				log.Fatalf("[imap.ApplyCRDTUpd] CRDT file of mailbox could not be deleted: %s\n", err.Error())
 			}
 
 			// Remove files associated with deleted mailbox
@@ -289,7 +332,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			err = delMaildir.Remove()
 			if err != nil {
 				storage.lock.Unlock()
-				return fmt.Errorf("[imap.ApplyCRDTUpd] Maildir could not be deleted: %s\n", err.Error())
+				log.Fatalf("[imap.ApplyCRDTUpd] Maildir could not be deleted: %s\n", err.Error())
 			}
 
 			// Unlock storage.
@@ -300,7 +343,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			// Parse received payload message into append message struct.
 			appendUpd, err := comm.ParseAppend(opPayload)
 			if err != nil {
-				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing APPEND update from sync message: %s\n", err.Error())
+				log.Fatalf("[imap.ApplyCRDTUpd] Error while parsing APPEND update from sync message: %s\n", err.Error())
 			}
 
 			// Lock storage exclusively.
@@ -332,7 +375,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 					appendFile, err := os.Create(appendFileName)
 					if err != nil {
 						storage.lock.Unlock()
-						return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to create file for mail to append: %s\n", err.Error())
+						log.Fatalf("[imap.ApplyCRDTUpd] Failed to create file for mail to append: %s\n", err.Error())
 					}
 
 					_, err = appendFile.WriteString(appendUpd.AddMail.Contents)
@@ -351,7 +394,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 							log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
 						}
 
-						// Exit worker.
+						// Exit storage.
 						storage.lock.Unlock()
 						os.Exit(1)
 					}
@@ -373,7 +416,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 							log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
 						}
 
-						// Exit worker.
+						// Exit storage.
 						storage.lock.Unlock()
 						os.Exit(1)
 					}
@@ -398,7 +441,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 							log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
 						}
 
-						// Exit worker.
+						// Exit storage.
 						storage.lock.Unlock()
 						os.Exit(1)
 					}
@@ -408,7 +451,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 					err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true, true)
 					if err != nil {
 						storage.lock.Unlock()
-						return fmt.Errorf("[imap.ApplyCRDTUpd] APPEND fail: %s. Exiting.\n", err.Error())
+						log.Fatalf("[imap.ApplyCRDTUpd] APPEND fail: %s. Exiting.\n", err.Error())
 					}
 				}
 			}
@@ -421,7 +464,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			// Parse received payload message into expunge message struct.
 			expungeUpd, err := comm.ParseExpunge(opPayload)
 			if err != nil {
-				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing EXPUNGE update from sync message: %s\n", err.Error())
+				log.Fatalf("[imap.ApplyCRDTUpd] Error while parsing EXPUNGE update from sync message: %s\n", err.Error())
 			}
 
 			// Lock storage exclusively.
@@ -448,7 +491,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 				err := userMailboxCRDT.RemoveEffect(rSet, true, true)
 				if err != nil {
 					storage.lock.Unlock()
-					return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to remove mail elements from respective mailbox CRDT: %s\n", err.Error())
+					log.Fatalf("[imap.ApplyCRDTUpd] Failed to remove mail elements from respective mailbox CRDT: %s\n", err.Error())
 				}
 
 				// Check if just removed elements marked all
@@ -467,7 +510,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 					err := os.Remove(delFileName)
 					if err != nil {
 						storage.lock.Unlock()
-						return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to remove underlying mail file during EXPUNGE update: %s\n", err.Error())
+						log.Fatalf("[imap.ApplyCRDTUpd] Failed to remove underlying mail file during EXPUNGE update: %s\n", err.Error())
 					}
 				}
 
@@ -491,7 +534,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 			// Parse received payload message into store message struct.
 			storeUpd, err := comm.ParseStore(opPayload)
 			if err != nil {
-				return fmt.Errorf("[imap.ApplyCRDTUpd] Error while parsing STORE update from sync message: %s\n", err.Error())
+				log.Fatalf("[imap.ApplyCRDTUpd] Error while parsing STORE update from sync message: %s\n", err.Error())
 			}
 
 			// Lock storage exclusively.
@@ -518,7 +561,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 				err := userMailboxCRDT.RemoveEffect(rSet, true, true)
 				if err != nil {
 					storage.lock.Unlock()
-					return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to remove mail elements from respective mailbox CRDT: %s\n", err.Error())
+					log.Fatalf("[imap.ApplyCRDTUpd] Failed to remove mail elements from respective mailbox CRDT: %s\n", err.Error())
 				}
 
 				// Check if just removed elements marked all
@@ -537,7 +580,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 					err := os.Remove(delFileName)
 					if err != nil {
 						storage.lock.Unlock()
-						return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to remove underlying mail file during STORE update: %s\n", err.Error())
+						log.Fatalf("[imap.ApplyCRDTUpd] Failed to remove underlying mail file during STORE update: %s\n", err.Error())
 					}
 				}
 
@@ -558,7 +601,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 					storeFile, err := os.Create(storeFileName)
 					if err != nil {
 						storage.lock.Unlock()
-						return fmt.Errorf("[imap.ApplyCRDTUpd] Failed to create file for mail of STORE operation: %s\n", err.Error())
+						log.Fatalf("[imap.ApplyCRDTUpd] Failed to create file for mail of STORE operation: %s\n", err.Error())
 					}
 
 					_, err = storeFile.WriteString(storeUpd.AddMail.Contents)
@@ -577,7 +620,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 							log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
 						}
 
-						// Exit worker.
+						// Exit storage.
 						storage.lock.Unlock()
 						os.Exit(1)
 					}
@@ -599,7 +642,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 							log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
 						}
 
-						// Exit worker.
+						// Exit storage.
 						storage.lock.Unlock()
 						os.Exit(1)
 					}
@@ -621,7 +664,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 							log.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
 						}
 
-						// Exit worker.
+						// Exit storage.
 						storage.lock.Unlock()
 						os.Exit(1)
 					}
@@ -631,7 +674,7 @@ func (storage *Storage) ApplyCRDTUpd() error {
 					err = userMailboxCRDT.AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true, true)
 					if err != nil {
 						storage.lock.Unlock()
-						return fmt.Errorf("[imap.ApplyCRDTUpd] STORE fail: %s. Exiting.\n", err.Error())
+						log.Fatalf("[imap.ApplyCRDTUpd] STORE fail: %s. Exiting.\n", err.Error())
 					}
 				}
 
@@ -652,6 +695,197 @@ func (storage *Storage) ApplyCRDTUpd() error {
 		}
 
 		// Signal receiver that update was performed.
-		storage.DoneCRDTUpdChan <- struct{}{}
+		doneChan <- struct{}{}
+	}
+}
+
+// Run loops over incoming requests at storage and
+// dispatches each one to a goroutine taking care of
+// the commands supplied.
+func (storage *Storage) Run() error {
+
+	for {
+
+		// Accept request or fail on error.
+		conn, err := storage.MailSocket.Accept()
+		if err != nil {
+			return fmt.Errorf("[imap.Run] Accepting incoming request at storage failed with: %s\n", err.Error())
+		}
+
+		// Dispatch into own goroutine.
+		go storage.HandleConnection(conn)
+	}
+}
+
+// HandleConnection is the main storage routine where all
+// incoming requests against this storage node have to go through.
+func (storage *Storage) HandleConnection(conn net.Conn) {
+
+	// Create a new connection struct for incoming request.
+	c := NewConnection(conn)
+
+	// Receive opening information.
+	opening, err := c.Receive()
+	if err != nil {
+		c.ErrorLogOnly("Encountered receive error", err)
+		return
+	}
+
+	// As long as this node did not receive an indicator that
+	// the system is about to shut down, we accept requests.
+	for opening != "> done <" {
+
+		// Extract the prefixed clientID and update or create context.
+		clientID, origWorker, err := storage.UpdateClientContext(opening)
+		if err != nil {
+			c.ErrorLogOnly("Error extracting context", err)
+			return
+		}
+
+		// Receive incoming actual client command.
+		rawReq, err := c.Receive()
+		if err != nil {
+			c.ErrorLogOnly("Encountered receive error", err)
+			return
+		}
+
+		// Parse received next raw request into struct.
+		req, err := ParseRequest(rawReq)
+		if err != nil {
+
+			// Signal error to client.
+			err := c.Send(err.Error())
+			if err != nil {
+				c.ErrorLogOnly("Encountered send error", err)
+				return
+			}
+
+			// In case of failure, wait for next sent command.
+			rawReq, err = c.Receive()
+			if err != nil {
+				c.ErrorLogOnly("Encountered receive error", err)
+				return
+			}
+
+			// Go back to beginning of loop.
+			continue
+		}
+
+		// Read-lock storage shortly.
+		storage.lock.RLock()
+
+		// Retrieve sync channel for node.
+		workerSyncChan := storage.SyncSendChans[origWorker]
+
+		// Release read-lock on storage.
+		storage.lock.RUnlock()
+
+		switch {
+
+		case rawReq == "> done <":
+			// Remove context of connection for this client
+			// from structure that keeps track of it.
+			// Effectively destroying all authentication and
+			// IMAP state information about this client.
+			delete(storage.Contexts, clientID)
+
+		case req.Command == "SELECT":
+			if ok := storage.Select(c, req, clientID, workerSyncChan); ok {
+
+				// If successful, signal end of operation to proxy node.
+				err := c.SignalSessionDone(nil)
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error", err)
+					return
+				}
+			}
+
+		case req.Command == "CREATE":
+			if ok := storage.Create(c, req, clientID, workerSyncChan); ok {
+
+				// If successful, signal end of operation to proxy node.
+				err := c.SignalSessionDone(nil)
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error", err)
+					return
+				}
+			}
+
+		case req.Command == "DELETE":
+			if ok := storage.Delete(c, req, clientID, workerSyncChan); ok {
+
+				// If successful, signal end of operation to proxy node.
+				err := c.SignalSessionDone(nil)
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error", err)
+					return
+				}
+			}
+
+		case req.Command == "LIST":
+			if ok := storage.List(c, req, clientID, workerSyncChan); ok {
+
+				// If successful, signal end of operation to proxy node.
+				err := c.SignalSessionDone(nil)
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error", err)
+					return
+				}
+			}
+
+		case req.Command == "APPEND":
+			if ok := storage.Append(c, req, clientID, workerSyncChan); ok {
+
+				// If successful, signal end of operation to proxy node.
+				err := c.SignalSessionDone(nil)
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error", err)
+					return
+				}
+			}
+
+		case req.Command == "EXPUNGE":
+			if ok := storage.Expunge(c, req, clientID, workerSyncChan); ok {
+
+				// If successful, signal end of operation to proxy node.
+				err := c.SignalSessionDone(nil)
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error", err)
+					return
+				}
+			}
+
+		case req.Command == "STORE":
+			if ok := storage.Store(c, req, clientID, workerSyncChan); ok {
+
+				// If successful, signal end of operation to proxy node.
+				err := c.SignalSessionDone(nil)
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error", err)
+					return
+				}
+			}
+
+		default:
+			// Client sent inappropriate command. Signal tagged error.
+			err := c.Send(fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
+			if err != nil {
+				c.ErrorLogOnly("Encountered send error", err)
+				return
+			}
+
+			err = c.SignalSessionDone(nil)
+			if err != nil {
+				c.ErrorLogOnly("Encountered send error", err)
+				return
+			}
+		}
+
+		// Receive next incoming proxied request.
+		opening, err = c.Receive()
+		if err != nil {
+			c.ErrorLogOnly("Encountered receive error", err)
+			return
+		}
 	}
 }

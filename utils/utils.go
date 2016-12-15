@@ -69,11 +69,12 @@ func RunStorageWithTimeout(conf *config.Config, waitMilliseconds int) {
 	// Close the socket after 500ms.
 	time.AfterFunc((time.Duration(waitMilliseconds) * time.Millisecond), func() {
 		log.Println("[utils.RunStorageWithTimeout] Timeout reached, closing storage socket. BEWARE.")
-		storage.Socket.Close()
+		storage.MailSocket.Close()
+		storage.SyncSocket.Close()
 	})
 
 	// Run the storage node.
-	_ = storage.ApplyCRDTUpd()
+	_ = storage.Run()
 }
 
 // RunWorkerWithTimeout is supposed to be called in a goroutine

@@ -55,6 +55,7 @@ func main() {
 			log.Fatal(err)
 		}
 		defer worker.MailSocket.Close()
+		defer worker.SyncSocket.Close()
 
 		// Loop on incoming requests.
 		err = worker.Run()
@@ -68,10 +69,11 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer storage.Socket.Close()
+		defer storage.MailSocket.Close()
+		defer storage.SyncSocket.Close()
 
-		// Apply received CRDT messages.
-		err = storage.ApplyCRDTUpd()
+		// Loop on incoming requests.
+		err = storage.Run()
 		if err != nil {
 			log.Fatal(err)
 		}

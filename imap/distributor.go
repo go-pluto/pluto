@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 
 	"crypto/tls"
 
@@ -15,6 +16,7 @@ import (
 // Distributor struct bundles information needed in
 // operation of a distributor node.
 type Distributor struct {
+	lock        *sync.RWMutex
 	Socket      net.Listener
 	AuthAdapter auth.PlainAuthenticator
 	Connections map[string]*tls.Conn
@@ -33,6 +35,7 @@ func InitDistributor(config *config.Config) (*Distributor, error) {
 
 	// Initialize and set fields.
 	distr := &Distributor{
+		lock:        new(sync.RWMutex),
 		Connections: make(map[string]*tls.Conn),
 		Config:      config,
 	}
@@ -54,18 +57,17 @@ func InitDistributor(config *config.Config) (*Distributor, error) {
 		return nil, err
 	}
 
-	// Connect to all worker nodes in order to already
-	// have established TLS connections later on.
-	for name, worker := range config.Workers {
+	for workerName, workerNode := range config.Workers {
 
-		// Try to connect to IMAP port of worker with internal TLS config.
-		c, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", worker.IP, worker.MailPort), internalTLSConfig)
+		// Try to connect to mail port of each worker node the
+		// distributor is responsible for.
+		c, err := ReliableConnect("distributor", workerName, workerNode.IP, workerNode.MailPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
 		if err != nil {
-			return nil, fmt.Errorf("[imap.InitDistributor] Could not connect to %s because of: %s\n", name, err.Error())
+			return nil, err
 		}
 
 		// Save connection for later use.
-		distr.Connections[name] = c
+		distr.Connections[workerName] = c
 	}
 
 	// Load public TLS config based on config values.
@@ -136,14 +138,23 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 				// inform the worker about the disconnect.
 				if c.Worker != "" {
 
+					// Read-lock distributor shortly.
+					distr.lock.RLock()
+
+					// Retrieve connection to concerned worker node.
+					concernedWorker := distr.Connections[c.Worker]
+
+					// Release read-lock on distributor.
+					distr.lock.RUnlock()
+
 					// Prefix the information with context.
-					if err := c.SignalSessionPrefix(distr.Connections[c.Worker]); err != nil {
+					if err := c.SignalSessionPrefixWorker(concernedWorker); err != nil {
 						c.Error("Encountered send error when distributor signalled context to worker", err)
 						return
 					}
 
 					// Now signal that client disconnected.
-					if err := c.SignalSessionDone(distr.Connections[c.Worker]); err != nil {
+					if err := c.SignalSessionDone(concernedWorker); err != nil {
 						c.Error("Encountered send error when distributor signalled end to worker", err)
 						return
 					}

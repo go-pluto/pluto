@@ -69,7 +69,7 @@ func (distr *Distributor) Logout(c *Connection, req *Request) bool {
 	if c.Worker != "" {
 
 		// Inform worker node about which session will log out.
-		if err := c.SignalSessionPrefix(distr.Connections[c.Worker]); err != nil {
+		if err := c.SignalSessionPrefixWorker(distr.Connections[c.Worker]); err != nil {
 			c.Error("Encountered send error when distributor signalled context to worker", err)
 			return false
 		}
@@ -215,7 +215,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	readerWorker := bufio.NewReader(connWorker)
 
 	// Inform worker node about context of request of this client.
-	if err := c.SignalSessionPrefix(distr.Connections[c.Worker]); err != nil {
+	if err := c.SignalSessionPrefixWorker(distr.Connections[c.Worker]); err != nil {
 		c.Error("Encountered send error when distributor signalled context to worker", err)
 		return false
 	}
@@ -227,7 +227,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	}
 
 	// Reserve space for answer buffer.
-	bufResp := make([]string, 0, 2)
+	bufResp := make([]string, 0, 6)
 
 	// Receive incoming worker response.
 	curResp, err := readerWorker.ReadString('\n')
@@ -298,7 +298,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 		}
 
 		// Reserve space for answer buffer.
-		bufResp := make([]string, 0, 2)
+		bufResp := make([]string, 0, 6)
 
 		// Receive incoming worker response.
 		curResp, err := readerWorker.ReadString('\n')

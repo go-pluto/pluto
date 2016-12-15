@@ -14,11 +14,13 @@ import (
 // Config holds all information parsed from
 // supplied config file.
 type Config struct {
-	RootCertLoc string
-	IMAP        IMAP
-	Distributor Distributor
-	Workers     map[string]Worker
-	Storage     Storage
+	RootCertLoc   string
+	IntlConnWait  int
+	IntlConnRetry int
+	IMAP          IMAP
+	Distributor   Distributor
+	Workers       map[string]Worker
+	Storage       Storage
 }
 
 // IMAP is the IMAP server related part
@@ -58,6 +60,7 @@ type Worker struct {
 // storing all user data in a very safe manner.
 type Storage struct {
 	IP            string
+	MailPort      string
 	SyncPort      string
 	MaildirRoot   string
 	CRDTLayerRoot string

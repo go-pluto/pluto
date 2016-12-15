@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 
 	"crypto/tls"
 )
@@ -54,6 +55,45 @@ func NewConnection(c net.Conn) *Connection {
 	}
 }
 
+// ReliableConnect attempts to connect to defined
+// remote node as longs as the error from previous
+// attempts is possible to be dealt with.
+func ReliableConnect(name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, wait int, retry int) (*tls.Conn, error) {
+
+	var err error
+	var c *tls.Conn
+
+	// Define address we are trying to connect to.
+	nodeAddr := fmt.Sprintf("%s:%s", remoteIP, remotePort)
+
+	// Define what an error looks like we can deal with.
+	okError := fmt.Sprintf("dial tcp %s: getsockopt: connection refused", nodeAddr)
+
+	// Initially, set error string to the one we can deal with.
+	err = fmt.Errorf(okError)
+
+	// In the beginning, give the other nodes some time to become available.
+	time.Sleep(time.Duration(wait) * time.Millisecond)
+
+	for err != nil {
+
+		// Attempt to connect to worker node.
+		c, err = tls.Dial("tcp", nodeAddr, tlsConfig)
+		if err != nil {
+
+			if err.Error() == okError {
+				time.Sleep(time.Duration(retry) * time.Millisecond)
+			} else {
+				return nil, fmt.Errorf("%s: Could not connect to sync port of node '%s' because of: %s\n", name, remoteName, err.Error())
+			}
+		}
+	}
+
+	log.Printf("%s: Successfully connected to worker node '%s'.\n", name, remoteName)
+
+	return c, nil
+}
+
 // Receive wraps the main io.Reader function that
 // awaits text until a newline symbol and deletes
 // that symbol afterwards again. It returns the
@@ -81,9 +121,9 @@ func (c *Connection) Send(text string) error {
 	return nil
 }
 
-// SignalSessionPrefix is used by the distributor node to signal
-// an involved worker node context about future requests.
-func (c *Connection) SignalSessionPrefix(worker *tls.Conn) error {
+// SignalSessionPrefixWorker is used by the distributor node to
+// signal an involved worker node context about future requests.
+func (c *Connection) SignalSessionPrefixWorker(worker *tls.Conn) error {
 
 	if _, err := fmt.Fprintf(worker, "> id: %s <\n", c.UserToken); err != nil {
 		return err
@@ -92,16 +132,27 @@ func (c *Connection) SignalSessionPrefix(worker *tls.Conn) error {
 	return nil
 }
 
+// SignalSessionPrefixStorage is used by a failover worker node
+// to signal the storage node context about future requests.
+func (c *Connection) SignalSessionPrefixStorage(storage *tls.Conn, clientID, workerName string) error {
+
+	if _, err := fmt.Fprintf(storage, "> id: %s %s <\n", clientID, workerName); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // SignalSessionError can be used by distributor or worker nodes
-// to signal the other side that an fatal error occurred during
+// to signal other nodes that an fatal error occurred during
 // processing a request.
-func (c *Connection) SignalSessionError(worker *tls.Conn) error {
+func (c *Connection) SignalSessionError(node *tls.Conn) error {
 
 	var err error
 
-	if worker != nil {
-		// Distributor: send error signal to worker.
-		_, err = fmt.Fprint(worker, "> error <\n")
+	if node != nil {
+		// Any node: send error signal to other node.
+		_, err = fmt.Fprint(node, "> error <\n")
 	} else {
 		// Worker: send error signal to distributor.
 		_, err = fmt.Fprint(c.Conn, "> error <\n")
@@ -115,15 +166,15 @@ func (c *Connection) SignalSessionError(worker *tls.Conn) error {
 }
 
 // SignalSessionDone is either used by the distributor to signal
-// the worker that a client logged out or by a worker to indicated
+// the worker that a client logged out or by any node to indicated
 // that the current operation is done.
-func (c *Connection) SignalSessionDone(worker *tls.Conn) error {
+func (c *Connection) SignalSessionDone(node *tls.Conn) error {
 
 	var err error
 
-	if worker != nil {
-		// Distributor: send done signal to worker.
-		_, err = fmt.Fprint(worker, "> done <\n")
+	if node != nil {
+		// Any node: send done signal to other node.
+		_, err = fmt.Fprint(node, "> done <\n")
 	} else {
 		// Worker: send done signal to distributor.
 		_, err = fmt.Fprint(c.Conn, "> done <\n")
@@ -179,9 +230,9 @@ func (c *Connection) Error(msg string, err error) {
 	}
 }
 
-// ErrorLogOnly is used by worker nodes to log and indicate
-// fatal errors but without closing the permanent connection
-// to the distributor node.
+// ErrorLogOnly is used by nodes to log and indicate fatal
+// errors but without closing the permanent connection
+// to other nodes, e.g. the distributor.
 func (c *Connection) ErrorLogOnly(msg string, err error) {
 
 	// Log error.

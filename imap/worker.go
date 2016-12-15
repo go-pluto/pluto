@@ -28,8 +28,6 @@ type Worker struct {
 	Contexts         map[string]*Context
 	MailboxStructure map[string]map[string]*crdt.ORSet
 	MailboxContents  map[string]map[string][]string
-	ApplyCRDTUpdChan chan string
-	DoneCRDTUpdChan  chan struct{}
 	Config           *config.Config
 }
 
@@ -51,8 +49,6 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		Contexts:         make(map[string]*Context),
 		MailboxStructure: make(map[string]map[string]*crdt.ORSet),
 		MailboxContents:  make(map[string]map[string][]string),
-		ApplyCRDTUpdChan: make(chan string),
-		DoneCRDTUpdChan:  make(chan struct{}),
 		Config:           config,
 	}
 
@@ -131,29 +127,40 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		return nil, err
 	}
 
-	// Try to connect to sync port of storage node with internal TLS config.
-	c, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.SyncPort), internalTLSConfig)
-	if err != nil {
-		return nil, fmt.Errorf("[imap.InitWorker] Could not connect to sync port of storage node because of: %s\n", err.Error())
-	}
-
-	// Save connection for later use.
-	worker.Connections["storage"] = c
-
 	// Start to listen for incoming internal connections on defined IP and sync port.
 	worker.SyncSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].IP, config.Workers[worker.Name].SyncPort), internalTLSConfig)
 	if err != nil {
 		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal sync TLS connections failed with: %s\n", err.Error())
 	}
 
+	log.Printf("[imap.InitWorker] Listening for incoming sync requests on %s.\n", worker.SyncSocket.Addr())
+
+	// Initialize channels for this node.
+	applyCRDTUpdChan := make(chan string)
+	doneCRDTUpdChan := make(chan struct{})
+
+	// Construct path to receiving and sending CRDT logs for storage node.
+	recvCRDTLog := filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "receiving.log")
+	sendCRDTLog := filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "sending.log")
+
 	// Initialize receiving goroutine for sync operations.
-	chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(worker.Name, filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "receiving.log"), worker.SyncSocket, worker.ApplyCRDTUpdChan, worker.DoneCRDTUpdChan, []string{"storage"})
+	chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(worker.Name, recvCRDTLog, worker.SyncSocket, applyCRDTUpdChan, doneCRDTUpdChan, []string{"storage"})
 	if err != nil {
 		return nil, err
 	}
 
+	// Try to connect to sync port of storage node to which this node
+	// sends data for long-term storage, but in background.
+	c, err := ReliableConnect(worker.Name, "storage", config.Storage.IP, config.Storage.SyncPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+	if err != nil {
+		return nil, err
+	}
+
+	// Save connection for later use.
+	worker.Connections["storage"] = c
+
 	// Init sending part of CRDT communication and send messages in background.
-	worker.SyncSendChan, err = comm.InitSender(worker.Name, filepath.Join(config.Workers[worker.Name].CRDTLayerRoot, "sending.log"), chanIncVClockWorker, chanUpdVClockWorker, worker.Connections)
+	worker.SyncSendChan, err = comm.InitSender(worker.Name, sendCRDTLog, chanIncVClockWorker, chanUpdVClockWorker, worker.Connections)
 	if err != nil {
 		return nil, err
 	}
@@ -349,6 +356,4 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 			return
 		}
 	}
-
-	log.Println("DISTRIBUTOR sent '> done <'")
 }

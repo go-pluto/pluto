@@ -23,33 +23,34 @@ func TestInitDistributor(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	// Correct storage initialization.
-	storage, err := imap.InitStorage(config)
-	if err != nil {
-		t.Fatalf("[imap.TestInitDistributor] Expected correct storage initialization but failed with: '%s'\n", err.Error())
-	}
-
 	go func() {
+
+		// Correct storage initialization.
+		storage, err := imap.InitStorage(config)
+		if err != nil {
+			t.Fatalf("[imap_test.TestInitDistributor] Expected correct storage initialization but failed with: '%s'\n", err.Error())
+		}
 
 		// Close the socket after 500ms.
 		time.AfterFunc((1000 * time.Millisecond), func() {
 			log.Println("[imap_test.TestInitDistributor] Timeout reached, closing storage socket. BEWARE.")
-			storage.Socket.Close()
+			storage.MailSocket.Close()
+			storage.SyncSocket.Close()
 		})
 
 		// Run the storage node.
-		_ = storage.ApplyCRDTUpd()
+		_ = storage.Run()
 	}()
 
 	time.Sleep(400 * time.Millisecond)
 
-	// Correct worker initialization.
-	worker, err := imap.InitWorker(config, "worker-1")
-	if err != nil {
-		t.Fatalf("[imap.TestInitDistributor] Expected correct worker-1 initialization but failed with: '%s'\n", err.Error())
-	}
-
 	go func() {
+
+		// Correct worker initialization.
+		worker, err := imap.InitWorker(config, "worker-1")
+		if err != nil {
+			t.Fatalf("[imap_test.TestInitDistributor] Expected correct worker-1 initialization but failed with: '%s'\n", err.Error())
+		}
 
 		// Close the socket after 500ms.
 		time.AfterFunc((600 * time.Millisecond), func() {
@@ -67,10 +68,10 @@ func TestInitDistributor(t *testing.T) {
 	// Correct distributor initialization.
 	distr, err := imap.InitDistributor(config)
 	if err != nil {
-		t.Fatalf("[imap.TestInitDistributor] Expected correct distributor initialization but failed with: '%s'\n", err.Error())
+		t.Fatalf("[imap_test.TestInitDistributor] Expected correct distributor initialization but failed with: '%s'\n", err.Error())
 	}
 
 	distr.Socket.Close()
 
-	time.Sleep(400 * time.Millisecond)
+	time.Sleep(800 * time.Millisecond)
 }

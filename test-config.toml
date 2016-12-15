@@ -1,4 +1,6 @@
 RootCertLoc = "private/root-cert.pem"
+IntlConnWait = 0
+IntlConnRetry = 10
 
 [IMAP]
 Greeting = "Pluto ready."
@@ -39,7 +41,8 @@ AuthAdapter = "AuthFile"
 
 [Storage]
 IP = "127.0.0.1"
-SyncPort = "21000"
+MailPort = "21000"
+SyncPort = "31000"
 MaildirRoot = "private/Maildirs/storage/"
 CRDTLayerRoot = "private/crdt-layers/storage/"
 

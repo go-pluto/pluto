@@ -23,22 +23,23 @@ func TestInitWorker(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	// Correct storage initialization.
-	storage, err := imap.InitStorage(config)
-	if err != nil {
-		t.Fatalf("[imap.TestInitWorker] Expected correct storage initialization but failed with: '%s'\n", err.Error())
-	}
-
 	go func() {
+
+		// Correct storage initialization.
+		storage, err := imap.InitStorage(config)
+		if err != nil {
+			t.Fatalf("[imap_test.TestInitWorker] Expected correct storage initialization but failed with: '%s'\n", err.Error())
+		}
 
 		// Close the socket after 500ms.
 		time.AfterFunc((600 * time.Millisecond), func() {
 			log.Println("[imap_test.TestInitWorker] Timeout reached, closing storage socket. BEWARE.")
-			storage.Socket.Close()
+			storage.MailSocket.Close()
+			storage.SyncSocket.Close()
 		})
 
 		// Run the storage node.
-		_ = storage.ApplyCRDTUpd()
+		_ = storage.Run()
 	}()
 
 	time.Sleep(400 * time.Millisecond)
@@ -46,11 +47,11 @@ func TestInitWorker(t *testing.T) {
 	// Correct worker initialization.
 	worker, err := imap.InitWorker(config, "worker-1")
 	if err != nil {
-		t.Fatalf("[imap.TestInitWorker] Expected correct worker-1 initialization but failed with: '%s'\n", err.Error())
+		t.Fatalf("[imap_test.TestInitWorker] Expected correct worker-1 initialization but failed with: '%s'\n", err.Error())
 	}
 
 	worker.MailSocket.Close()
 	worker.SyncSocket.Close()
 
-	time.Sleep(400 * time.Millisecond)
+	time.Sleep(800 * time.Millisecond)
 }

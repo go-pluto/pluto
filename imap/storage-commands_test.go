@@ -13,37 +13,24 @@ import (
 	"github.com/numbleroot/pluto/utils"
 )
 
-// Variable
-
-var msg1 string = `Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)
-From: Fred Foobar <foobar@Blurdybloop.COM>
-Subject: afternoon meeting
-To: mooch@owatagu.siam.edu
-Message-Id: <B27397-0100000@Blurdybloop.COM>
-MIME-Version: 1.0
-Content-Type: TEXT/PLAIN; CHARSET=US-ASCII
-
-Hello Joe, do you think we can meet at 3:30 tomorrow?
-`
-
 // Structs
 
-var selectTests = []struct {
+var proxiedSelectTests = []struct {
 	in  string
 	out string
 }{
-	{"a LOGIN user0 password0", "a OK LOGIN completed"},
+	{"a LOGIN user5 password5", "a OK LOGIN completed"},
 	{"b SELECT INBOX", "* 0 EXISTS\n* 0 RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\nb OK [READ-WRITE] SELECT completed"},
 	{"c SELECT", "c BAD Command SELECT was sent without a mailbox to select"},
 	{"d SELECT lol rofl nope", "d BAD Command SELECT was sent with multiple mailbox names instead of only one"},
 	{"e LOGOUT", "* BYE Terminating connection\ne OK LOGOUT completed"},
 }
 
-var createTests = []struct {
+var proxiedCreateTests = []struct {
 	in  string
 	out string
 }{
-	{"a LOGIN user1 password1", "a OK LOGIN completed"},
+	{"a LOGIN user6 password6", "a OK LOGIN completed"},
 	{"b CREATE mailbox1 mailbox2", "b BAD Command CREATE was not sent with exactly one parameter"},
 	{"c CREATE INBOX.", "c NO New mailbox cannot be named INBOX"},
 	{"d CREATE INBOX", "d NO New mailbox cannot be named INBOX"},
@@ -58,11 +45,11 @@ var createTests = []struct {
 	{"m LOGOUT", "* BYE Terminating connection\nm OK LOGOUT completed"},
 }
 
-var deleteTests = []struct {
+var proxiedDeleteTests = []struct {
 	in  string
 	out string
 }{
-	{"a LOGIN user1 password1", "a OK LOGIN completed"},
+	{"a LOGIN user6 password6", "a OK LOGIN completed"},
 	{"b DELETE INBOX.", "b NO Forbidden to delete INBOX"},
 	{"c DELETE INBOX", "c NO Forbidden to delete INBOX"},
 	{"d DELETE inbox", "d NO Forbidden to delete INBOX"},
@@ -76,12 +63,12 @@ var deleteTests = []struct {
 	{"l LOGOUT", "* BYE Terminating connection\nl OK LOGOUT completed"},
 }
 
-var listTests = []struct {
+var proxiedListTests = []struct {
 	in     string
 	outOne string
 	outTwo string
 }{
-	{"a LOGIN user1 password1", "a OK LOGIN completed", "a OK LOGIN completed"},
+	{"a LOGIN user6 password6", "a OK LOGIN completed", "a OK LOGIN completed"},
 	{"b LIST \"\" *", "* LIST () \".\" INBOX\n* LIST () \".\" university\nb OK LIST completed", "* LIST () \".\" university\n* LIST () \".\" INBOX\nb OK LIST completed"},
 	{"c CREATE university.Modul1", "c OK CREATE completed", "c OK CREATE completed"},
 	{"d LIST \"\" %", "* LIST () \".\" INBOX\n* LIST () \".\" university\nd OK LIST completed", "* LIST () \".\" university\n* LIST () \".\" INBOX\nd OK LIST completed"},
@@ -90,11 +77,11 @@ var listTests = []struct {
 	{"g LOGOUT", "* BYE Terminating connection\ng OK LOGOUT completed", "* BYE Terminating connection\ng OK LOGOUT completed"},
 }
 
-var appendTests = []struct {
+var proxiedAppendTests = []struct {
 	in  string
 	out string
 }{
-	{"a LOGIN user2 password2", "a OK LOGIN completed"},
+	{"a LOGIN user7 password7", "a OK LOGIN completed"},
 	{"b APPEND DoesNotExist {301}", "b NO [TRYCREATE] Mailbox to append to does not exist"},
 	{"c APPEND inbox {301}", "+ Ready for literal data"},
 	{msg1, "c OK APPEND completed"},
@@ -107,11 +94,11 @@ var appendTests = []struct {
 	{"z LOGOUT", "* BYE Terminating connection\nz OK LOGOUT completed"},
 }
 
-var storeTests = []struct {
+var proxiedStoreTests = []struct {
 	in  string
 	out string
 }{
-	{"a LOGIN user3 password3", "a OK LOGIN completed"},
+	{"a LOGIN user8 password8", "a OK LOGIN completed"},
 	{"b CREATE Sports", "b OK CREATE completed"},
 	{"c APPEND Sports {301}", "+ Ready for literal data"},
 	{msg1, "c OK APPEND completed"},
@@ -136,11 +123,11 @@ var storeTests = []struct {
 	{"r LOGOUT", "* BYE Terminating connection\nr OK LOGOUT completed"},
 }
 
-var expungeTests = []struct {
+var proxiedExpungeTests = []struct {
 	in  string
 	out string
 }{
-	{"a LOGIN user4 password4", "a OK LOGIN completed"},
+	{"a LOGIN user9 password9", "a OK LOGIN completed"},
 	{"b CREATE Monday", "b OK CREATE completed"},
 	{"c APPEND Monday {301}", "+ Ready for literal data"},
 	{msg1, "c OK APPEND completed"},
@@ -162,9 +149,9 @@ var expungeTests = []struct {
 
 // Functions
 
-// TestSelect executes a black-box table test on the
-// implemented Select() function.
-func TestSelect(t *testing.T) {
+// TestProxiedSelect executes a black-box table
+// test on the Select() function of storage.
+func TestProxiedSelect(t *testing.T) {
 
 	// Create needed test environment.
 	config, tlsConfig, err := utils.CreateTestEnv()
@@ -187,7 +174,7 @@ func TestSelect(t *testing.T) {
 	// Connect to IMAP server.
 	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
 	if err != nil {
-		t.Fatalf("[imap.TestSelect] Error during connection attempt to IMAP server: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedSelect] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
@@ -196,23 +183,23 @@ func TestSelect(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestSelect] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Errorf("[imap.TestProxiedSelect] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
-	for _, tt := range selectTests {
+	for _, tt := range proxiedSelectTests {
 
 		var answer string
 
 		// Table test: send 'in' part of each line.
 		err = c.Send(tt.in)
 		if err != nil {
-			t.Fatalf("[imap.TestSelect] Sending message to server failed with: %s\n", err.Error())
+			t.Fatalf("[imap.TestProxiedSelect] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive answer to SELECT request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
+			t.Errorf("[imap.TestProxiedSelect] Error during receiving table test SELECT: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -225,7 +212,7 @@ func TestSelect(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
+				t.Errorf("[imap.TestProxiedSelect] Error during receiving table test SELECT: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
@@ -234,7 +221,7 @@ func TestSelect(t *testing.T) {
 		answer = firstAnswer
 
 		if answer != tt.out {
-			t.Fatalf("[imap.TestSelect] Expected '%s' but received '%s'\n", tt.out, answer)
+			t.Fatalf("[imap.TestProxiedSelect] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
 
@@ -244,9 +231,9 @@ func TestSelect(t *testing.T) {
 	time.Sleep(2000 * time.Millisecond)
 }
 
-// TestCreate executes a black-box table test on the
-// implemented Create() function.
-func TestCreate(t *testing.T) {
+// TestProxiedCreate executes a black-box table
+// test on the Create() function of storage.
+func TestProxiedCreate(t *testing.T) {
 
 	// Create needed test environment.
 	config, tlsConfig, err := utils.CreateTestEnv()
@@ -269,7 +256,7 @@ func TestCreate(t *testing.T) {
 	// Connect to IMAP server.
 	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
 	if err != nil {
-		t.Fatalf("[imap.TestCreate] Error during connection attempt to IMAP server: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedCreate] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
@@ -278,23 +265,23 @@ func TestCreate(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestCreate] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Errorf("[imap.TestProxiedCreate] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
-	for _, tt := range createTests {
+	for _, tt := range proxiedCreateTests {
 
 		var answer string
 
 		// Table test: send 'in' part of each line.
 		err = c.Send(tt.in)
 		if err != nil {
-			t.Fatalf("[imap.TestCreate] Sending message to server failed with: %s\n", err.Error())
+			t.Fatalf("[imap.TestProxiedCreate] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive answer to CREATE request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestCreate] Error during receiving table test CREATE: %s\n", err.Error())
+			t.Errorf("[imap.TestProxiedCreate] Error during receiving table test CREATE: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -307,7 +294,7 @@ func TestCreate(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestCreate] Error during receiving table test CREATE: %s\n", err.Error())
+				t.Errorf("[imap.TestProxiedCreate] Error during receiving table test CREATE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
@@ -316,7 +303,7 @@ func TestCreate(t *testing.T) {
 		answer = firstAnswer
 
 		if answer != tt.out {
-			t.Fatalf("[imap.TestCreate] Expected '%s' but received '%s'\n", tt.out, answer)
+			t.Fatalf("[imap.TestProxiedCreate] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
 
@@ -326,9 +313,9 @@ func TestCreate(t *testing.T) {
 	time.Sleep(2000 * time.Millisecond)
 }
 
-// TestDelete executes a black-box table test on the
-// implemented Delete() function.
-func TestDelete(t *testing.T) {
+// TestProxiedDelete executes a black-box table
+// test on the Delete() function of storage.
+func TestProxiedDelete(t *testing.T) {
 
 	// Create needed test environment.
 	config, tlsConfig, err := utils.CreateTestEnv()
@@ -351,7 +338,7 @@ func TestDelete(t *testing.T) {
 	// Connect to IMAP server.
 	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
 	if err != nil {
-		t.Fatalf("[imap.TestDelete] Error during connection attempt to IMAP server: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedDelete] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
@@ -360,23 +347,23 @@ func TestDelete(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestDelete] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Errorf("[imap.TestProxiedDelete] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
-	for _, tt := range deleteTests {
+	for _, tt := range proxiedDeleteTests {
 
 		var answer string
 
 		// Table test: send 'in' part of each line.
 		err = c.Send(tt.in)
 		if err != nil {
-			t.Fatalf("[imap.TestDelete] Sending message to server failed with: %s\n", err.Error())
+			t.Fatalf("[imap.TestProxiedDelete] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive answer to DELETE request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
+			t.Errorf("[imap.TestProxiedDelete] Error during receiving table test DELETE: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -389,7 +376,7 @@ func TestDelete(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
+				t.Errorf("[imap.TestProxiedDelete] Error during receiving table test DELETE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
@@ -398,7 +385,7 @@ func TestDelete(t *testing.T) {
 		answer = firstAnswer
 
 		if answer != tt.out {
-			t.Fatalf("[imap.TestDelete] Expected '%s' but received '%s'\n", tt.out, answer)
+			t.Fatalf("[imap.TestProxiedDelete] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
 
@@ -408,9 +395,9 @@ func TestDelete(t *testing.T) {
 	time.Sleep(2000 * time.Millisecond)
 }
 
-// TestList executes a black-box table test on the
-// implemented List() function.
-func TestList(t *testing.T) {
+// TestProxiedList executes a black-box table
+// test on the List() function of storage.
+func TestProxiedList(t *testing.T) {
 
 	// Create needed test environment.
 	config, tlsConfig, err := utils.CreateTestEnv()
@@ -433,7 +420,7 @@ func TestList(t *testing.T) {
 	// Connect to IMAP server.
 	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
 	if err != nil {
-		t.Fatalf("[imap.TestList] Error during connection attempt to IMAP server: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedList] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
@@ -442,23 +429,23 @@ func TestList(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestList] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Errorf("[imap.TestProxiedList] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
-	for _, tt := range listTests {
+	for _, tt := range proxiedListTests {
 
 		var answer string
 
 		// Table test: send 'in' part of each line.
 		err = c.Send(tt.in)
 		if err != nil {
-			t.Fatalf("[imap.TestList] Sending message to server failed with: %s\n", err.Error())
+			t.Fatalf("[imap.TestProxiedList] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive answer to LIST request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
+			t.Errorf("[imap.TestProxiedList] Error during receiving table test LIST: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -471,7 +458,7 @@ func TestList(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
+				t.Errorf("[imap.TestProxiedList] Error during receiving table test LIST: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
@@ -480,7 +467,7 @@ func TestList(t *testing.T) {
 		answer = firstAnswer
 
 		if (answer != tt.outOne) && (answer != tt.outTwo) {
-			t.Fatalf("[imap.TestList] Expected '%s' or '%s' but received '%s'\n", tt.outOne, tt.outTwo, answer)
+			t.Fatalf("[imap.TestProxiedList] Expected '%s' or '%s' but received '%s'\n", tt.outOne, tt.outTwo, answer)
 		}
 	}
 
@@ -490,9 +477,9 @@ func TestList(t *testing.T) {
 	time.Sleep(2000 * time.Millisecond)
 }
 
-// TestAppend executes a black-box table test on the
-// implemented Append() function.
-func TestAppend(t *testing.T) {
+// TestProxiedAppend executes a black-box table
+// test on the Append() function of storage.
+func TestProxiedAppend(t *testing.T) {
 
 	// Create needed test environment.
 	config, tlsConfig, err := utils.CreateTestEnv()
@@ -515,7 +502,7 @@ func TestAppend(t *testing.T) {
 	// Connect to IMAP server.
 	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
 	if err != nil {
-		t.Fatalf("[imap.TestAppend] Error during connection attempt to IMAP server: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedAppend] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
@@ -524,10 +511,10 @@ func TestAppend(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestAppend] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Errorf("[imap.TestProxiedAppend] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
-	for i, tt := range appendTests {
+	for i, tt := range proxiedAppendTests {
 
 		var answer string
 
@@ -536,21 +523,21 @@ func TestAppend(t *testing.T) {
 			// Send mail message without additional newline.
 			_, err = fmt.Fprintf(c.Conn, "%s", tt.in)
 			if err != nil {
-				t.Fatalf("[imap.TestAppend] Sending mail message to server failed with: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedAppend] Sending mail message to server failed with: %s\n", err.Error())
 			}
 		} else {
 
 			// Table test: send 'in' part of each line.
 			err = c.Send(tt.in)
 			if err != nil {
-				t.Fatalf("[imap.TestAppend] Sending message to server failed with: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedAppend] Sending message to server failed with: %s\n", err.Error())
 			}
 		}
 
 		// Receive answer to APPEND request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
+			t.Errorf("[imap.TestProxiedAppend] Error during receiving table test APPEND: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -563,7 +550,7 @@ func TestAppend(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
+				t.Errorf("[imap.TestProxiedAppend] Error during receiving table test APPEND: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
@@ -572,7 +559,7 @@ func TestAppend(t *testing.T) {
 		answer = firstAnswer
 
 		if answer != tt.out {
-			t.Fatalf("[imap.TestAppend] Expected '%s' but received '%s'\n", tt.out, answer)
+			t.Fatalf("[imap.TestProxiedAppend] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
 
@@ -582,9 +569,9 @@ func TestAppend(t *testing.T) {
 	time.Sleep(2000 * time.Millisecond)
 }
 
-// TestStore executes a black-box table test on the
-// implemented Store() function.
-func TestStore(t *testing.T) {
+// TestProxiedStore executes a black-box table
+// test on the Store() function of storage.
+func TestProxiedStore(t *testing.T) {
 
 	// Create needed test environment.
 	config, tlsConfig, err := utils.CreateTestEnv()
@@ -607,7 +594,7 @@ func TestStore(t *testing.T) {
 	// Connect to IMAP server.
 	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
 	if err != nil {
-		t.Fatalf("[imap.TestStore] Error during connection attempt to IMAP server: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedStore] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
@@ -616,10 +603,10 @@ func TestStore(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestStore] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Errorf("[imap.TestProxiedStore] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
-	for i, tt := range storeTests {
+	for i, tt := range proxiedStoreTests {
 
 		var answer string
 
@@ -628,21 +615,21 @@ func TestStore(t *testing.T) {
 			// Send mail message without additional newline.
 			_, err = fmt.Fprintf(c.Conn, "%s", tt.in)
 			if err != nil {
-				t.Fatalf("[imap.TestStore] Sending mail message to server failed with: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedStore] Sending mail message to server failed with: %s\n", err.Error())
 			}
 		} else {
 
 			// Table test: send 'in' part of each line.
 			err = c.Send(tt.in)
 			if err != nil {
-				t.Fatalf("[imap.TestStore] Sending message to server failed with: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedStore] Sending message to server failed with: %s\n", err.Error())
 			}
 		}
 
 		// Receive answer to STORE request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestStore] Error during receiving table test STORE: %s\n", err.Error())
+			t.Errorf("[imap.TestProxiedStore] Error during receiving table test STORE: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -655,7 +642,7 @@ func TestStore(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestStore] Error during receiving table test STORE: %s\n", err.Error())
+				t.Errorf("[imap.TestProxiedStore] Error during receiving table test STORE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
@@ -664,7 +651,7 @@ func TestStore(t *testing.T) {
 		answer = firstAnswer
 
 		if answer != tt.out {
-			t.Fatalf("[imap.TestStore] Expected '%s' but received '%s'\n", tt.out, answer)
+			t.Fatalf("[imap.TestProxiedStore] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
 
@@ -674,9 +661,9 @@ func TestStore(t *testing.T) {
 	time.Sleep(2000 * time.Millisecond)
 }
 
-// TestExpunge executes a black-box table test on the
-// implemented Expunge() function.
-func TestExpunge(t *testing.T) {
+// TestProxiedExpunge executes a black-box table
+// test on the Expunge() function of storage.
+func TestProxiedExpunge(t *testing.T) {
 
 	// Create needed test environment.
 	config, tlsConfig, err := utils.CreateTestEnv()
@@ -699,7 +686,7 @@ func TestExpunge(t *testing.T) {
 	// Connect to IMAP server.
 	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
 	if err != nil {
-		t.Fatalf("[imap.TestExpunge] Error during connection attempt to IMAP server: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedExpunge] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
 
 	// Create new connection struct.
@@ -708,10 +695,10 @@ func TestExpunge(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestExpunge] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Errorf("[imap.TestProxiedExpunge] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
-	for i, tt := range expungeTests {
+	for i, tt := range proxiedExpungeTests {
 
 		var answer string
 
@@ -720,21 +707,21 @@ func TestExpunge(t *testing.T) {
 			// Send mail message without additional newline.
 			_, err = fmt.Fprintf(c.Conn, "%s", tt.in)
 			if err != nil {
-				t.Fatalf("[imap.TestExpunge] Sending mail message to server failed with: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedExpunge] Sending mail message to server failed with: %s\n", err.Error())
 			}
 		} else {
 
 			// Table test: send 'in' part of each line.
 			err = c.Send(tt.in)
 			if err != nil {
-				t.Fatalf("[imap.TestExpunge] Sending message to server failed with: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedExpunge] Sending message to server failed with: %s\n", err.Error())
 			}
 		}
 
 		// Receive answer to EXPUNGE request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
+			t.Errorf("[imap.TestProxiedExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -747,7 +734,7 @@ func TestExpunge(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
+				t.Errorf("[imap.TestProxiedExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
@@ -756,7 +743,7 @@ func TestExpunge(t *testing.T) {
 		answer = firstAnswer
 
 		if answer != tt.out {
-			t.Fatalf("[imap.TestExpunge] Expected '%s' but received '%s'\n", tt.out, answer)
+			t.Fatalf("[imap.TestProxiedExpunge] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
 

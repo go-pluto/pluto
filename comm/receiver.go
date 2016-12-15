@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"sync"
-	// "github.com/numbleroot/pluto/crdt"
 )
 
 // Structs
@@ -316,7 +315,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 		// If not, set indicator to false.
 		if (msg.VClock[msg.Sender] != recv.vclock[msg.Sender]) &&
 			(msg.VClock[msg.Sender] != (recv.vclock[msg.Sender] + 1)) {
-			log.Printf("[comm.ApplyStoredMsgs] %s: applyMsg false because msg.clock[sender] = %d != %d = recv.clock[sender]\n", recv.name, msg.VClock[msg.Sender], recv.vclock[msg.Sender])
+			log.Printf("[comm.ApplyStoredMsgs] %s: not applying message because leap in causality and messages missing.\n", recv.name)
 			applyMsg = false
 		}
 
@@ -328,7 +327,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// and check if they do not exceed the locally stored
 				// values for these nodes.
 				if value > recv.vclock[node] {
-					log.Printf("[comm.ApplyStoredMsgs] %s: applyMsg false because 2\n", recv.name)
+					log.Printf("[comm.ApplyStoredMsgs] %s: not applying message because other elements exceeded.\n", recv.name)
 					applyMsg = false
 					break
 				}
@@ -352,7 +351,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// Wait for done signal from node.
 				<-recv.doneCRDTUpdChan
 			} else {
-				log.Printf("[comm.ApplyStoredMsgs] OLD message, duplicate: %s", msgRaw)
+				log.Printf("[comm.ApplyStoredMsgs] %s: message was a duplicate, already seen.", recv.name)
 			}
 
 			for node, value := range msg.VClock {
@@ -399,7 +398,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			}
 		} else {
 
-			log.Printf("[comm.ApplyStoredMsgs] Message was out-of-order. Moving to next message in log file at position (curOffset + msgRawLength) = %d\n", (curOffset + msgRawLength))
+			log.Printf("[comm.ApplyStoredMsgs] Message was out of order. Next.")
 
 			// Set position of head to byte after just read message,
 			// effectively delaying execution of that message.

@@ -73,16 +73,16 @@ func TestCapability(t *testing.T) {
 	}
 
 	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 2200)
-	time.Sleep(400 * time.Millisecond)
+	go utils.RunStorageWithTimeout(config, 2400)
+	time.Sleep(100 * time.Millisecond)
 
 	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
-	time.Sleep(400 * time.Millisecond)
+	go utils.RunWorkerWithTimeout(config, "worker-1", 2300)
+	time.Sleep(100 * time.Millisecond)
 
 	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 1400)
-	time.Sleep(400 * time.Millisecond)
+	go utils.RunDistributorWithTimeout(config, 2200)
+	time.Sleep(600 * time.Millisecond)
 
 	// Connect to IMAP distributor.
 	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
@@ -136,7 +136,7 @@ func TestCapability(t *testing.T) {
 	// At the end of each test, terminate connection.
 	c.Terminate()
 
-	time.Sleep(1200 * time.Millisecond)
+	time.Sleep(2000 * time.Millisecond)
 }
 
 // TestLogout executes a black-box table test on the
@@ -150,16 +150,16 @@ func TestLogout(t *testing.T) {
 	}
 
 	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 2200)
-	time.Sleep(400 * time.Millisecond)
+	go utils.RunStorageWithTimeout(config, 2400)
+	time.Sleep(100 * time.Millisecond)
 
 	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
-	time.Sleep(400 * time.Millisecond)
+	go utils.RunWorkerWithTimeout(config, "worker-1", 2300)
+	time.Sleep(100 * time.Millisecond)
 
 	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 1400)
-	time.Sleep(400 * time.Millisecond)
+	go utils.RunDistributorWithTimeout(config, 2200)
+	time.Sleep(600 * time.Millisecond)
 
 	for i, tt := range logoutTests {
 
@@ -216,7 +216,7 @@ func TestLogout(t *testing.T) {
 		}
 	}
 
-	time.Sleep(1200 * time.Millisecond)
+	time.Sleep(2000 * time.Millisecond)
 }
 
 // TestStartTLS executes a black-box table test on the
@@ -230,16 +230,16 @@ func TestStartTLS(t *testing.T) {
 	}
 
 	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 2200)
-	time.Sleep(400 * time.Millisecond)
+	go utils.RunStorageWithTimeout(config, 2400)
+	time.Sleep(100 * time.Millisecond)
 
 	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
-	time.Sleep(400 * time.Millisecond)
+	go utils.RunWorkerWithTimeout(config, "worker-1", 2300)
+	time.Sleep(100 * time.Millisecond)
 
 	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 1400)
-	time.Sleep(400 * time.Millisecond)
+	go utils.RunDistributorWithTimeout(config, 2200)
+	time.Sleep(600 * time.Millisecond)
 
 	// Connect to IMAP server.
 	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
@@ -278,7 +278,7 @@ func TestStartTLS(t *testing.T) {
 	// At the end of each test, terminate connection.
 	c.Terminate()
 
-	time.Sleep(1200 * time.Millisecond)
+	time.Sleep(2000 * time.Millisecond)
 }
 
 // TestLogin executes a black-box table test on the
@@ -292,16 +292,16 @@ func TestLogin(t *testing.T) {
 	}
 
 	// Start a storage node in background.
-	go utils.RunStorageWithTimeout(config, 2200)
-	time.Sleep(400 * time.Millisecond)
+	go utils.RunStorageWithTimeout(config, 2400)
+	time.Sleep(100 * time.Millisecond)
 
 	// Start a worker node in background.
-	go utils.RunWorkerWithTimeout(config, "worker-1", 1800)
-	time.Sleep(400 * time.Millisecond)
+	go utils.RunWorkerWithTimeout(config, "worker-1", 2300)
+	time.Sleep(100 * time.Millisecond)
 
 	// Start a distributor node in background.
-	go utils.RunDistributorWithTimeout(config, 1400)
-	time.Sleep(400 * time.Millisecond)
+	go utils.RunDistributorWithTimeout(config, 2200)
+	time.Sleep(600 * time.Millisecond)
 
 	// Connect to IMAP distributor.
 	conn, err := tls.Dial("tcp", (config.Distributor.IP + ":" + config.Distributor.Port), tlsConfig)
@@ -340,5 +340,5 @@ func TestLogin(t *testing.T) {
 	// At the end of each test, terminate connection.
 	c.Terminate()
 
-	time.Sleep(1200 * time.Millisecond)
+	time.Sleep(2000 * time.Millisecond)
 }
