@@ -55,11 +55,17 @@ func main() {
 		if *failoverFlag {
 
 			// Initialize a failover worker node.
-			failoverWorker, err := imap.InitFailoverWorker(conf, *workerFlag)
+			failWorker, err := imap.InitFailoverWorker(conf, *workerFlag)
 			if err != nil {
 				log.Fatal(err)
 			}
-			defer failoverWorker.MailSocket.Close()
+			defer failWorker.MailSocket.Close()
+
+			// Loop on incoming requests to pass on.
+			err = failWorker.RunFailover()
+			if err != nil {
+				log.Fatal(err)
+			}
 		} else {
 
 			// Initialize a normally operating worker.

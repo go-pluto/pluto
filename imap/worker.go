@@ -1,10 +1,14 @@
 package imap
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 
 	"crypto/tls"
@@ -27,11 +31,13 @@ type Worker struct {
 // FailoverWorker represents a reduced IMAPNode
 // that simply writes through traffic to storage node.
 type FailoverWorker struct {
-	Name         string
-	MailSocket   net.Listener
-	Connections  map[string]*tls.Conn
-	Config       *config.Config
-	ShutdownChan chan struct{}
+	lock          *sync.RWMutex
+	Name          string
+	MailSocket    net.Listener
+	IntlTLSConfig *tls.Config
+	Connections   map[string]*tls.Conn
+	Config        *config.Config
+	ShutdownChan  chan struct{}
 }
 
 // Functions
@@ -198,15 +204,18 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 // traffic from distributor directly to storage node.
 func InitFailoverWorker(config *config.Config, workerName string) (*FailoverWorker, error) {
 
+	var err error
+
 	// Initialize and set fields.
-	failoverWorker := &FailoverWorker{
+	failWorker := &FailoverWorker{
+		lock:        new(sync.RWMutex),
 		Name:        workerName,
 		Connections: make(map[string]*tls.Conn),
 		Config:      config,
 	}
 
 	// Check if supplied worker with workerName actually is configured.
-	if _, ok := config.Workers[failoverWorker.Name]; !ok {
+	if _, ok := config.Workers[failWorker.Name]; !ok {
 
 		var workerID string
 
@@ -219,30 +228,30 @@ func InitFailoverWorker(config *config.Config, workerName string) (*FailoverWork
 	}
 
 	// Load internal TLS config.
-	internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Workers[failoverWorker.Name].TLS.CertLoc, config.Workers[failoverWorker.Name].TLS.KeyLoc, config.RootCertLoc)
+	failWorker.IntlTLSConfig, err = crypto.NewInternalTLSConfig(config.Workers[failWorker.Name].TLS.CertLoc, config.Workers[failWorker.Name].TLS.KeyLoc, config.RootCertLoc)
 	if err != nil {
 		return nil, err
 	}
 
 	// Try to connect to mail port of storage node to which this node
 	// forwards all traffic it received from distributor.
-	c, err := comm.ReliableConnect(failoverWorker.Name, "storage", config.Storage.IP, config.Storage.MailPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+	c, err := comm.ReliableConnect(failWorker.Name, "storage", config.Storage.IP, config.Storage.MailPort, failWorker.IntlTLSConfig, config.IntlConnWait, config.IntlConnRetry)
 	if err != nil {
 		return nil, err
 	}
 
 	// Save connection for later use.
-	failoverWorker.Connections["storage"] = c
+	failWorker.Connections["storage"] = c
 
 	// Start to listen for incoming internal connections on defined IP and mail port.
-	failoverWorker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[failoverWorker.Name].IP, config.Workers[failoverWorker.Name].MailPort), internalTLSConfig)
+	failWorker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[failWorker.Name].IP, config.Workers[failWorker.Name].MailPort), failWorker.IntlTLSConfig)
 	if err != nil {
 		return nil, fmt.Errorf("[imap.InitFailoverWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
 	}
 
-	log.Printf("[imap.InitFailoverWorker] Listening for incoming IMAP requests on %s.\n", failoverWorker.MailSocket.Addr())
+	log.Printf("[imap.InitFailoverWorker] Listening for incoming IMAP requests on %s.\n", failWorker.MailSocket.Addr())
 
-	return failoverWorker, nil
+	return failWorker, nil
 }
 
 // Run loops over incoming requests at worker and
@@ -429,6 +438,237 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 		opening, err = comm.InternalReceive(c.Reader)
 		if err != nil {
 			c.ErrorLogOnly("Encountered receive error", err)
+			return
+		}
+	}
+}
+
+func (failWorker *FailoverWorker) RunFailover() error {
+
+	for {
+
+		// Accept request or fail on error.
+		conn, err := failWorker.MailSocket.Accept()
+		if err != nil {
+			return fmt.Errorf("[imap.Run] Accepting incoming request at failover %s failed with: %s\n", failWorker.Name, err.Error())
+		}
+
+		// Dispatch into own goroutine.
+		go failWorker.HandleFailover(conn)
+	}
+}
+
+func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
+
+	// Assert we are talking via a TLS connection.
+	tlsConn, ok := conn.(*tls.Conn)
+	if ok != true {
+		log.Printf("[imap.HandleFailover] Failover %s could not convert connection into TLS connection.\n", failWorker.Name)
+		return
+	}
+
+	// Create a new connection struct for incoming request.
+	c := NewConnection(tlsConn)
+
+	// Receive opening information.
+	opening, err := comm.InternalReceive(c.Reader)
+	if err != nil {
+		c.ErrorLogOnly("Encountered receive error", err)
+		return
+	}
+
+	// As long as the distributor node did not indicate that
+	// the system is about to shut down, we accept requests.
+	for opening != "> done <" {
+
+		// Extract the prefixed clientID.
+		clientID, err := failWorker.ExtractClientContext(opening)
+		if err != nil {
+			c.ErrorLogOnly("Error extracting context", err)
+			return
+		}
+
+		// Receive incoming actual client command.
+		rawReq, err := comm.InternalReceive(c.Reader)
+		if err != nil {
+			c.ErrorLogOnly("Encountered receive error", err)
+			return
+		}
+
+		log.Println()
+		log.Printf("PROXYing request '%s'...\n", rawReq)
+
+		failWorker.lock.RLock()
+
+		// Save connection information to storage for later use.
+		storageConn := failWorker.Connections["storage"]
+		storageIP := failWorker.Config.Storage.IP
+		storagePort := failWorker.Config.Storage.MailPort
+
+		failWorker.lock.RUnlock()
+
+		// Inform storage about which session will continue.
+		conn, err := c.SignalSessionPrefixStorage(clientID, storageConn, failWorker.Name, "storage", storageIP, storagePort, failWorker.IntlTLSConfig, failWorker.Config.IntlConnRetry)
+		if err != nil {
+			c.ErrorLogOnly("Encountered send error when failover worker signalled context to storage", err)
+			return
+		}
+
+		failWorker.lock.Lock()
+
+		// Replace stored connection by possibly new one.
+		failWorker.Connections["storage"] = conn
+
+		failWorker.lock.Unlock()
+
+		// Create a buffered reader from storage connection.
+		storageReader := bufio.NewReader(conn)
+
+		// Send received client command to storage.
+		err = comm.InternalSend(conn, rawReq, failWorker.Name, "storage")
+		if err != nil {
+			c.ErrorLogOnly("Encountered send error to storage", err)
+			return
+		}
+
+		// Reserve space for answer buffer.
+		bufResp := make([]string, 0, 6)
+
+		// Receive incoming storage response.
+		curResp, err := comm.InternalReceive(storageReader)
+		if err != nil {
+			c.ErrorLogOnly("Encountered receive error from storage", err)
+			return
+		}
+
+		// As long as the storage node has not indicated
+		// the end of the current operation, continue
+		// to buffer answers.
+		for (curResp != "> done <") && (curResp != "> error <") && (strings.HasPrefix(curResp, "> literal: ") != true) {
+
+			// Append it to answer buffer.
+			bufResp = append(bufResp, curResp)
+
+			// Receive incoming storage response.
+			curResp, err = comm.InternalReceive(storageReader)
+			if err != nil {
+				c.ErrorLogOnly("Encountered receive error from storage", err)
+				return
+			}
+		}
+
+		for i := range bufResp {
+
+			log.Printf("sending backingham: '%s'\n", bufResp[i])
+
+			// Send all buffered storage answers to distributor.
+			err = comm.InternalSend(c.Conn, bufResp[i], failWorker.Name, "distributor")
+			if err != nil {
+				c.ErrorLogOnly("Encountered send error to distributor", err)
+				return
+			}
+		}
+
+		// Special case: We expect literal data in form of a
+		// RFC defined mail message.
+		if strings.HasPrefix(curResp, "> literal: ") {
+
+			// Strip off left and right elements of signal.
+			// This leaves the awaited amount of bytes.
+			numBytesString := strings.TrimLeft(curResp, "> literal: ")
+			numBytesString = strings.TrimRight(numBytesString, " <")
+
+			// Convert string amount to int.
+			numBytes, err := strconv.Atoi(numBytesString)
+			if err != nil {
+				c.ErrorLogOnly("Encountered conversion error for string to int", err)
+				return
+			}
+
+			// Signal distributor what amount of literal bytes we are expecting.
+			err = c.SignalAwaitingLiteral(numBytes)
+			if err != nil {
+				c.ErrorLogOnly("Error during signalling distributor literal byte number", err)
+				return
+			}
+
+			// Reserve space for exact amount of expected data.
+			msgBuffer := make([]byte, numBytes)
+
+			// Read in that amount from connection to client.
+			_, err = io.ReadFull(c.Reader, msgBuffer)
+			if err != nil {
+				c.ErrorLogOnly("Encountered error while reading client literal data", err)
+				return
+			}
+
+			// Pass on data to storage. Mails have to be ended by
+			// newline symbol.
+			_, err = fmt.Fprintf(conn, "%s", msgBuffer)
+			if err != nil {
+				c.ErrorLogOnly("Encountered passing send error to storage", err)
+				return
+			}
+
+			// Reserve space for answer buffer.
+			bufResp := make([]string, 0, 6)
+
+			// Receive incoming storage response.
+			curResp, err := comm.InternalReceive(storageReader)
+			if err != nil {
+				c.ErrorLogOnly("Encountered receive error from storage after literal data was sent", err)
+				return
+			}
+
+			// As long as the storage node has not indicated
+			// the end of the current operation, continue
+			// to buffer answers.
+			for (curResp != "> done <") && (curResp != "> error <") {
+
+				// Append it to answer buffer.
+				bufResp = append(bufResp, curResp)
+
+				// Receive incoming storage response.
+				curResp, err = comm.InternalReceive(storageReader)
+				if err != nil {
+					c.ErrorLogOnly("Encountered receive error from storage after literal data was sent", err)
+					return
+				}
+			}
+
+			for i := range bufResp {
+
+				log.Printf("sending backingham 2: '%s'\n", bufResp[i])
+
+				// Send all buffered storage answers to distributor.
+				err = comm.InternalSend(c.Conn, bufResp[i], failWorker.Name, "distributor")
+				if err != nil {
+					c.ErrorLogOnly("Encountered send error to distributor after literal data was sent", err)
+					return
+				}
+			}
+		}
+
+		if curResp == "> done <" {
+
+			// If successful, signal end of operation to distributor.
+			err := c.SignalSessionDone(nil)
+			if err != nil {
+				c.ErrorLogOnly("Encountered send error signalling done to distributor while in proxy", err)
+				return
+			}
+		} else if curResp == "> error <" {
+
+			// If the involved storage node indicated that an error
+			// occurred, terminate connection to client.
+			c.ErrorLogOnly("Storage indicated error, failover worker passed on", err)
+			return
+		}
+
+		// Receive next incoming proxied request.
+		opening, err = comm.InternalReceive(c.Reader)
+		if err != nil {
+			c.ErrorLogOnly("Encountered receive error on failover waiting for next request", err)
 			return
 		}
 	}

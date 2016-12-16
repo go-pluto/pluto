@@ -63,6 +63,8 @@ func InternalSend(conn *tls.Conn, text string, name string, remoteName string) e
 		return fmt.Errorf("%s: sending ping to node '%s' failed: %s\n", name, remoteName, err.Error())
 	}
 
+	log.Printf("%s: sending message to node '%s -> %s': '%s'\n", name, conn.LocalAddr().String(), conn.RemoteAddr().String(), text)
+
 	// Write message to TLS connections.
 	_, err = fmt.Fprintf(conn, "%s\n", text)
 	for err != nil {
@@ -86,6 +88,7 @@ func InternalReceive(reader *bufio.Reader) (string, error) {
 	for text == "> ping <\n" {
 
 		text, err = reader.ReadString('\n')
+		log.Printf("Received: '%s'\n", text)
 		if err != nil {
 			break
 		}

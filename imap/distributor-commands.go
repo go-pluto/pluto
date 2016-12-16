@@ -223,7 +223,7 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 }
 
 // Proxy forwards one request between the distributor
-// node and the responsible worker distr.
+// node and the responsible worker node.
 func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 
 	log.Println()
@@ -238,7 +238,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 
 	distr.lock.RUnlock()
 
-	// Inform worker node about which session will log out.
+	// Inform worker node about which session will continue.
 	conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnRetry)
 	if err != nil {
 		c.Error("Encountered send error when distributor signalled context to worker", err)
@@ -255,7 +255,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	// Create a buffered reader from worker connection.
 	workerReader := bufio.NewReader(conn)
 
-	// Send received client command to worker distr.
+	// Send received client command to worker node.
 	err = comm.InternalSend(conn, rawReq, "distributor", c.Worker)
 	if err != nil {
 		c.Error("Encountered send error to worker", err)
@@ -289,6 +289,8 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	}
 
 	for i := range bufResp {
+
+		log.Printf("sending palace: '%s'\n", bufResp[i])
 
 		// Send all buffered worker answers to client.
 		err = c.Send(bufResp[i])
@@ -359,6 +361,8 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 		}
 
 		for i := range bufResp {
+
+			log.Printf("sending palace 2: '%s'\n", bufResp[i])
 
 			// Send all buffered worker answers to client.
 			err = c.Send(bufResp[i])

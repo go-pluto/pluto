@@ -259,6 +259,8 @@ func (storage *Storage) HandleConnection(conn net.Conn) {
 		// Release read-lock on storage.
 		storage.lock.RUnlock()
 
+		log.Printf("[imap.HandleConnection] Storage: working on failover request from %s: '%s'\n", origWorker, rawReq)
+
 		switch {
 
 		case rawReq == "> done <":

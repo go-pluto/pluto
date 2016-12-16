@@ -67,6 +67,24 @@ func (worker *Worker) UpdateClientContext(clientIDRaw string) (string, error) {
 	return clientID, nil
 }
 
+func (failWorker *FailoverWorker) ExtractClientContext(clientIDRaw string) (string, error) {
+
+	// Split received clientID string at white spaces
+	// and check for correct amount of found fields.
+	fields := strings.Fields(clientIDRaw)
+	if len(fields) != 4 {
+		return "", fmt.Errorf("received an invalid clientID information")
+	}
+
+	// Check if structure is correct.
+	if fields[0] != ">" || fields[1] != "id:" || fields[3] != "<" {
+		return "", fmt.Errorf("received an invalid clientID information")
+	}
+
+	// Return extracted clientID.
+	return fields[2], nil
+}
+
 // UpdateClientContext takes in received raw clientID string,
 // verifies, parses it, checks for existing client context and
 // if successful, returns the clientID. Storage version.
