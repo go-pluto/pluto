@@ -267,11 +267,18 @@ func (worker *Worker) Run() error {
 // incoming requests against worker nodes have to go through.
 func (worker *Worker) HandleConnection(conn net.Conn) {
 
+	// Assert we are talking via a TLS connection.
+	tlsConn, ok := conn.(*tls.Conn)
+	if ok != true {
+		log.Printf("[imap.HandleConnection] Worker %s could not convert connection into TLS connection.\n", worker.Name)
+		return
+	}
+
 	// Create a new connection struct for incoming request.
-	c := NewConnection(conn)
+	c := NewConnection(tlsConn)
 
 	// Receive opening information.
-	opening, err := c.Receive()
+	opening, err := comm.InternalReceive(c.Reader)
 	if err != nil {
 		c.ErrorLogOnly("Encountered receive error", err)
 		return
@@ -289,7 +296,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 		}
 
 		// Receive incoming actual client command.
-		rawReq, err := c.Receive()
+		rawReq, err := comm.InternalReceive(c.Reader)
 		if err != nil {
 			c.ErrorLogOnly("Encountered receive error", err)
 			return
@@ -300,14 +307,14 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 		if err != nil {
 
 			// Signal error to client.
-			err := c.Send(err.Error())
+			err := comm.InternalSend(c.Conn, err.Error(), worker.Name, "distributor")
 			if err != nil {
 				c.ErrorLogOnly("Encountered send error", err)
 				return
 			}
 
 			// In case of failure, wait for next sent command.
-			rawReq, err = c.Receive()
+			rawReq, err = comm.InternalReceive(c.Reader)
 			if err != nil {
 				c.ErrorLogOnly("Encountered receive error", err)
 				return
@@ -405,7 +412,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 
 		default:
 			// Client sent inappropriate command. Signal tagged error.
-			err := c.Send(fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
+			err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag), worker.Name, "distributor")
 			if err != nil {
 				c.ErrorLogOnly("Encountered send error", err)
 				return
@@ -419,7 +426,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 		}
 
 		// Receive next incoming proxied request.
-		opening, err = c.Receive()
+		opening, err = comm.InternalReceive(c.Reader)
 		if err != nil {
 			c.ErrorLogOnly("Encountered receive error", err)
 			return

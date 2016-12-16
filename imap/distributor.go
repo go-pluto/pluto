@@ -17,11 +17,12 @@ import (
 // Distributor struct bundles information needed in
 // operation of a distributor node.
 type Distributor struct {
-	lock        *sync.RWMutex
-	Socket      net.Listener
-	AuthAdapter auth.PlainAuthenticator
-	Connections map[string]*tls.Conn
-	Config      *config.Config
+	lock          *sync.RWMutex
+	Socket        net.Listener
+	IntlTLSConfig *tls.Config
+	AuthAdapter   auth.PlainAuthenticator
+	Connections   map[string]*tls.Conn
+	Config        *config.Config
 }
 
 // Functions
@@ -53,7 +54,7 @@ func InitDistributor(config *config.Config) (*Distributor, error) {
 	}
 
 	// Load internal TLS config.
-	internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Distributor.InternalTLS.CertLoc, config.Distributor.InternalTLS.KeyLoc, config.RootCertLoc)
+	distr.IntlTLSConfig, err = crypto.NewInternalTLSConfig(config.Distributor.InternalTLS.CertLoc, config.Distributor.InternalTLS.KeyLoc, config.RootCertLoc)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +63,7 @@ func InitDistributor(config *config.Config) (*Distributor, error) {
 
 		// Try to connect to mail port of each worker node the
 		// distributor is responsible for.
-		c, err := comm.ReliableConnect("distributor", workerName, workerNode.IP, workerNode.MailPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+		c, err := comm.ReliableConnect("distributor", workerName, workerNode.IP, workerNode.MailPort, distr.IntlTLSConfig, config.IntlConnWait, config.IntlConnRetry)
 		if err != nil {
 			return nil, err
 		}
@@ -112,8 +113,15 @@ func (distr *Distributor) Run() error {
 // specific handlers matching the parsed data.
 func (distr *Distributor) HandleConnection(conn net.Conn) {
 
+	// Assert we are talking via a TLS connection.
+	tlsConn, ok := conn.(*tls.Conn)
+	if ok != true {
+		log.Printf("[imap.HandleConnection] Distributor could not convert connection into TLS connection.\n")
+		return
+	}
+
 	// Create a new connection struct for incoming request.
-	c := NewConnection(conn)
+	c := NewConnection(tlsConn)
 
 	// Send initial server greeting.
 	err := c.Send(fmt.Sprintf("* OK IMAP4rev1 %s", distr.Config.IMAP.Greeting))
@@ -139,23 +147,31 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 				// inform the worker about the disconnect.
 				if c.Worker != "" {
 
-					// Read-lock distributor shortly.
 					distr.lock.RLock()
 
-					// Retrieve connection to concerned worker node.
-					concernedWorker := distr.Connections[c.Worker]
+					// Store worker connection information.
+					workerConn := distr.Connections[c.Worker]
+					workerIP := distr.Config.Workers[c.Worker].IP
+					workerPort := distr.Config.Workers[c.Worker].MailPort
 
-					// Release read-lock on distributor.
 					distr.lock.RUnlock()
 
 					// Prefix the information with context.
-					if err := c.SignalSessionPrefixWorker(concernedWorker); err != nil {
+					conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnRetry)
+					if err != nil {
 						c.Error("Encountered send error when distributor signalled context to worker", err)
 						return
 					}
 
+					distr.lock.Lock()
+
+					// Replace stored connection by possibly new one.
+					distr.Connections[c.Worker] = conn
+
+					distr.lock.Unlock()
+
 					// Now signal that client disconnected.
-					if err := c.SignalSessionDone(concernedWorker); err != nil {
+					if err := c.SignalSessionDone(conn); err != nil {
 						c.Error("Encountered send error when distributor signalled end to worker", err)
 						return
 					}

@@ -4,10 +4,11 @@ import (
 	"bufio"
 	"fmt"
 	"log"
-	"net"
 	"strings"
 
 	"crypto/tls"
+
+	"github.com/numbleroot/pluto/comm"
 )
 
 // Constants
@@ -34,7 +35,7 @@ type IMAPState int
 // to one observed connection on its way through
 // the IMAP server.
 type Connection struct {
-	Conn      net.Conn
+	Conn      *tls.Conn
 	Worker    string
 	Reader    *bufio.Reader
 	UserToken string
@@ -46,7 +47,7 @@ type Connection struct {
 // NewConnection creates a new element of above
 // connection struct and fills it with content from
 // a supplied, real IMAP connection.
-func NewConnection(c net.Conn) *Connection {
+func NewConnection(c *tls.Conn) *Connection {
 
 	return &Connection{
 		Conn:   c,
@@ -60,7 +61,26 @@ func NewConnection(c net.Conn) *Connection {
 // resulting string or an error.
 func (c *Connection) Receive() (string, error) {
 
-	text, err := c.Reader.ReadString('\n')
+	var err error
+
+	// Initial value for received message in order
+	// to skip past the mandatory ping message.
+	text := "> ping <\n"
+
+	for text == "> ping <\n" {
+
+		text, err = c.Reader.ReadString('\n')
+		if err != nil {
+
+			if err.Error() == "EOF" {
+				log.Printf("[imap.Receive] Node at %s disconnected...\n", c.Conn.RemoteAddr())
+			}
+
+			break
+		}
+	}
+
+	// If an error happened, return it.
 	if err != nil {
 		return "", err
 	}
@@ -83,24 +103,48 @@ func (c *Connection) Send(text string) error {
 
 // SignalSessionPrefixWorker is used by the distributor node to
 // signal an involved worker node context about future requests.
-func (c *Connection) SignalSessionPrefixWorker(worker *tls.Conn) error {
+func (c *Connection) SignalSessionPrefixWorker(conn *tls.Conn, name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, retry int) (*tls.Conn, error) {
 
-	if _, err := fmt.Fprintf(worker, "> id: %s <\n", c.UserToken); err != nil {
-		return err
+	// Text to send.
+	msg := fmt.Sprintf("> id: %s <", c.UserToken)
+
+	// Reliably send message to node.
+	newConn, replaced, err := comm.ReliableSend(conn, msg, name, remoteName, remoteIP, remotePort, tlsConfig, retry)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	// If connection had to be reestablished,
+	// returned renewed connection.
+	if replaced {
+		return newConn, nil
+	}
+
+	// Otherwise, return the working prior one.
+	return conn, nil
 }
 
 // SignalSessionPrefixStorage is used by a failover worker node
 // to signal the storage node context about future requests.
-func (c *Connection) SignalSessionPrefixStorage(storage *tls.Conn, clientID, workerName string) error {
+func (c *Connection) SignalSessionPrefixStorage(clientID string, conn *tls.Conn, name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, retry int) (*tls.Conn, error) {
 
-	if _, err := fmt.Fprintf(storage, "> id: %s %s <\n", clientID, workerName); err != nil {
-		return err
+	// Text to send.
+	msg := fmt.Sprintf("> id: %s %s <", clientID, name)
+
+	// Reliably send message to node.
+	newConn, replaced, err := comm.ReliableSend(conn, msg, name, remoteName, remoteIP, remotePort, tlsConfig, retry)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	// If connection had to be reestablished,
+	// returned renewed connection.
+	if replaced {
+		return newConn, nil
+	}
+
+	// Otherwise, return the working prior one.
+	return conn, nil
 }
 
 // SignalSessionError can be used by distributor or worker nodes

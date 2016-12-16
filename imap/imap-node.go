@@ -593,7 +593,7 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 		// If connection was not correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.Send(fmt.Sprintf("%s BAD Command SELECT cannot be executed in this state", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command SELECT cannot be executed in this state", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -609,7 +609,7 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 
 		// If no mailbox to select was specified in payload,
 		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -625,7 +625,7 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 
 		// If there were more than two names supplied to select,
 		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -651,7 +651,7 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 
 		// If specified maildir did not turn out to be a valid one,
 		// this is a client error. Return NO statement.
-		err := c.Send(fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -690,7 +690,7 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 	// TODO: Add other SELECT response elements if needed.
 
 	// Send answer to requesting client.
-	err = c.Send(fmt.Sprintf("* %d EXISTS\n* %d RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\n%s OK [READ-WRITE] SELECT completed", len(selMailboxContents), recentMails, req.Tag))
+	err = comm.InternalSend(c.Conn, fmt.Sprintf("* %d EXISTS\n* %d RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\n%s OK [READ-WRITE] SELECT completed", len(selMailboxContents), recentMails, req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -715,7 +715,7 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 		// If connection was not correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.Send(fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -731,7 +731,7 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 
 		// If payload did not contain exactly one element,
 		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command CREATE was not sent with exactly one parameter", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command CREATE was not sent with exactly one parameter", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -748,7 +748,7 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 
 		// If mailbox to-be-created was named INBOX,
 		// this is a client error. Return NO response.
-		err := c.Send(fmt.Sprintf("%s NO New mailbox cannot be named INBOX", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s NO New mailbox cannot be named INBOX", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -765,7 +765,7 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 
 		// If mailbox to-be-created already exists for user,
 		// this is a client error. Return NO response.
-		err := c.Send(fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -846,7 +846,7 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 	}
 
 	// Send success answer.
-	err = c.Send(fmt.Sprintf("%s OK CREATE completed", req.Tag))
+	err = comm.InternalSend(c.Conn, fmt.Sprintf("%s OK CREATE completed", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -871,7 +871,7 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 		// If connection was not correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.Send(fmt.Sprintf("%s BAD Command DELETE cannot be executed in this state", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command DELETE cannot be executed in this state", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -887,7 +887,7 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 
 		// If payload did not contain exactly one element,
 		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command DELETE was not sent with exactly one parameter", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command DELETE was not sent with exactly one parameter", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -904,7 +904,7 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 
 		// If mailbox to-be-deleted was named INBOX,
 		// this is a client error. Return NO response.
-		err := c.Send(fmt.Sprintf("%s NO Forbidden to delete INBOX", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s NO Forbidden to delete INBOX", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -932,7 +932,7 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 		if err.Error() == "element to be removed not found in set" {
 
 			// If so, return a NO response.
-			err := c.Send(fmt.Sprintf("%s NO Cannot delete folder that does not exist", req.Tag))
+			err := comm.InternalSend(c.Conn, fmt.Sprintf("%s NO Cannot delete folder that does not exist", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return false
@@ -977,7 +977,7 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 	}
 
 	// Send success answer.
-	err = c.Send(fmt.Sprintf("%s OK DELETE completed", req.Tag))
+	err = comm.InternalSend(c.Conn, fmt.Sprintf("%s OK DELETE completed", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -1002,7 +1002,7 @@ func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncCha
 		// If connection was not correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.Send(fmt.Sprintf("%s BAD Command LIST cannot be executed in this state", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command LIST cannot be executed in this state", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1018,7 +1018,7 @@ func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncCha
 
 		// If payload did not contain between exactly two elements,
 		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command LIST was not sent with exactly two arguments", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command LIST was not sent with exactly two arguments", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1031,7 +1031,7 @@ func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncCha
 
 		// If second argument is not one of two wildcards,
 		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command LIST needs either '%%' or '*' as mailbox name", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command LIST needs either '%%' or '*' as mailbox name", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1068,7 +1068,7 @@ func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncCha
 	// Send out LIST response lines.
 	for _, listAnswerLine := range listAnswerLines {
 
-		err := c.Send(listAnswerLine)
+		err := comm.InternalSend(c.Conn, listAnswerLine, c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1076,7 +1076,7 @@ func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncCha
 	}
 
 	// Send success answer.
-	err := c.Send(fmt.Sprintf("%s OK LIST completed", req.Tag))
+	err := comm.InternalSend(c.Conn, fmt.Sprintf("%s OK LIST completed", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -1101,26 +1101,25 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 	// Lock node.
 	node.lock.Lock()
 
-	if (node.Contexts[clientID].IMAPState != AUTHENTICATED) && (node.Contexts[clientID].IMAPState != MAILBOX) {
+	// Save current state of IMAP connection.
+	curIMAPState := node.Contexts[clientID].IMAPState
+
+	// Unlock node again.
+	node.lock.Unlock()
+
+	if (curIMAPState != AUTHENTICATED) && (curIMAPState != MAILBOX) {
 
 		// If connection was not correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.Send(fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
-			node.lock.Unlock()
 			c.Error("Encountered send error", err)
 			return false
 		}
 
-		// Unlock node again.
-		node.lock.Unlock()
-
 		return true
 	}
-
-	// Unlock node again.
-	node.lock.Unlock()
 
 	// Split payload on every space character.
 	appendArgs := strings.Split(req.Payload, " ")
@@ -1131,7 +1130,7 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 		// If payload did not contain between two and four
 		// elements, this is a client error.
 		// Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command APPEND was not sent with appropriate number of parameters", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command APPEND was not sent with appropriate number of parameters", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1167,12 +1166,12 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 	// If flags were supplied, parse them.
 	if flagsRaw != "" {
 
-		flags, err := ParseFlags(flagsRaw)
+		_, err := ParseFlags(flagsRaw)
 		if err != nil {
 
 			// Parsing flags from APPEND request produced
 			// an error. Return tagged BAD response.
-			err := c.Send(fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
+			err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return false
@@ -1181,12 +1180,11 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 			return true
 		}
 
-		log.Printf("flags: %#v\n", flags)
+		// TODO: Do something with these flags.
 	}
 
 	// If date-time was supplied, parse it.
 	if dateTimeRaw != "" {
-
 		// TODO: Parse time and do something with it.
 	}
 
@@ -1200,7 +1198,7 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 
 		// If we were not able to parse out the number,
 		// it was probably a client error. Send tagged BAD.
-		err := c.Send(fmt.Sprintf("%s BAD Command APPEND did not contain proper literal data byte number", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command APPEND did not contain proper literal data byte number", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1216,28 +1214,24 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 	// conveniently use it hereafter.
 	userMainCRDT := node.MailboxStructure[node.Contexts[clientID].UserName]["Structure"]
 
+	// Unlock node again.
+	node.lock.Unlock()
+
 	if userMainCRDT.Lookup(mailbox, true) != true {
 
 		// If mailbox to append message to does not exist,
 		// this is a client error. Return NO response.
-		err := c.Send(fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
-			node.lock.Unlock()
 			return false
 		}
-
-		// Unlock node again.
-		node.lock.Unlock()
 
 		return true
 	}
 
-	// Unlock node again.
-	node.lock.Unlock()
-
 	// Send command continuation to client.
-	err = c.Send("+ Ready for literal data")
+	err = comm.InternalSend(c.Conn, "+ Ready for literal data", c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -1340,7 +1334,7 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 	}
 
 	// Send success answer.
-	err = c.Send(fmt.Sprintf("%s OK APPEND completed", req.Tag))
+	err = comm.InternalSend(c.Conn, fmt.Sprintf("%s OK APPEND completed", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -1366,7 +1360,7 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 		// If connection was not correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.Send(fmt.Sprintf("%s BAD No mailbox selected to expunge", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD No mailbox selected to expunge", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1379,7 +1373,7 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 
 		// If payload was not empty to EXPUNGE command,
 		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command EXPUNGE was sent with extra parameters", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command EXPUNGE was sent with extra parameters", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1472,7 +1466,7 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 		// Send out FETCH part with new flags.
 		for _, expAnswerLine := range expAnswerLines {
 
-			err := c.Send(expAnswerLine)
+			err := comm.InternalSend(c.Conn, expAnswerLine, c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return false
@@ -1481,7 +1475,7 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 	}
 
 	// Send success answer.
-	err := c.Send(fmt.Sprintf("%s OK EXPUNGE completed", req.Tag))
+	err := comm.InternalSend(c.Conn, fmt.Sprintf("%s OK EXPUNGE completed", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -1513,7 +1507,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 		// If connection was not correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.Send(fmt.Sprintf("%s BAD No mailbox selected for store", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD No mailbox selected for store", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1530,7 +1524,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 		// If payload did not contain at least three
 		// elements, this is a client error.
 		// Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command STORE was not sent with three parameters", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command STORE was not sent with three parameters", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1545,7 +1539,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 
 		// Parsing sequence numbers from STORE request produced
 		// an error. Return tagged BAD response.
-		err := c.Send(fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1564,7 +1558,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 		// If supplied data item type is none of the
 		// supported ones, this is a client error.
 		// Send tagged BAD response.
-		err := c.Send(fmt.Sprintf("%s BAD Unknown data item type specified", req.Tag))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Unknown data item type specified", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1585,7 +1579,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 
 		// Parsing flags from STORE request produced
 		// an error. Return tagged BAD response.
-		err := c.Send(fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
+		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1801,7 +1795,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 		// Send out FETCH part with new flags.
 		for _, answerLine := range answerLines {
 
-			err = c.Send(answerLine)
+			err = comm.InternalSend(c.Conn, answerLine, c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return false
@@ -1810,7 +1804,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 	}
 
 	// Send success answer.
-	err = c.Send(fmt.Sprintf("%s OK STORE completed", req.Tag))
+	err = comm.InternalSend(c.Conn, fmt.Sprintf("%s OK STORE completed", req.Tag), c.Conn.LocalAddr().String(), c.Conn.RemoteAddr().String())
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false

@@ -283,7 +283,7 @@ func (sender *Sender) SendMsgs() {
 					// Test long-lived connection.
 					_, err = conn.Write([]byte("> ping <\n"))
 					if err != nil {
-						log.Fatalf("[comm.SendMsgs] Sending ping to node %s failed with: %s\n", i, err.Error())
+						log.Fatalf("[comm.SendMsgs] Sending ping to node '%s' failed with: %s\n", i, err.Error())
 					}
 
 					// Write message to TLS connections.
@@ -303,13 +303,13 @@ func (sender *Sender) SendMsgs() {
 							// Connection was lost. Reconnect.
 							conn, err = ReliableConnect(sender.name, i, addrParts[0], addrParts[1], sender.tlsConfig, 0, sender.intlConnRetry)
 							if err != nil {
-								log.Fatalf("[comm.SendMsgs] Could not reestablish connection with %s: %s\n", i, err.Error())
+								log.Fatalf("[comm.SendMsgs] Could not reestablish connection with '%s': %s\n", i, err.Error())
 							}
 
 							// Replace old connection with new.
 							sender.nodes[i] = conn
 						} else {
-							log.Fatalf("[comm.SendMsgs] Could not reestablish connection with %s: %s\n", i, err.Error())
+							log.Fatalf("[comm.SendMsgs] Could not reestablish connection with '%s': %s\n", i, err.Error())
 						}
 
 						// Wait configured time before attempting next transfer.

@@ -7,6 +7,8 @@ import (
 	"log"
 	"strconv"
 	"strings"
+
+	"github.com/numbleroot/pluto/comm"
 )
 
 // Functions
@@ -68,14 +70,31 @@ func (distr *Distributor) Logout(c *Connection, req *Request) bool {
 	// If already a worker was assigned, signal logout.
 	if c.Worker != "" {
 
+		distr.lock.RLock()
+
+		// Store worker connection information.
+		workerConn := distr.Connections[c.Worker]
+		workerIP := distr.Config.Workers[c.Worker].IP
+		workerPort := distr.Config.Workers[c.Worker].MailPort
+
+		distr.lock.RUnlock()
+
 		// Inform worker node about which session will log out.
-		if err := c.SignalSessionPrefixWorker(distr.Connections[c.Worker]); err != nil {
+		conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnRetry)
+		if err != nil {
 			c.Error("Encountered send error when distributor signalled context to worker", err)
 			return false
 		}
 
+		distr.lock.Lock()
+
+		// Replace stored connection by possibly new one.
+		distr.Connections[c.Worker] = conn
+
+		distr.lock.Unlock()
+
 		// Signal to worker node that session is done.
-		if err := c.SignalSessionDone(distr.Connections[c.Worker]); err != nil {
+		if err := c.SignalSessionDone(conn); err != nil {
 			c.Error("Encountered send error when distributor signalled end to worker", err)
 			return false
 		}
@@ -210,18 +229,35 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	log.Println()
 	log.Printf("PROXYing request '%s'...\n", rawReq)
 
-	// We need proper auxiliary variables for later access.
-	connWorker := distr.Connections[c.Worker]
-	readerWorker := bufio.NewReader(connWorker)
+	distr.lock.RLock()
 
-	// Inform worker node about context of request of this client.
-	if err := c.SignalSessionPrefixWorker(distr.Connections[c.Worker]); err != nil {
+	// Store worker connection information.
+	workerConn := distr.Connections[c.Worker]
+	workerIP := distr.Config.Workers[c.Worker].IP
+	workerPort := distr.Config.Workers[c.Worker].MailPort
+
+	distr.lock.RUnlock()
+
+	// Inform worker node about which session will log out.
+	conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnRetry)
+	if err != nil {
 		c.Error("Encountered send error when distributor signalled context to worker", err)
 		return false
 	}
 
+	distr.lock.Lock()
+
+	// Replace stored connection by possibly new one.
+	distr.Connections[c.Worker] = conn
+
+	distr.lock.Unlock()
+
+	// Create a buffered reader from worker connection.
+	workerReader := bufio.NewReader(conn)
+
 	// Send received client command to worker distr.
-	if _, err := fmt.Fprintf(connWorker, "%s\n", rawReq); err != nil {
+	err = comm.InternalSend(conn, rawReq, "distributor", c.Worker)
+	if err != nil {
 		c.Error("Encountered send error to worker", err)
 		return false
 	}
@@ -230,12 +266,11 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	bufResp := make([]string, 0, 6)
 
 	// Receive incoming worker response.
-	curResp, err := readerWorker.ReadString('\n')
+	curResp, err := comm.InternalReceive(workerReader)
 	if err != nil {
 		c.Error("Encountered receive error from worker", err)
 		return false
 	}
-	curResp = strings.TrimRight(curResp, "\n")
 
 	// As long as the responsible worker has not
 	// indicated the end of the current operation,
@@ -246,12 +281,11 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 		bufResp = append(bufResp, curResp)
 
 		// Receive incoming worker response.
-		curResp, err = readerWorker.ReadString('\n')
+		curResp, err = comm.InternalReceive(workerReader)
 		if err != nil {
 			c.Error("Encountered receive error from worker", err)
 			return false
 		}
-		curResp = strings.TrimRight(curResp, "\n")
 	}
 
 	for i := range bufResp {
@@ -292,7 +326,8 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 
 		// Pass on data to worker. Mails have to be ended by
 		// newline symbol.
-		if _, err := fmt.Fprintf(connWorker, "%s", msgBuffer); err != nil {
+		_, err = fmt.Fprintf(conn, "%s", msgBuffer)
+		if err != nil {
 			c.Error("Encountered passing send error to worker", err)
 			return false
 		}
@@ -301,12 +336,11 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 		bufResp := make([]string, 0, 6)
 
 		// Receive incoming worker response.
-		curResp, err := readerWorker.ReadString('\n')
+		curResp, err := comm.InternalReceive(workerReader)
 		if err != nil {
 			c.Error("Encountered receive error from worker after literal data was sent", err)
 			return false
 		}
-		curResp = strings.TrimRight(curResp, "\n")
 
 		// As long as the responsible worker has not
 		// indicated the end of the current operation,
@@ -317,12 +351,11 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 			bufResp = append(bufResp, curResp)
 
 			// Receive incoming worker response.
-			curResp, err = readerWorker.ReadString('\n')
+			curResp, err = comm.InternalReceive(workerReader)
 			if err != nil {
 				c.Error("Encountered receive error from worker after literal data was sent", err)
 				return false
 			}
-			curResp = strings.TrimRight(curResp, "\n")
 		}
 
 		for i := range bufResp {
