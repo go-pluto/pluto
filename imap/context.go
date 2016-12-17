@@ -67,6 +67,8 @@ func (worker *Worker) UpdateClientContext(clientIDRaw string) (string, error) {
 	return clientID, nil
 }
 
+// ExtractClientContext simply extracts the contained
+// client ID from a prefix sent by distributor.
 func (failWorker *FailoverWorker) ExtractClientContext(clientIDRaw string) (string, error) {
 
 	// Split received clientID string at white spaces

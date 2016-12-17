@@ -134,8 +134,10 @@ func (sender *Sender) BrokerMsgs() {
 			sender.writeLog.Close()
 			sender.lock.Unlock()
 
-			// End infinite loop.
-			break
+			// Call done handler of wait group for this
+			// routine on exiting this function.
+			defer sender.wg.Done()
+			return
 
 		default:
 
@@ -177,8 +179,6 @@ func (sender *Sender) BrokerMsgs() {
 			}
 		}
 	}
-
-	sender.wg.Done()
 }
 
 // SendMsgs waits for a signal indicating that a message
@@ -198,8 +198,10 @@ func (sender *Sender) SendMsgs() {
 			sender.updLog.Close()
 			sender.lock.Unlock()
 
-			// End infinite loop.
-			break
+			// Call done handler of wait group for this
+			// routine on exiting this function.
+			defer sender.wg.Done()
+			return
 
 		default:
 
@@ -358,6 +360,4 @@ func (sender *Sender) SendMsgs() {
 			}
 		}
 	}
-
-	sender.wg.Done()
 }

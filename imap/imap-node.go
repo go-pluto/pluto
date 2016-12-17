@@ -1047,7 +1047,7 @@ func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncCha
 	// Reserve space for answer.
 	listAnswerLines := make([]string, 0, (len(userMainCRDT) - 1))
 
-	for mailbox, _ := range userMainCRDT {
+	for mailbox := range userMainCRDT {
 
 		// Do not consider structure element.
 		if mailbox != "Structure" {

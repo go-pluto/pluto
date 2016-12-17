@@ -253,8 +253,10 @@ func (recv *Receiver) IncVClockEntry() {
 		// Check if a shutdown signal was sent.
 		case <-recv.shutdown:
 
-			// If so, break from infinite loop.
-			break
+			// Call done handler of wait group for this
+			// routine on exiting this function.
+			defer recv.wg.Done()
+			return
 
 		default:
 
@@ -296,8 +298,6 @@ func (recv *Receiver) IncVClockEntry() {
 			}
 		}
 	}
-
-	recv.wg.Done()
 }
 
 // AcceptIncMsgs runs in background and waits for
@@ -305,6 +305,8 @@ func (recv *Receiver) IncVClockEntry() {
 // dispatches into next routine.
 func (recv *Receiver) AcceptIncMsgs() error {
 
+	// Call done handler of wait group for this
+	// routine on exiting this function.
 	defer recv.wg.Done()
 
 	// Initilize channel to signal end to
@@ -331,8 +333,7 @@ func (recv *Receiver) AcceptIncMsgs() error {
 			recv.writeLog.Close()
 			recv.lock.Unlock()
 
-			// Break from infinite loop.
-			break
+			return nil
 
 		default:
 
@@ -347,8 +348,6 @@ func (recv *Receiver) AcceptIncMsgs() error {
 			go recv.StoreIncMsgs(conn, downStoring)
 		}
 	}
-
-	return nil
 }
 
 // StoreIncMsgs takes received message string and saves
@@ -465,8 +464,10 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			recv.updLog.Close()
 			recv.lock.Unlock()
 
-			// End infinite loop.
-			break
+			// Call done handler of wait group for this
+			// routine on exiting this function.
+			defer recv.wg.Done()
+			return
 
 		default:
 
@@ -674,6 +675,4 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			}
 		}
 	}
-
-	recv.wg.Done()
 }

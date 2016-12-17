@@ -443,6 +443,9 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 	}
 }
 
+// RunFailover is the main method called when starting a
+// failover worker node. It accepts IMAP connections and
+// dispatches them into own goroutines.
 func (failWorker *FailoverWorker) RunFailover() error {
 
 	for {
@@ -458,6 +461,10 @@ func (failWorker *FailoverWorker) RunFailover() error {
 	}
 }
 
+// HandleFailover is the function new IMAP connections
+// incoming at a failover worker node are dispatched into
+// in. It takes care of message forwarding to storage and
+// reply return to distributor.
 func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 
 	// Assert we are talking via a TLS connection.
