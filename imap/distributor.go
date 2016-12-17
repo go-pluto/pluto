@@ -183,7 +183,7 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 			} else {
 				// If not a simple disconnect, log error and
 				// terminate connection to client.
-				c.Error("Encountered receive error", err)
+				c.Error("Encountered receive error from client", err)
 			}
 
 			return

@@ -51,57 +51,6 @@ func ReliableConnect(name string, remoteName string, remoteIP string, remotePort
 	return c, nil
 }
 
-// InternalSend is used by nodes of the pluto system to
-// successfully transmit a message to another node or
-// fail definitely. This prevents further handler advancement
-// in case a link failed.
-func InternalSend(conn *tls.Conn, text string, name string, remoteName string) error {
-
-	// Test long-lived connection.
-	_, err := conn.Write([]byte("> ping <\n"))
-	if err != nil {
-		return fmt.Errorf("%s: sending ping to node '%s' failed: %s\n", name, remoteName, err.Error())
-	}
-
-	log.Printf("%s: sending message to node '%s -> %s': '%s'\n", name, conn.LocalAddr().String(), conn.RemoteAddr().String(), text)
-
-	// Write message to TLS connections.
-	_, err = fmt.Fprintf(conn, "%s\n", text)
-	for err != nil {
-		return fmt.Errorf("%s: sending message to node '%s' failed: %s\n", name, remoteName, err.Error())
-	}
-
-	return nil
-}
-
-// InternalReceive is used by nodes in the pluto system
-// receive an incoming message and filter out all prior
-// received ping message.
-func InternalReceive(reader *bufio.Reader) (string, error) {
-
-	var err error
-
-	// Initial value for received message in order
-	// to skip past the mandatory ping message.
-	text := "> ping <\n"
-
-	for text == "> ping <\n" {
-
-		text, err = reader.ReadString('\n')
-		log.Printf("Received: '%s'\n", text)
-		if err != nil {
-			break
-		}
-	}
-
-	// If an error happened, return it.
-	if err != nil {
-		return "", err
-	}
-
-	return strings.TrimRight(text, "\n"), nil
-}
-
 // ReliableSend sends text to other node specified and
 // tries to reconnect in case of simple disconnects.
 func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, retry int) (*tls.Conn, bool, error) {
@@ -117,6 +66,8 @@ func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, r
 	if err != nil {
 		return nil, false, fmt.Errorf("sending ping to node '%s' failed with: %s\n", remoteName, err.Error())
 	}
+
+	log.Printf("[RELIABLE] %s: sending message to node '%s -> %s': '%s'\n", name, conn.LocalAddr().String(), conn.RemoteAddr().String(), text)
 
 	// Write message to TLS connections.
 	_, err = fmt.Fprintf(conn, "%s\n", text)
@@ -141,6 +92,8 @@ func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, r
 			// Wait configured time before attempting next transfer.
 			time.Sleep(time.Duration(retry) * time.Millisecond)
 
+			log.Printf("[RELIABLE] %s: sending message to node '%s -> %s': '%s'\n", name, conn.LocalAddr().String(), conn.RemoteAddr().String(), text)
+
 			// Retry transfer.
 			_, err = fmt.Fprintf(replacedConn, "%s\n", text)
 		} else {
@@ -153,4 +106,55 @@ func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, r
 	}
 
 	return conn, replaced, nil
+}
+
+// InternalSend is used by nodes of the pluto system to
+// successfully transmit a message to another node or
+// fail definitely. This prevents further handler advancement
+// in case a link failed.
+func InternalSend(conn *tls.Conn, text string, name string, remoteName string) error {
+
+	// Test long-lived connection.
+	_, err := conn.Write([]byte("> ping <\n"))
+	if err != nil {
+		return fmt.Errorf("%s: sending ping to node '%s' failed: %s\n", name, remoteName, err.Error())
+	}
+
+	log.Printf("[SEND] %s: sending message to node '%s -> %s': '%s'\n", name, conn.LocalAddr().String(), conn.RemoteAddr().String(), text)
+
+	// Write message to TLS connections.
+	_, err = fmt.Fprintf(conn, "%s\n", text)
+	for err != nil {
+		return fmt.Errorf("%s: sending message to node '%s' failed: %s\n", name, remoteName, err.Error())
+	}
+
+	return nil
+}
+
+// InternalReceive is used by nodes in the pluto system
+// receive an incoming message and filter out all prior
+// received ping message.
+func InternalReceive(reader *bufio.Reader) (string, error) {
+
+	var err error
+
+	// Initial value for received message in order
+	// to skip past the mandatory ping message.
+	text := "> ping <\n"
+
+	for text == "> ping <\n" {
+
+		text, err = reader.ReadString('\n')
+		log.Printf("[RECEIVED] '%s'\n", text)
+		if err != nil {
+			break
+		}
+	}
+
+	// If an error happened, return it.
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimRight(text, "\n"), nil
 }

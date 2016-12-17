@@ -656,7 +656,7 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 			}
 		}
 
-		if curResp == "> done <" {
+		if (curResp == "> done <") || (strings.HasPrefix(curResp, "> literal: ")) {
 
 			// If successful, signal end of operation to distributor.
 			err := c.SignalSessionDone(nil)
