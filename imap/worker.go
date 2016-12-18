@@ -151,6 +151,14 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 
 	log.Printf("[imap.InitWorker] Listening for incoming sync requests on %s.\n", worker.SyncSocket.Addr())
 
+	// Start to listen for incoming internal connections on defined IP and mail port.
+	worker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].IP, config.Workers[worker.Name].MailPort), internalTLSConfig)
+	if err != nil {
+		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
+	}
+
+	log.Printf("[imap.InitWorker] Listening for incoming IMAP requests on %s.\n", worker.MailSocket.Addr())
+
 	// Initialize channels for this node.
 	applyCRDTUpdChan := make(chan string)
 	doneCRDTUpdChan := make(chan struct{})
@@ -186,14 +194,6 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 
 	// Apply received CRDT messages in background.
 	go worker.ApplyCRDTUpd(applyCRDTUpdChan, doneCRDTUpdChan)
-
-	// Start to listen for incoming internal connections on defined IP and mail port.
-	worker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].IP, config.Workers[worker.Name].MailPort), internalTLSConfig)
-	if err != nil {
-		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
-	}
-
-	log.Printf("[imap.InitWorker] Listening for incoming IMAP requests on %s.\n", worker.MailSocket.Addr())
 
 	return worker, nil
 }
@@ -233,6 +233,14 @@ func InitFailoverWorker(config *config.Config, workerName string) (*FailoverWork
 		return nil, err
 	}
 
+	// Start to listen for incoming internal connections on defined IP and mail port.
+	failWorker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[failWorker.Name].IP, config.Workers[failWorker.Name].MailPort), failWorker.IntlTLSConfig)
+	if err != nil {
+		return nil, fmt.Errorf("[imap.InitFailoverWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
+	}
+
+	log.Printf("[imap.InitFailoverWorker] Listening for incoming IMAP requests on %s.\n", failWorker.MailSocket.Addr())
+
 	// Try to connect to mail port of storage node to which this node
 	// forwards all traffic it received from distributor.
 	c, err := comm.ReliableConnect(failWorker.Name, "storage", config.Storage.IP, config.Storage.MailPort, failWorker.IntlTLSConfig, config.IntlConnWait, config.IntlConnRetry)
@@ -242,14 +250,6 @@ func InitFailoverWorker(config *config.Config, workerName string) (*FailoverWork
 
 	// Save connection for later use.
 	failWorker.Connections["storage"] = c
-
-	// Start to listen for incoming internal connections on defined IP and mail port.
-	failWorker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[failWorker.Name].IP, config.Workers[failWorker.Name].MailPort), failWorker.IntlTLSConfig)
-	if err != nil {
-		return nil, fmt.Errorf("[imap.InitFailoverWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
-	}
-
-	log.Printf("[imap.InitFailoverWorker] Listening for incoming IMAP requests on %s.\n", failWorker.MailSocket.Addr())
 
 	return failWorker, nil
 }
@@ -502,9 +502,6 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 			return
 		}
 
-		log.Println()
-		log.Printf("PROXYing request '%s'...\n", rawReq)
-
 		failWorker.lock.RLock()
 
 		// Save connection information to storage for later use.
@@ -565,8 +562,6 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 		}
 
 		for i := range bufResp {
-
-			log.Printf("sending backingham: '%s'\n", bufResp[i])
 
 			// Send all buffered storage answers to distributor.
 			err = comm.InternalSend(c.Conn, bufResp[i], failWorker.Name, "distributor")
@@ -644,8 +639,6 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 			}
 
 			for i := range bufResp {
-
-				log.Printf("sending backingham 2: '%s'\n", bufResp[i])
 
 				// Send all buffered storage answers to distributor.
 				err = comm.InternalSend(c.Conn, bufResp[i], failWorker.Name, "distributor")

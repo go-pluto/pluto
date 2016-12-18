@@ -125,7 +125,7 @@ func RunAllNodes(testEnv *TestEnv, workerName string) {
 			// Wait for shutdown signal on channel.
 			<-testEnv.DownWorker
 
-			log.Printf("[utils.RunAllNodes] Closing %s socket.\n", workerName)
+			log.Printf("[utils.RunAllNodes] Closing '%s' socket.\n", workerName)
 
 			// Shut down worker node.
 			worker.MailSocket.Close()
@@ -172,10 +172,10 @@ func RunAllNodes(testEnv *TestEnv, workerName string) {
 	time.Sleep(500 * time.Millisecond)
 }
 
-// TearDownNodes takes up the role of shutting down the
+// TearDownNormalSetup takes care of shutting down the normally
 // running nodes by sending shutdown signals and expecting
 // success answers.
-func TearDownNodes(testEnv *TestEnv) {
+func TearDownNormalSetup(testEnv *TestEnv) {
 
 	// Signal to all nodes running background that they
 	// are supposed to shut down now.
@@ -187,4 +187,7 @@ func TearDownNodes(testEnv *TestEnv) {
 	<-testEnv.DoneDistr
 	<-testEnv.DoneWorker
 	<-testEnv.DoneStorage
+
+	// Wait shortly.
+	time.Sleep(500 * time.Millisecond)
 }

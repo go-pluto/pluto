@@ -41,7 +41,7 @@ func ReliableConnect(name string, remoteName string, remoteIP string, remotePort
 			if err.Error() == okError {
 				time.Sleep(time.Duration(retry) * time.Millisecond)
 			} else {
-				return nil, fmt.Errorf("%s: Could not connect to sync port of node '%s' because of: %s\n", name, remoteName, err.Error())
+				return nil, fmt.Errorf("%s: Could not connect to port of node '%s' because of: %s\n", name, remoteName, err.Error())
 			}
 		}
 	}
@@ -67,8 +67,6 @@ func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, r
 		return nil, false, fmt.Errorf("sending ping to node '%s' failed with: %s\n", remoteName, err.Error())
 	}
 
-	log.Printf("[RELIABLE] %s: sending message to node '%s -> %s': '%s'\n", name, conn.LocalAddr().String(), conn.RemoteAddr().String(), text)
-
 	// Write message to TLS connections.
 	_, err = fmt.Fprintf(conn, "%s\n", text)
 	for err != nil {
@@ -91,8 +89,6 @@ func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, r
 
 			// Wait configured time before attempting next transfer.
 			time.Sleep(time.Duration(retry) * time.Millisecond)
-
-			log.Printf("[RELIABLE] %s: sending message to node '%s -> %s': '%s'\n", name, conn.LocalAddr().String(), conn.RemoteAddr().String(), text)
 
 			// Retry transfer.
 			_, err = fmt.Fprintf(replacedConn, "%s\n", text)
@@ -120,8 +116,6 @@ func InternalSend(conn *tls.Conn, text string, name string, remoteName string) e
 		return fmt.Errorf("%s: sending ping to node '%s' failed: %s\n", name, remoteName, err.Error())
 	}
 
-	log.Printf("[SEND] %s: sending message to node '%s -> %s': '%s'\n", name, conn.LocalAddr().String(), conn.RemoteAddr().String(), text)
-
 	// Write message to TLS connections.
 	_, err = fmt.Fprintf(conn, "%s\n", text)
 	for err != nil {
@@ -145,7 +139,6 @@ func InternalReceive(reader *bufio.Reader) (string, error) {
 	for text == "> ping <\n" {
 
 		text, err = reader.ReadString('\n')
-		log.Printf("[RECEIVED] '%s'\n", text)
 		if err != nil {
 			break
 		}

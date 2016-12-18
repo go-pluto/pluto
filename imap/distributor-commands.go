@@ -290,8 +290,6 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 
 	for i := range bufResp {
 
-		log.Printf("sending palace: '%s'\n", bufResp[i])
-
 		// Send all buffered worker answers to client.
 		err = c.Send(bufResp[i])
 		if err != nil {
@@ -361,8 +359,6 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 		}
 
 		for i := range bufResp {
-
-			log.Printf("sending palace 2: '%s'\n", bufResp[i])
 
 			// Send all buffered worker answers to client.
 			err = c.Send(bufResp[i])

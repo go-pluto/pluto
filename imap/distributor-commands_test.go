@@ -83,7 +83,7 @@ func TestMain(m *testing.M) {
 	success := m.Run()
 
 	// Tear down test setup.
-	utils.TearDownNodes(testEnv)
+	utils.TearDownNormalSetup(testEnv)
 
 	// Return with test return value.
 	os.Exit(success)

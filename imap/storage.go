@@ -117,6 +117,14 @@ func InitStorage(config *config.Config) (*Storage, error) {
 
 	log.Printf("[imap.InitStorage] Listening for incoming sync requests on %s.\n", storage.SyncSocket.Addr())
 
+	// Start to listen for incoming internal connections on defined IP and mail port.
+	storage.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.MailPort), internalTLSConfig)
+	if err != nil {
+		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
+	}
+
+	log.Printf("[imap.InitStorage] Listening for incoming IMAP requests on %s.\n", storage.MailSocket.Addr())
+
 	for workerName, workerNode := range config.Workers {
 
 		// Initialize channels for this node.
@@ -159,14 +167,6 @@ func InitStorage(config *config.Config) (*Storage, error) {
 		// Apply received CRDT messages in background.
 		go storage.ApplyCRDTUpd(applyCRDTUpdChan, doneCRDTUpdChan)
 	}
-
-	// Start to listen for incoming internal connections on defined IP and mail port.
-	storage.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.MailPort), internalTLSConfig)
-	if err != nil {
-		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
-	}
-
-	log.Printf("[imap.InitStorage] Listening for incoming IMAP requests on %s.\n", storage.MailSocket.Addr())
 
 	return storage, nil
 }
