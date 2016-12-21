@@ -1,7 +1,7 @@
 .PHONY: prod clean deps setup-test-env destroy-test-env exec-tests build pki test-pki test-public test
 
 PACKAGES = $(shell go list ./... | grep -v /vendor/)
-NUM_USERS := 10
+NUM_USERS := 9
 
 prod: clean deps pki build
 
@@ -54,22 +54,22 @@ setup-test-env:
 	if [ ! -d "private" ]; then mkdir private; fi
 	chmod 0700 private
 	if [ ! -d "private/Maildirs/worker-1" ]; then mkdir -p private/Maildirs/worker-1; fi
-	@for ((i = 0; i < ${NUM_USERS}; i++)); do if [ ! -d "private/Maildirs/worker-1/user$${i}/new" ]; then mkdir -p private/Maildirs/worker-1/user$${i}/new; fi; done
-	@for ((i = 0; i < ${NUM_USERS}; i++)); do if [ ! -d "private/Maildirs/worker-1/user$${i}/tmp" ]; then mkdir -p private/Maildirs/worker-1/user$${i}/tmp; fi; done
-	@for ((i = 0; i < ${NUM_USERS}; i++)); do if [ ! -d "private/Maildirs/worker-1/user$${i}/cur" ]; then mkdir -p private/Maildirs/worker-1/user$${i}/cur; fi; done
+	@for i in `seq 0 ${NUM_USERS}`; do if [ ! -d "private/Maildirs/worker-1/user$${i}/new" ]; then mkdir -p private/Maildirs/worker-1/user$${i}/new; fi; done
+	@for i in `seq 0 ${NUM_USERS}`; do if [ ! -d "private/Maildirs/worker-1/user$${i}/tmp" ]; then mkdir -p private/Maildirs/worker-1/user$${i}/tmp; fi; done
+	@for i in `seq 0 ${NUM_USERS}`; do if [ ! -d "private/Maildirs/worker-1/user$${i}/cur" ]; then mkdir -p private/Maildirs/worker-1/user$${i}/cur; fi; done
 	if [ ! -d "private/Maildirs/storage" ]; then mkdir -p private/Maildirs/storage; fi
-	@for ((i = 0; i < ${NUM_USERS}; i++)); do if [ ! -d "private/Maildirs/storage/user$${i}/new" ]; then mkdir -p private/Maildirs/storage/user$${i}/new; fi; done
-	@for ((i = 0; i < ${NUM_USERS}; i++)); do if [ ! -d "private/Maildirs/storage/user$${i}/tmp" ]; then mkdir -p private/Maildirs/storage/user$${i}/tmp; fi; done
-	@for ((i = 0; i < ${NUM_USERS}; i++)); do if [ ! -d "private/Maildirs/storage/user$${i}/cur" ]; then mkdir -p private/Maildirs/storage/user$${i}/cur; fi; done
+	@for i in `seq 0 ${NUM_USERS}`; do if [ ! -d "private/Maildirs/storage/user$${i}/new" ]; then mkdir -p private/Maildirs/storage/user$${i}/new; fi; done
+	@for i in `seq 0 ${NUM_USERS}`; do if [ ! -d "private/Maildirs/storage/user$${i}/tmp" ]; then mkdir -p private/Maildirs/storage/user$${i}/tmp; fi; done
+	@for i in `seq 0 ${NUM_USERS}`; do if [ ! -d "private/Maildirs/storage/user$${i}/cur" ]; then mkdir -p private/Maildirs/storage/user$${i}/cur; fi; done
 	chmod -R 0700 private/Maildirs/*
 	if [ ! -d "private/crdt-layers/worker-1" ]; then mkdir -p private/crdt-layers/worker-1; fi
-	@for ((i = 0; i < ${NUM_USERS}; i++)); do \
+	@for i in `seq 0 ${NUM_USERS}`; do \
 		if [ ! -d "private/crdt-layers/worker-1/user$${i}" ]; then mkdir -p private/crdt-layers/worker-1/user$${i}; fi; \
 		if [ ! -f "private/crdt-layers/worker-1/user$${i}/mailbox-structure.log" ]; then touch private/crdt-layers/worker-1/user$${i}/mailbox-structure.log && echo -n "SU5CT1g=;aa$${i}cc488-7469-4984-8f88-27adc426ab6a" > private/crdt-layers/worker-1/user$${i}/mailbox-structure.log; fi; \
 		if [ ! -f "private/crdt-layers/worker-1/user$${i}/INBOX.log" ]; then touch private/crdt-layers/worker-1/user$${i}/INBOX.log; fi; \
 	done
 	if [ ! -d "private/crdt-layers/storage" ]; then mkdir -p private/crdt-layers/storage; fi
-	@for ((i = 0; i < ${NUM_USERS}; i++)); do \
+	@for i in `seq 0 ${NUM_USERS}`; do \
 		if [ ! -d "private/crdt-layers/storage/user$${i}" ]; then mkdir -p private/crdt-layers/storage/user$${i}; fi; \
 		if [ ! -f "private/crdt-layers/storage/user$${i}/mailbox-structure.log" ]; then touch private/crdt-layers/storage/user$${i}/mailbox-structure.log && echo -n "SU5CT1g=;bb$${i}cc488-7469-4984-8f88-27adc426ab6a" > private/crdt-layers/storage/user$${i}/mailbox-structure.log; fi; \
 		if [ ! -f "private/crdt-layers/storage/user$${i}/INBOX.log" ]; then touch private/crdt-layers/storage/user$${i}/INBOX.log; fi; \
