@@ -10,7 +10,7 @@ import (
 	"github.com/numbleroot/pluto/imap"
 )
 
-// Variable
+// Variables
 
 var msg1 string = `Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)
 From: Fred Foobar <foobar@Blurdybloop.COM>
