@@ -63,7 +63,7 @@ func InitDistributor(config *config.Config) (*Distributor, error) {
 
 		// Try to connect to mail port of each worker node the
 		// distributor is responsible for.
-		c, err := comm.ReliableConnect("distributor", workerName, workerNode.IP, workerNode.MailPort, distr.IntlTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+		c, err := comm.ReliableConnect("distributor", workerName, workerNode.IP, workerNode.MailPort, distr.IntlTLSConfig, config.IntlConnRetry)
 		if err != nil {
 			return nil, err
 		}
@@ -157,9 +157,9 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 					distr.lock.RUnlock()
 
 					// Prefix the information with context.
-					conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnRetry)
+					conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnTimeout, distr.Config.IntlConnRetry)
 					if err != nil {
-						c.Error("Encountered send error when distributor signalled context to worker", err)
+						c.Error("Encountered send error when distributor was signalling context to worker", err)
 						return
 					}
 
@@ -172,7 +172,7 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 
 					// Now signal that client disconnected.
 					if err := c.SignalSessionDone(conn); err != nil {
-						c.Error("Encountered send error when distributor signalled end to worker", err)
+						c.Error("Encountered send error when distributor was signalling end to worker", err)
 						return
 					}
 				}

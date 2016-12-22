@@ -581,8 +581,6 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 // the client and still return true.
 func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncChan chan string) bool {
 
-	log.Printf("Serving SELECT '%s'...\n", req.Tag)
-
 	// Save local and remote address of current connection
 	// for later use in logging of communication.
 	cLocal := c.Conn.LocalAddr().String()
@@ -707,8 +705,6 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 // Create attempts to create a mailbox with name
 // taken from payload of request.
 func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncChan chan string) bool {
-
-	log.Printf("Serving CREATE '%s'...\n", req.Tag)
 
 	// Save local and remote address of current connection
 	// for later use in logging of communication.
@@ -869,8 +865,6 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 // all included content in CRDT as well as file system.
 func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncChan chan string) bool {
 
-	log.Printf("Serving DELETE '%s'...\n", req.Tag)
-
 	// Save local and remote address of current connection
 	// for later use in logging of communication.
 	cLocal := c.Conn.LocalAddr().String()
@@ -938,7 +932,9 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 	// Remove element from user's main CRDT and send out
 	// remove update operations to all other replicas.
 	err := userMainCRDT.Remove(delMailbox, func(payload string) {
+
 		syncChan <- fmt.Sprintf("delete|%s|%s|%s", node.Contexts[clientID].UserName, base64.StdEncoding.EncodeToString([]byte(delMailbox)), payload)
+
 	})
 	if err != nil {
 
@@ -1004,8 +1000,6 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 // List allows clients to learn about the mailboxes
 // available and also returns the hierarchy delimiter.
 func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncChan chan string) bool {
-
-	log.Printf("Serving LIST '%s'...\n", req.Tag)
 
 	// Save local and remote address of current connection
 	// for later use in logging of communication.
@@ -1115,8 +1109,6 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 	var flagsRaw string
 	var dateTimeRaw string
 	var numBytesRaw string
-
-	log.Printf("Serving APPEND '%s'...\n", req.Tag)
 
 	// Save local and remote address of current connection
 	// for later use in logging of communication.
@@ -1373,8 +1365,6 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 // prior to calling this function.
 func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, syncChan chan string) bool {
 
-	log.Printf("Serving EXPUNGE '%s'...\n", req.Tag)
-
 	// Save local and remote address of current connection
 	// for later use in logging of communication.
 	cLocal := c.Conn.LocalAddr().String()
@@ -1518,8 +1508,6 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 // of flags to change in those messages and changes the
 // attributes for these mails throughout the system.
 func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncChan chan string) bool {
-
-	log.Printf("Serving STORE '%s'...\n", req.Tag)
 
 	var err error
 

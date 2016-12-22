@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"crypto/tls"
 )
@@ -18,19 +17,20 @@ import (
 // Sender bundles information needed for sending
 // out sync messages via CRDTs.
 type Sender struct {
-	lock          *sync.Mutex
-	name          string
-	tlsConfig     *tls.Config
-	intlConnRetry int
-	inc           chan string
-	msgInLog      chan struct{}
-	writeLog      *os.File
-	updLog        *os.File
-	incVClock     chan string
-	updVClock     chan map[string]int
-	nodes         map[string]*tls.Conn
-	wg            *sync.WaitGroup
-	shutdown      chan struct{}
+	lock            *sync.Mutex
+	name            string
+	tlsConfig       *tls.Config
+	intlConnTimeout int
+	intlConnRetry   int
+	inc             chan string
+	msgInLog        chan struct{}
+	writeLog        *os.File
+	updLog          *os.File
+	incVClock       chan string
+	updVClock       chan map[string]int
+	nodes           map[string]*tls.Conn
+	wg              *sync.WaitGroup
+	shutdown        chan struct{}
 }
 
 // Functions
@@ -40,22 +40,23 @@ type Sender struct {
 // with. It returns a channel local processes can put
 // CRDT changes into, so that those changes will be
 // communicated to connected nodes.
-func InitSender(name string, logFilePath string, tlsConfig *tls.Config, retry int, incVClock chan string, updVClock chan map[string]int, downSender chan struct{}, nodes map[string]*tls.Conn) (chan string, error) {
+func InitSender(name string, logFilePath string, tlsConfig *tls.Config, timeout int, retry int, incVClock chan string, updVClock chan map[string]int, downSender chan struct{}, nodes map[string]*tls.Conn) (chan string, error) {
 
 	// Create and initialize what we need for
 	// a CRDT sender routine.
 	sender := &Sender{
-		lock:          new(sync.Mutex),
-		name:          name,
-		tlsConfig:     tlsConfig,
-		intlConnRetry: retry,
-		inc:           make(chan string),
-		msgInLog:      make(chan struct{}, 1),
-		incVClock:     incVClock,
-		updVClock:     updVClock,
-		nodes:         nodes,
-		wg:            new(sync.WaitGroup),
-		shutdown:      make(chan struct{}, 2),
+		lock:            new(sync.Mutex),
+		name:            name,
+		tlsConfig:       tlsConfig,
+		intlConnTimeout: timeout,
+		intlConnRetry:   retry,
+		inc:             make(chan string),
+		msgInLog:        make(chan struct{}, 1),
+		incVClock:       incVClock,
+		updVClock:       updVClock,
+		nodes:           nodes,
+		wg:              new(sync.WaitGroup),
+		shutdown:        make(chan struct{}, 2),
 	}
 
 	// Open log file descriptor for writing.
@@ -278,48 +279,64 @@ func (sender *Sender) SendMsgs() {
 				// Marshall message.
 				marshalledMsg := msg.String()
 
+				// Unlock mutex.
+				sender.lock.Unlock()
+
 				for i, conn := range sender.nodes {
 
-					var err error
+					// Extract address to reconnect to.
+					addrParts := strings.Split(conn.RemoteAddr().String(), ":")
 
-					// Test long-lived connection.
-					_, err = conn.Write([]byte("> ping <\n"))
+					// Send payload reliably to other nodes.
+					conn, replaced, err := ReliableSend(conn, marshalledMsg, sender.name, i, addrParts[0], addrParts[1], sender.tlsConfig, sender.intlConnTimeout, sender.intlConnRetry)
 					if err != nil {
-						log.Fatalf("[comm.SendMsgs] Sending ping to node '%s' failed with: %s\n", i, err.Error())
+						log.Fatalf("[comm.SendMsgs] Failed to send: %s\n", err.Error())
 					}
 
-					// Write message to TLS connections.
-					_, err = fmt.Fprintf(conn, "%s\n", marshalledMsg)
-					for err != nil {
+					if replaced {
 
-						log.Printf("[comm.SendMsgs] Sending to node '%s' failed, trying to recover...\n", i)
-
-						// Define an error we can deal with.
-						okError := fmt.Sprintf("write tcp %s->%s: write: broken pipe", conn.LocalAddr(), conn.RemoteAddr())
-
-						// Extract address to reconnect to.
-						addrParts := strings.Split(conn.RemoteAddr().String(), ":")
-
-						if err.Error() == okError {
-
-							// Connection was lost. Reconnect.
-							conn, err = ReliableConnect(sender.name, i, addrParts[0], addrParts[1], sender.tlsConfig, 0, sender.intlConnRetry)
-							if err != nil {
-								log.Fatalf("[comm.SendMsgs] Could not reestablish connection with '%s': %s\n", i, err.Error())
-							}
-
-							// Replace old connection with new.
-							sender.nodes[i] = conn
-						} else {
-							log.Fatalf("[comm.SendMsgs] Could not reestablish connection with '%s': %s\n", i, err.Error())
-						}
-
-						// Wait configured time before attempting next transfer.
-						time.Sleep(time.Duration(sender.intlConnRetry) * time.Millisecond)
-
-						// Retry transfer.
-						_, err = fmt.Fprintf(conn, "%s\n", marshalledMsg)
+						// If connection had to be re-established, lock
+						// sender and exchange old connection with new one.
+						sender.lock.Lock()
+						sender.nodes[i] = conn
+						sender.lock.Unlock()
 					}
+				}
+
+				// Lock mutex.
+				sender.lock.Lock()
+
+				// Retrieve file information.
+				info, err = sender.updLog.Stat()
+				if err != nil {
+					log.Fatalf("[comm.SendMsgs] Could not get CRDT log file information: %s\n", err.Error())
+				}
+
+				// Create a buffer of capacity of read file size.
+				buf = bytes.NewBuffer(make([]byte, 0, info.Size()))
+
+				// Reset position to beginning of file.
+				_, err = sender.updLog.Seek(0, os.SEEK_SET)
+				if err != nil {
+					log.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
+				}
+
+				// Copy contents of log file to prepared buffer.
+				_, err = io.Copy(buf, sender.updLog)
+				if err != nil {
+					log.Fatalf("[comm.SendMsgs] Could not copy CRDT log file contents to buffer: %s\n", err.Error())
+				}
+
+				// Read oldest message from log file.
+				_, err = buf.ReadString('\n')
+				if (err != nil) && (err != io.EOF) {
+					log.Fatalf("[comm.SendMsgs] Error during extraction of first line in CRDT log file: %s\n", err.Error())
+				}
+
+				// Reset position to beginning of file.
+				_, err = sender.updLog.Seek(0, os.SEEK_SET)
+				if err != nil {
+					log.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
 				}
 
 				// Copy reduced buffer contents back to beginning

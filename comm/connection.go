@@ -15,7 +15,7 @@ import (
 // ReliableConnect attempts to connect to defined remote node
 // as longs as the error from previous attempts is possible
 // to be dealt with.
-func ReliableConnect(name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, wait int, retry int) (*tls.Conn, error) {
+func ReliableConnect(name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, retry int) (*tls.Conn, error) {
 
 	var err error
 	var c *tls.Conn
@@ -28,9 +28,6 @@ func ReliableConnect(name string, remoteName string, remoteIP string, remotePort
 
 	// Initially, set error string to the one we can deal with.
 	err = fmt.Errorf(okError)
-
-	// In the beginning, give the other nodes some time to become available.
-	time.Sleep(time.Duration(wait) * time.Millisecond)
 
 	for err != nil {
 
@@ -53,7 +50,7 @@ func ReliableConnect(name string, remoteName string, remoteIP string, remotePort
 
 // ReliableSend sends text to other node specified and
 // tries to reconnect in case of simple disconnects.
-func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, retry int) (*tls.Conn, bool, error) {
+func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, timeout int, retry int) (*tls.Conn, bool, error) {
 
 	var err error
 	var replacedConn *tls.Conn
@@ -61,11 +58,20 @@ func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, r
 	// Track if we replaced the connection.
 	replaced := false
 
+	// Set configured timeout on waiting for response.
+	conn.SetWriteDeadline(time.Now().Add(time.Duration(timeout) * time.Millisecond))
+
 	// Test long-lived connection.
 	_, err = conn.Write([]byte("> ping <\n"))
 	if err != nil {
 		return nil, false, fmt.Errorf("sending ping to node '%s' failed with: %s\n", remoteName, err.Error())
 	}
+
+	// Wait for configured time to pass.
+	time.Sleep(time.Duration(timeout) * time.Millisecond)
+
+	// Disable write deadline again for future calls.
+	conn.SetDeadline(time.Time{})
 
 	// Write message to TLS connections.
 	_, err = fmt.Fprintf(conn, "%s\n", text)
@@ -79,7 +85,7 @@ func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, r
 		if err.Error() == okError {
 
 			// Connection was lost. Reconnect.
-			replacedConn, err = ReliableConnect(name, remoteName, remoteIP, remotePort, tlsConfig, 0, retry)
+			replacedConn, err = ReliableConnect(name, remoteName, remoteIP, remotePort, tlsConfig, retry)
 			if err != nil {
 				return nil, false, fmt.Errorf("could not reestablish connection with '%s': %s\n", remoteName, err.Error())
 			}

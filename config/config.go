@@ -14,13 +14,13 @@ import (
 // Config holds all information parsed from
 // supplied config file.
 type Config struct {
-	RootCertLoc   string
-	IntlConnWait  int
-	IntlConnRetry int
-	IMAP          IMAP
-	Distributor   Distributor
-	Workers       map[string]Worker
-	Storage       Storage
+	RootCertLoc     string
+	IntlConnTimeout int
+	IntlConnRetry   int
+	IMAP            IMAP
+	Distributor     Distributor
+	Workers         map[string]Worker
+	Storage         Storage
 }
 
 // IMAP is the IMAP server related part

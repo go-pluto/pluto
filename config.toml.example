@@ -3,9 +3,10 @@
 # node certificates.
 RootCertLoc = "/very/complicated/and/long/path/to/your/root-cert.pem"
 
-# Time in milliseconds to let internal communication
-# attempts wait before first trying.
-IntlConnWait = 1500
+# Time in milliseconds to wait for a response from
+# an internal connection. Assume failed connection
+# when no response was received after this time.
+IntlConnTimeout = 100
 
 # Time in milliseconds to wait between a failed
 # connection attempt and the next one.

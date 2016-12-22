@@ -103,13 +103,13 @@ func (c *Connection) Send(text string) error {
 
 // SignalSessionPrefixWorker is used by the distributor node to
 // signal an involved worker node context about future requests.
-func (c *Connection) SignalSessionPrefixWorker(conn *tls.Conn, name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, retry int) (*tls.Conn, error) {
+func (c *Connection) SignalSessionPrefixWorker(conn *tls.Conn, name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, timeout int, retry int) (*tls.Conn, error) {
 
 	// Text to send.
 	msg := fmt.Sprintf("> id: %s <", c.UserToken)
 
 	// Reliably send message to node.
-	newConn, replaced, err := comm.ReliableSend(conn, msg, name, remoteName, remoteIP, remotePort, tlsConfig, retry)
+	newConn, replaced, err := comm.ReliableSend(conn, msg, name, remoteName, remoteIP, remotePort, tlsConfig, timeout, retry)
 	if err != nil {
 		return nil, err
 	}
@@ -126,13 +126,13 @@ func (c *Connection) SignalSessionPrefixWorker(conn *tls.Conn, name string, remo
 
 // SignalSessionPrefixStorage is used by a failover worker node
 // to signal the storage node context about future requests.
-func (c *Connection) SignalSessionPrefixStorage(clientID string, conn *tls.Conn, name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, retry int) (*tls.Conn, error) {
+func (c *Connection) SignalSessionPrefixStorage(clientID string, conn *tls.Conn, name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, timeout int, retry int) (*tls.Conn, error) {
 
 	// Text to send.
 	msg := fmt.Sprintf("> id: %s %s <", clientID, name)
 
 	// Reliably send message to node.
-	newConn, replaced, err := comm.ReliableSend(conn, msg, name, remoteName, remoteIP, remotePort, tlsConfig, retry)
+	newConn, replaced, err := comm.ReliableSend(conn, msg, name, remoteName, remoteIP, remotePort, tlsConfig, timeout, retry)
 	if err != nil {
 		return nil, err
 	}

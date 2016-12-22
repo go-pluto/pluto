@@ -148,7 +148,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 
 		// Try to connect to sync port of each worker node this storage
 		// node is serving as long-term storage backend as.
-		c, err := comm.ReliableConnect("storage", workerName, workerNode.IP, workerNode.SyncPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+		c, err := comm.ReliableConnect("storage", workerName, workerNode.IP, workerNode.SyncPort, internalTLSConfig, config.IntlConnRetry)
 		if err != nil {
 			return nil, err
 		}
@@ -159,7 +159,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 		storage.Connections[workerName] = c
 
 		// Init sending part of CRDT communication and send messages in background.
-		storage.SyncSendChans[workerName], err = comm.InitSender("storage", sendCRDTLog, internalTLSConfig, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
+		storage.SyncSendChans[workerName], err = comm.InitSender("storage", sendCRDTLog, internalTLSConfig, config.IntlConnTimeout, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
 		if err != nil {
 			return nil, err
 		}

@@ -133,13 +133,13 @@ func TestSenderReceiver(t *testing.T) {
 	connsN2[n1] = cToN1
 
 	// Initialize sending interface for worker-1.
-	chan1, err := comm.InitSender(n1, "../test-comm-sending-worker-1.log", internalTLSConfigN1, testEnv.Config.IntlConnWait, chanIncN1, chanUpdN1, n1DownSender, connsN1)
+	chan1, err := comm.InitSender(n1, "../test-comm-sending-worker-1.log", internalTLSConfigN1, testEnv.Config.IntlConnTimeout, testEnv.Config.IntlConnRetry, chanIncN1, chanUpdN1, n1DownSender, connsN1)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitSender() for worker-1 not to fail but received: %s\n", err.Error())
 	}
 
 	// Initialize sending interface for storage.
-	chan2, err := comm.InitSender(n2, "../test-comm-sending-storage.log", internalTLSConfigN2, testEnv.Config.IntlConnWait, chanIncN2, chanUpdN2, n2DownSender, connsN2)
+	chan2, err := comm.InitSender(n2, "../test-comm-sending-storage.log", internalTLSConfigN2, testEnv.Config.IntlConnTimeout, testEnv.Config.IntlConnRetry, chanIncN2, chanUpdN2, n2DownSender, connsN2)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected InitSender() for storage not to fail but received: %s\n", err.Error())
 	}

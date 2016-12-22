@@ -1,5 +1,5 @@
 RootCertLoc = "private/root-cert.pem"
-IntlConnWait = 0
+IntlConnTimeout = 50
 IntlConnRetry = 10
 
 [IMAP]

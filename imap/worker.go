@@ -178,7 +178,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 
 	// Try to connect to sync port of storage node to which this node
 	// sends data for long-term storage, but in background.
-	c, err := comm.ReliableConnect(worker.Name, "storage", config.Storage.IP, config.Storage.SyncPort, internalTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+	c, err := comm.ReliableConnect(worker.Name, "storage", config.Storage.IP, config.Storage.SyncPort, internalTLSConfig, config.IntlConnRetry)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	worker.Connections["storage"] = c
 
 	// Init sending part of CRDT communication and send messages in background.
-	worker.SyncSendChan, err = comm.InitSender(worker.Name, sendCRDTLog, internalTLSConfig, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, worker.Connections)
+	worker.SyncSendChan, err = comm.InitSender(worker.Name, sendCRDTLog, internalTLSConfig, config.IntlConnTimeout, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, worker.Connections)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func InitFailoverWorker(config *config.Config, workerName string) (*FailoverWork
 
 	// Try to connect to mail port of storage node to which this node
 	// forwards all traffic it received from distributor.
-	c, err := comm.ReliableConnect(failWorker.Name, "storage", config.Storage.IP, config.Storage.MailPort, failWorker.IntlTLSConfig, config.IntlConnWait, config.IntlConnRetry)
+	c, err := comm.ReliableConnect(failWorker.Name, "storage", config.Storage.IP, config.Storage.MailPort, failWorker.IntlTLSConfig, config.IntlConnRetry)
 	if err != nil {
 		return nil, err
 	}
@@ -512,7 +512,7 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 		failWorker.lock.RUnlock()
 
 		// Inform storage about which session will continue.
-		conn, err := c.SignalSessionPrefixStorage(clientID, storageConn, failWorker.Name, "storage", storageIP, storagePort, failWorker.IntlTLSConfig, failWorker.Config.IntlConnRetry)
+		conn, err := c.SignalSessionPrefixStorage(clientID, storageConn, failWorker.Name, "storage", storageIP, storagePort, failWorker.IntlTLSConfig, failWorker.Config.IntlConnTimeout, failWorker.Config.IntlConnRetry)
 		if err != nil {
 			c.ErrorLogOnly("Encountered send error when failover worker signalled context to storage", err)
 			return

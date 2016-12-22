@@ -17,9 +17,6 @@ import (
 // It outputs the supported actions in the current state.
 func (distr *Distributor) Capability(c *Connection, req *Request) bool {
 
-	log.Println()
-	log.Printf("Serving CAPABILITY '%s'...\n", req.Tag)
-
 	if len(req.Payload) > 0 {
 
 		// If payload was not empty to CAPABILITY command,
@@ -51,9 +48,6 @@ func (distr *Distributor) Capability(c *Connection, req *Request) bool {
 // get shut down gracefully.
 func (distr *Distributor) Logout(c *Connection, req *Request) bool {
 
-	log.Println()
-	log.Printf("Serving LOGOUT '%s'...\n", req.Tag)
-
 	if len(req.Payload) > 0 {
 
 		// If payload was not empty to LOGOUT command,
@@ -80,9 +74,9 @@ func (distr *Distributor) Logout(c *Connection, req *Request) bool {
 		distr.lock.RUnlock()
 
 		// Inform worker node about which session will log out.
-		conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnRetry)
+		conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnTimeout, distr.Config.IntlConnRetry)
 		if err != nil {
-			c.Error("Encountered send error when distributor signalled context to worker", err)
+			c.Error("Encountered send error when distributor was signalling context to worker", err)
 			return false
 		}
 
@@ -95,7 +89,7 @@ func (distr *Distributor) Logout(c *Connection, req *Request) bool {
 
 		// Signal to worker node that session is done.
 		if err := c.SignalSessionDone(conn); err != nil {
-			c.Error("Encountered send error when distributor signalled end to worker", err)
+			c.Error("Encountered send error when distributor was signalling end to worker", err)
 			return false
 		}
 	}
@@ -121,9 +115,6 @@ func (distr *Distributor) Logout(c *Connection, req *Request) bool {
 // StartTLS states on IMAP STARTTLS command
 // that current connection is already encrypted.
 func (distr *Distributor) StartTLS(c *Connection, req *Request) bool {
-
-	log.Println()
-	log.Printf("Serving STARTTLS '%s'...\n", req.Tag)
 
 	if len(req.Payload) > 0 {
 
@@ -152,9 +143,6 @@ func (distr *Distributor) StartTLS(c *Connection, req *Request) bool {
 // Login performs the authentication mechanism specified
 // as part of the distributor config.
 func (distr *Distributor) Login(c *Connection, req *Request) bool {
-
-	log.Println()
-	log.Printf("Serving LOGIN '%s'...\n", req.Tag)
 
 	if (c.Worker != "") && (c.UserToken != "") && (c.UserName != "") {
 
@@ -226,9 +214,6 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 // node and the responsible worker node.
 func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 
-	log.Println()
-	log.Printf("PROXYing request '%s'...\n", rawReq)
-
 	distr.lock.RLock()
 
 	// Store worker connection information.
@@ -239,9 +224,9 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	distr.lock.RUnlock()
 
 	// Inform worker node about which session will continue.
-	conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnRetry)
+	conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnTimeout, distr.Config.IntlConnRetry)
 	if err != nil {
-		c.Error("Encountered send error when distributor signalled context to worker", err)
+		c.Error("Encountered send error when distributor was signalling context to worker", err)
 		return false
 	}
 
