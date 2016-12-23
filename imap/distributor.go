@@ -124,7 +124,7 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 	c := NewConnection(tlsConn)
 
 	// Send initial server greeting.
-	err := c.Send(fmt.Sprintf("* OK IMAP4rev1 %s", distr.Config.IMAP.Greeting))
+	err := c.Send(fmt.Sprintf("* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] %s", distr.Config.IMAP.Greeting))
 	if err != nil {
 		c.Error("Encountered error while sending IMAP greeting", err)
 		return

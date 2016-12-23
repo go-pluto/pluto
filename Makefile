@@ -1,9 +1,7 @@
-.PHONY: prod clean deps setup-test-env destroy-test-env exec-tests build pki test-pki test-public test
+.PHONY: clean deps build pki test-pki test-public test destroy-test-env setup-test-env exec-tests
 
 PACKAGES = $(shell go list ./... | grep -v /vendor/)
 NUM_USERS := 9
-
-prod: clean deps pki build
 
 clean:
 	go clean -i ./...
