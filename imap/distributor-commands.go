@@ -34,7 +34,7 @@ func (distr *Distributor) Capability(c *Connection, req *Request) bool {
 	// This means, AUTH=PLAIN is allowed and nothing else.
 	// STARTTLS will be answered but is not listed as
 	// each connection already is a TLS connection.
-	err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 AUTH=PLAIN\n%s OK CAPABILITY completed", req.Tag))
+	err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 AUTH=PLAIN\r\n%s OK CAPABILITY completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -95,7 +95,7 @@ func (distr *Distributor) Logout(c *Connection, req *Request) bool {
 	}
 
 	// Signal success to client.
-	err := c.Send(fmt.Sprintf("* BYE Terminating connection\n%s OK LOGOUT completed", req.Tag))
+	err := c.Send(fmt.Sprintf("* BYE Terminating connection\r\n%s OK LOGOUT completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false

@@ -150,8 +150,8 @@ func (sender *Sender) BrokerMsgs() {
 
 				// If payload does not end with a newline symbol,
 				// append one to it.
-				if strings.HasSuffix(payload, "\n") != true {
-					payload = fmt.Sprintf("%s\n", payload)
+				if strings.HasSuffix(payload, "\r\n") != true {
+					payload = fmt.Sprintf("%s\r\n", payload)
 				}
 
 				// Lock mutex.

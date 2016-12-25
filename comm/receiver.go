@@ -358,12 +358,12 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn, downStoring chan struct{}) {
 
 	// Initial value for received message in order
 	// to skip past the mandatory ping message.
-	msgRaw := "> ping <\n"
+	msgRaw := "> ping <\r\n"
 
 	// Create new buffered reader for connection.
 	r := bufio.NewReader(conn)
 
-	for msgRaw == "> ping <\n" {
+	for msgRaw == "> ping <\r\n" {
 
 		// Read string until newline character is received.
 		msgRaw, err = r.ReadString('\n')
@@ -375,7 +375,7 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn, downStoring chan struct{}) {
 				log.Printf("[comm.StoreIncMsgs] Node at %s disconnected...\n", conn.RemoteAddr())
 
 				// Simply end this function.
-				msgRaw = "> done <\n"
+				msgRaw = "> done <\r\n"
 			} else {
 				log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
 			}
@@ -384,7 +384,7 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn, downStoring chan struct{}) {
 
 	// Unless we do not receive the signal that continuous CRDT
 	// message transmission is done, we accept new messages.
-	for msgRaw != "> done <\n" {
+	for msgRaw != "> done <\r\n" {
 
 		// Lock mutex.
 		recv.lock.Lock()
@@ -417,14 +417,14 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn, downStoring chan struct{}) {
 		case <-downStoring:
 
 			// Break from inifinte loop.
-			msgRaw = "> done <\n"
+			msgRaw = "> done <\r\n"
 
 		default:
 
 			// Reset message to expected ping.
-			msgRaw = "> ping <\n"
+			msgRaw = "> ping <\r\n"
 
-			for msgRaw == "> ping <\n" {
+			for msgRaw == "> ping <\r\n" {
 
 				// Read next CRDT message until newline character is received.
 				msgRaw, err = r.ReadString('\n')
@@ -436,7 +436,7 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn, downStoring chan struct{}) {
 						log.Printf("[comm.StoreIncMsgs] Node at %s disconnected...\n", conn.RemoteAddr())
 
 						// Simply end this function.
-						msgRaw = "> done <\n"
+						msgRaw = "> done <\r\n"
 					} else {
 						log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
 					}

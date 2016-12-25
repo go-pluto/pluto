@@ -22,8 +22,8 @@ var capabilityTests = []struct {
 	in  string
 	out string
 }{
-	{"a CAPABILITY", "* CAPABILITY IMAP4rev1 AUTH=PLAIN\na OK CAPABILITY completed"},
-	{"b capability", "* CAPABILITY IMAP4rev1 AUTH=PLAIN\nb OK CAPABILITY completed"},
+	{"a CAPABILITY", "* CAPABILITY IMAP4rev1 AUTH=PLAIN\r\na OK CAPABILITY completed"},
+	{"b capability", "* CAPABILITY IMAP4rev1 AUTH=PLAIN\r\nb OK CAPABILITY completed"},
 	{"c CAPABILITY   ", "c BAD Command CAPABILITY was sent with extra parameters"},
 	{"CAPABILITY", "* BAD Received invalid IMAP command"},
 }
@@ -32,8 +32,8 @@ var logoutTests = []struct {
 	in  string
 	out string
 }{
-	{"a LOGOUT", "* BYE Terminating connection\na OK LOGOUT completed"},
-	{"b logout", "* BYE Terminating connection\nb OK LOGOUT completed"},
+	{"a LOGOUT", "* BYE Terminating connection\r\na OK LOGOUT completed"},
+	{"b logout", "* BYE Terminating connection\r\nb OK LOGOUT completed"},
 	{"c   LOGOUT    ", "c BAD Received invalid IMAP command"},
 	{"LOGOUT some more parameters", "* BAD Received invalid IMAP command"},
 	{"d LOGOUT some more parameters", "d BAD Command LOGOUT was sent with extra parameters"},
@@ -71,7 +71,7 @@ func TestMain(m *testing.M) {
 	var err error
 
 	// Create needed test environment.
-	testEnv, err = utils.CreateTestEnv()
+	testEnv, err = utils.CreateTestEnv("../test-config.toml")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -132,13 +132,13 @@ func TestCapability(t *testing.T) {
 				t.Errorf("[imap.TestCapability] Error during receiving table test CAPABILITY: %s\n", err.Error())
 			}
 
-			answer = fmt.Sprintf("%s\n%s", capAnswer, okAnswer)
+			answer = fmt.Sprintf("%s\r\n%s", capAnswer, okAnswer)
 		} else {
 			answer = capAnswer
 		}
 
 		if answer != tt.out {
-			t.Fatalf("[imap.TestCapability] Expected '%s' but received '%s'\n", tt.out, answer)
+			t.Fatalf("[imap.TestCapability] Expected '%#v' but received '%#v'\n", tt.out, answer)
 		}
 	}
 
@@ -189,7 +189,7 @@ func TestLogout(t *testing.T) {
 				t.Errorf("[imap.TestLogout] Error during receiving table test LOGOUT: %s\n", err.Error())
 			}
 
-			answer = fmt.Sprintf("%s\n%s", logoutAnswer, okAnswer)
+			answer = fmt.Sprintf("%s\r\n%s", logoutAnswer, okAnswer)
 		} else {
 			answer = logoutAnswer
 		}

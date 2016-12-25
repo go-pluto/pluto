@@ -30,10 +30,10 @@ var selectTests = []struct {
 	out string
 }{
 	{"a LOGIN user0 password0", "a OK LOGIN completed"},
-	{"b SELECT INBOX", "* 0 EXISTS\n* 0 RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\nb OK [READ-WRITE] SELECT completed"},
+	{"b SELECT INBOX", "* 0 EXISTS\r\n* 0 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\nb OK [READ-WRITE] SELECT completed"},
 	{"c SELECT", "c BAD Command SELECT was sent without a mailbox to select"},
 	{"d SELECT lol rofl nope", "d BAD Command SELECT was sent with multiple mailbox names instead of only one"},
-	{"e LOGOUT", "* BYE Terminating connection\ne OK LOGOUT completed"},
+	{"e LOGOUT", "* BYE Terminating connection\r\ne OK LOGOUT completed"},
 }
 
 var createTests = []struct {
@@ -52,7 +52,7 @@ var createTests = []struct {
 	{"j CREATE university", "j OK CREATE completed"},
 	{"k CREATE University.Thesis", "k OK CREATE completed"},
 	{"l CREATE University.Thesis.", "l NO New mailbox cannot be named after already existing mailbox"},
-	{"m LOGOUT", "* BYE Terminating connection\nm OK LOGOUT completed"},
+	{"m LOGOUT", "* BYE Terminating connection\r\nm OK LOGOUT completed"},
 }
 
 var deleteTests = []struct {
@@ -70,7 +70,7 @@ var deleteTests = []struct {
 	{"i DELETE University.Thesis", "i NO Cannot delete folder that does not exist"},
 	{"j DELETE University.", "j OK DELETE completed"},
 	{"k DELETE University", "k NO Cannot delete folder that does not exist"},
-	{"l LOGOUT", "* BYE Terminating connection\nl OK LOGOUT completed"},
+	{"l LOGOUT", "* BYE Terminating connection\r\nl OK LOGOUT completed"},
 }
 
 var listTests = []struct {
@@ -79,12 +79,12 @@ var listTests = []struct {
 	outTwo string
 }{
 	{"a LOGIN user1 password1", "a OK LOGIN completed", "a OK LOGIN completed"},
-	{"b LIST \"\" *", "* LIST () \".\" INBOX\n* LIST () \".\" university\nb OK LIST completed", "* LIST () \".\" university\n* LIST () \".\" INBOX\nb OK LIST completed"},
+	{"b LIST \"\" *", "* LIST () \".\" INBOX\r\n* LIST () \".\" university\r\nb OK LIST completed", "* LIST () \".\" university\r\n* LIST () \".\" INBOX\r\nb OK LIST completed"},
 	{"c CREATE university.Modul1", "c OK CREATE completed", "c OK CREATE completed"},
-	{"d LIST \"\" %", "* LIST () \".\" INBOX\n* LIST () \".\" university\nd OK LIST completed", "* LIST () \".\" university\n* LIST () \".\" INBOX\nd OK LIST completed"},
+	{"d LIST \"\" %", "* LIST () \".\" INBOX\r\n* LIST () \".\" university\r\nd OK LIST completed", "* LIST () \".\" university\r\n* LIST () \".\" INBOX\r\nd OK LIST completed"},
 	{"e DELETE university", "e OK DELETE completed", "e OK DELETE completed"},
-	{"f LIST \"\" *", "* LIST () \".\" INBOX\n* LIST () \".\" university.Modul1\nf OK LIST completed", "* LIST () \".\" university.Modul1\n* LIST () \".\" INBOX\nf OK LIST completed"},
-	{"g LOGOUT", "* BYE Terminating connection\ng OK LOGOUT completed", "* BYE Terminating connection\ng OK LOGOUT completed"},
+	{"f LIST \"\" *", "* LIST () \".\" INBOX\r\n* LIST () \".\" university.Modul1\r\nf OK LIST completed", "* LIST () \".\" university.Modul1\r\n* LIST () \".\" INBOX\r\nf OK LIST completed"},
+	{"g LOGOUT", "* BYE Terminating connection\r\ng OK LOGOUT completed", "* BYE Terminating connection\r\ng OK LOGOUT completed"},
 }
 
 var appendTests = []struct {
@@ -101,7 +101,7 @@ var appendTests = []struct {
 	{"f APPEND University {301}", "+ Ready for literal data"},
 	{msg1, "f OK APPEND completed"},
 	{"f APPEND university {301}", "f NO [TRYCREATE] Mailbox to append to does not exist"},
-	{"z LOGOUT", "* BYE Terminating connection\nz OK LOGOUT completed"},
+	{"z LOGOUT", "* BYE Terminating connection\r\nz OK LOGOUT completed"},
 }
 
 var storeTests = []struct {
@@ -121,16 +121,16 @@ var storeTests = []struct {
 	{"g APPEND Sports {301}", "+ Ready for literal data"},
 	{msg1, "g OK APPEND completed"},
 	{"h STORE anything", "h BAD No mailbox selected for store"},
-	{"i SELECT Sports", "* 5 EXISTS\n* 5 RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\ni OK [READ-WRITE] SELECT completed"},
+	{"i SELECT Sports", "* 5 EXISTS\r\n* 5 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\ni OK [READ-WRITE] SELECT completed"},
 	{"j STORE too few", "j BAD Command STORE was not sent with three parameters"},
 	{"k STORE one,two FLAGS (\\Seen)", "k BAD Command STORE was sent with an invalid number parameter"},
 	{"l STORE 2,4:* WHYNOTTHIS? (\\Seen)", "l BAD Unknown data item type specified"},
 	{"m STORE 2,4:* -FLAGS.SILENT \\Seen", "m BAD Command STORE was sent with invalid parenthesized flags list"},
-	{"n STORE 2,4:* +FLAGS (\\Seen \\Answered)", "* 2 FETCH (FLAGS (\\Answered \\Seen))\n* 4 FETCH (FLAGS (\\Answered \\Seen))\n* 5 FETCH (FLAGS (\\Answered \\Seen))\nn OK STORE completed"},
-	{"o STORE 3,2,1 -FLAGS (\\Answered)", "* 1 FETCH (FLAGS ())\n* 2 FETCH (FLAGS (\\Seen))\n* 3 FETCH (FLAGS ())\no OK STORE completed"},
+	{"n STORE 2,4:* +FLAGS (\\Seen \\Answered)", "* 2 FETCH (FLAGS (\\Answered \\Seen))\r\n* 4 FETCH (FLAGS (\\Answered \\Seen))\r\n* 5 FETCH (FLAGS (\\Answered \\Seen))\r\nn OK STORE completed"},
+	{"o STORE 3,2,1 -FLAGS (\\Answered)", "* 1 FETCH (FLAGS ())\r\n* 2 FETCH (FLAGS (\\Seen))\r\n* 3 FETCH (FLAGS ())\r\no OK STORE completed"},
 	{"p STORE 1,2,3:* FLAGS.SILENT (\\Draft \\Deleted)", "p OK STORE completed"},
-	{"q STORE 5,3,4,1,2 +FLAGS (\\Answered)", "* 1 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\n* 2 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\n* 3 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\n* 4 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\n* 5 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\nq OK STORE completed"},
-	{"r LOGOUT", "* BYE Terminating connection\nr OK LOGOUT completed"},
+	{"q STORE 5,3,4,1,2 +FLAGS (\\Answered)", "* 1 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 2 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 3 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 4 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 5 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\nq OK STORE completed"},
+	{"r LOGOUT", "* BYE Terminating connection\r\nr OK LOGOUT completed"},
 }
 
 var expungeTests = []struct {
@@ -150,11 +150,11 @@ var expungeTests = []struct {
 	{"g APPEND Monday {301}", "+ Ready for literal data"},
 	{msg1, "g OK APPEND completed"},
 	{"h EXPUNGE", "h BAD No mailbox selected to expunge"},
-	{"i SELECT Monday", "* 5 EXISTS\n* 5 RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\ni OK [READ-WRITE] SELECT completed"},
+	{"i SELECT Monday", "* 5 EXISTS\r\n* 5 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\ni OK [READ-WRITE] SELECT completed"},
 	{"j EXPUNGE", "j OK EXPUNGE completed"},
-	{"k STORE 1:* +FLAGS (\\Deleted)", "* 1 FETCH (FLAGS (\\Deleted))\n* 2 FETCH (FLAGS (\\Deleted))\n* 3 FETCH (FLAGS (\\Deleted))\n* 4 FETCH (FLAGS (\\Deleted))\n* 5 FETCH (FLAGS (\\Deleted))\nk OK STORE completed"},
-	{"l EXPUNGE", "* 5 EXPUNGE\n* 4 EXPUNGE\n* 3 EXPUNGE\n* 2 EXPUNGE\n* 1 EXPUNGE\nl OK EXPUNGE completed"},
-	{"m LOGOUT", "* BYE Terminating connection\nm OK LOGOUT completed"},
+	{"k STORE 1:* +FLAGS (\\Deleted)", "* 1 FETCH (FLAGS (\\Deleted))\r\n* 2 FETCH (FLAGS (\\Deleted))\r\n* 3 FETCH (FLAGS (\\Deleted))\r\n* 4 FETCH (FLAGS (\\Deleted))\r\n* 5 FETCH (FLAGS (\\Deleted))\r\nk OK STORE completed"},
+	{"l EXPUNGE", "* 5 EXPUNGE\r\n* 4 EXPUNGE\r\n* 3 EXPUNGE\r\n* 2 EXPUNGE\r\n* 1 EXPUNGE\r\nl OK EXPUNGE completed"},
+	{"m LOGOUT", "* BYE Terminating connection\r\nm OK LOGOUT completed"},
 }
 
 var proxiedSelectTests = []struct {
@@ -162,10 +162,10 @@ var proxiedSelectTests = []struct {
 	out string
 }{
 	{"a LOGIN user5 password5", "a OK LOGIN completed"},
-	{"b SELECT INBOX", "* 0 EXISTS\n* 0 RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\nb OK [READ-WRITE] SELECT completed"},
+	{"b SELECT INBOX", "* 0 EXISTS\r\n* 0 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\nb OK [READ-WRITE] SELECT completed"},
 	{"c SELECT", "c BAD Command SELECT was sent without a mailbox to select"},
 	{"d SELECT lol rofl nope", "d BAD Command SELECT was sent with multiple mailbox names instead of only one"},
-	{"e LOGOUT", "* BYE Terminating connection\ne OK LOGOUT completed"},
+	{"e LOGOUT", "* BYE Terminating connection\r\ne OK LOGOUT completed"},
 }
 
 var proxiedCreateTests = []struct {
@@ -184,7 +184,7 @@ var proxiedCreateTests = []struct {
 	{"j CREATE university", "j OK CREATE completed"},
 	{"k CREATE University.Thesis", "k OK CREATE completed"},
 	{"l CREATE University.Thesis.", "l NO New mailbox cannot be named after already existing mailbox"},
-	{"m LOGOUT", "* BYE Terminating connection\nm OK LOGOUT completed"},
+	{"m LOGOUT", "* BYE Terminating connection\r\nm OK LOGOUT completed"},
 }
 
 var proxiedDeleteTests = []struct {
@@ -202,7 +202,7 @@ var proxiedDeleteTests = []struct {
 	{"i DELETE University.Thesis", "i NO Cannot delete folder that does not exist"},
 	{"j DELETE University.", "j OK DELETE completed"},
 	{"k DELETE University", "k NO Cannot delete folder that does not exist"},
-	{"l LOGOUT", "* BYE Terminating connection\nl OK LOGOUT completed"},
+	{"l LOGOUT", "* BYE Terminating connection\r\nl OK LOGOUT completed"},
 }
 
 var proxiedListTests = []struct {
@@ -211,12 +211,12 @@ var proxiedListTests = []struct {
 	outTwo string
 }{
 	{"a LOGIN user6 password6", "a OK LOGIN completed", "a OK LOGIN completed"},
-	{"b LIST \"\" *", "* LIST () \".\" INBOX\n* LIST () \".\" university\nb OK LIST completed", "* LIST () \".\" university\n* LIST () \".\" INBOX\nb OK LIST completed"},
+	{"b LIST \"\" *", "* LIST () \".\" INBOX\r\n* LIST () \".\" university\r\nb OK LIST completed", "* LIST () \".\" university\r\n* LIST () \".\" INBOX\r\nb OK LIST completed"},
 	{"c CREATE university.Modul1", "c OK CREATE completed", "c OK CREATE completed"},
-	{"d LIST \"\" %", "* LIST () \".\" INBOX\n* LIST () \".\" university\nd OK LIST completed", "* LIST () \".\" university\n* LIST () \".\" INBOX\nd OK LIST completed"},
+	{"d LIST \"\" %", "* LIST () \".\" INBOX\r\n* LIST () \".\" university\r\nd OK LIST completed", "* LIST () \".\" university\r\n* LIST () \".\" INBOX\r\nd OK LIST completed"},
 	{"e DELETE university", "e OK DELETE completed", "e OK DELETE completed"},
-	{"f LIST \"\" *", "* LIST () \".\" INBOX\n* LIST () \".\" university.Modul1\nf OK LIST completed", "* LIST () \".\" university.Modul1\n* LIST () \".\" INBOX\nf OK LIST completed"},
-	{"g LOGOUT", "* BYE Terminating connection\ng OK LOGOUT completed", "* BYE Terminating connection\ng OK LOGOUT completed"},
+	{"f LIST \"\" *", "* LIST () \".\" INBOX\r\n* LIST () \".\" university.Modul1\r\nf OK LIST completed", "* LIST () \".\" university.Modul1\r\n* LIST () \".\" INBOX\r\nf OK LIST completed"},
+	{"g LOGOUT", "* BYE Terminating connection\r\ng OK LOGOUT completed", "* BYE Terminating connection\r\ng OK LOGOUT completed"},
 }
 
 var proxiedAppendTests = []struct {
@@ -233,7 +233,7 @@ var proxiedAppendTests = []struct {
 	{"f APPEND University {301}", "+ Ready for literal data"},
 	{msg1, "f OK APPEND completed"},
 	{"f APPEND university {301}", "f NO [TRYCREATE] Mailbox to append to does not exist"},
-	{"z LOGOUT", "* BYE Terminating connection\nz OK LOGOUT completed"},
+	{"z LOGOUT", "* BYE Terminating connection\r\nz OK LOGOUT completed"},
 }
 
 var proxiedStoreTests = []struct {
@@ -253,16 +253,16 @@ var proxiedStoreTests = []struct {
 	{"g APPEND Sports {301}", "+ Ready for literal data"},
 	{msg1, "g OK APPEND completed"},
 	{"h STORE anything", "h BAD No mailbox selected for store"},
-	{"i SELECT Sports", "* 5 EXISTS\n* 5 RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\ni OK [READ-WRITE] SELECT completed"},
+	{"i SELECT Sports", "* 5 EXISTS\r\n* 5 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\ni OK [READ-WRITE] SELECT completed"},
 	{"j STORE too few", "j BAD Command STORE was not sent with three parameters"},
 	{"k STORE one,two FLAGS (\\Seen)", "k BAD Command STORE was sent with an invalid number parameter"},
 	{"l STORE 2,4:* WHYNOTTHIS? (\\Seen)", "l BAD Unknown data item type specified"},
 	{"m STORE 2,4:* -FLAGS.SILENT \\Seen", "m BAD Command STORE was sent with invalid parenthesized flags list"},
-	{"n STORE 2,4:* +FLAGS (\\Seen \\Answered)", "* 2 FETCH (FLAGS (\\Answered \\Seen))\n* 4 FETCH (FLAGS (\\Answered \\Seen))\n* 5 FETCH (FLAGS (\\Answered \\Seen))\nn OK STORE completed"},
-	{"o STORE 3,2,1 -FLAGS (\\Answered)", "* 1 FETCH (FLAGS ())\n* 2 FETCH (FLAGS (\\Seen))\n* 3 FETCH (FLAGS ())\no OK STORE completed"},
+	{"n STORE 2,4:* +FLAGS (\\Seen \\Answered)", "* 2 FETCH (FLAGS (\\Answered \\Seen))\r\n* 4 FETCH (FLAGS (\\Answered \\Seen))\r\n* 5 FETCH (FLAGS (\\Answered \\Seen))\r\nn OK STORE completed"},
+	{"o STORE 3,2,1 -FLAGS (\\Answered)", "* 1 FETCH (FLAGS ())\r\n* 2 FETCH (FLAGS (\\Seen))\r\n* 3 FETCH (FLAGS ())\r\no OK STORE completed"},
 	{"p STORE 1,2,3:* FLAGS.SILENT (\\Draft \\Deleted)", "p OK STORE completed"},
-	{"q STORE 5,3,4,1,2 +FLAGS (\\Answered)", "* 1 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\n* 2 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\n* 3 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\n* 4 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\n* 5 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\nq OK STORE completed"},
-	{"r LOGOUT", "* BYE Terminating connection\nr OK LOGOUT completed"},
+	{"q STORE 5,3,4,1,2 +FLAGS (\\Answered)", "* 1 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 2 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 3 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 4 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 5 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\nq OK STORE completed"},
+	{"r LOGOUT", "* BYE Terminating connection\r\nr OK LOGOUT completed"},
 }
 
 var proxiedExpungeTests = []struct {
@@ -282,11 +282,11 @@ var proxiedExpungeTests = []struct {
 	{"g APPEND Monday {301}", "+ Ready for literal data"},
 	{msg1, "g OK APPEND completed"},
 	{"h EXPUNGE", "h BAD No mailbox selected to expunge"},
-	{"i SELECT Monday", "* 5 EXISTS\n* 5 RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\ni OK [READ-WRITE] SELECT completed"},
+	{"i SELECT Monday", "* 5 EXISTS\r\n* 5 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\ni OK [READ-WRITE] SELECT completed"},
 	{"j EXPUNGE", "j OK EXPUNGE completed"},
-	{"k STORE 1:* +FLAGS (\\Deleted)", "* 1 FETCH (FLAGS (\\Deleted))\n* 2 FETCH (FLAGS (\\Deleted))\n* 3 FETCH (FLAGS (\\Deleted))\n* 4 FETCH (FLAGS (\\Deleted))\n* 5 FETCH (FLAGS (\\Deleted))\nk OK STORE completed"},
-	{"l EXPUNGE", "* 5 EXPUNGE\n* 4 EXPUNGE\n* 3 EXPUNGE\n* 2 EXPUNGE\n* 1 EXPUNGE\nl OK EXPUNGE completed"},
-	{"m LOGOUT", "* BYE Terminating connection\nm OK LOGOUT completed"},
+	{"k STORE 1:* +FLAGS (\\Deleted)", "* 1 FETCH (FLAGS (\\Deleted))\r\n* 2 FETCH (FLAGS (\\Deleted))\r\n* 3 FETCH (FLAGS (\\Deleted))\r\n* 4 FETCH (FLAGS (\\Deleted))\r\n* 5 FETCH (FLAGS (\\Deleted))\r\nk OK STORE completed"},
+	{"l EXPUNGE", "* 5 EXPUNGE\r\n* 4 EXPUNGE\r\n* 3 EXPUNGE\r\n* 2 EXPUNGE\r\n* 1 EXPUNGE\r\nl OK EXPUNGE completed"},
+	{"m LOGOUT", "* BYE Terminating connection\r\nm OK LOGOUT completed"},
 }
 
 // Functions
@@ -339,7 +339,7 @@ func TestSelect(t *testing.T) {
 				t.Errorf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -401,7 +401,7 @@ func TestCreate(t *testing.T) {
 				t.Errorf("[imap.TestCreate] Error during receiving table test CREATE: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -463,7 +463,7 @@ func TestDelete(t *testing.T) {
 				t.Errorf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -525,7 +525,7 @@ func TestList(t *testing.T) {
 				t.Errorf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -597,7 +597,7 @@ func TestAppend(t *testing.T) {
 				t.Errorf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -669,7 +669,7 @@ func TestStore(t *testing.T) {
 				t.Errorf("[imap.TestStore] Error during receiving table test STORE: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -741,7 +741,7 @@ func TestExpunge(t *testing.T) {
 				t.Errorf("[imap.TestExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -803,7 +803,7 @@ func TestProxiedSelect(t *testing.T) {
 				t.Errorf("[imap.TestProxiedSelect] Error during receiving table test SELECT: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -865,7 +865,7 @@ func TestProxiedCreate(t *testing.T) {
 				t.Errorf("[imap.TestProxiedCreate] Error during receiving table test CREATE: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -927,7 +927,7 @@ func TestProxiedDelete(t *testing.T) {
 				t.Errorf("[imap.TestProxiedDelete] Error during receiving table test DELETE: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -989,7 +989,7 @@ func TestProxiedList(t *testing.T) {
 				t.Errorf("[imap.TestProxiedList] Error during receiving table test LIST: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -1061,7 +1061,7 @@ func TestProxiedAppend(t *testing.T) {
 				t.Errorf("[imap.TestProxiedAppend] Error during receiving table test APPEND: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -1133,7 +1133,7 @@ func TestProxiedStore(t *testing.T) {
 				t.Errorf("[imap.TestProxiedStore] Error during receiving table test STORE: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer
@@ -1205,7 +1205,7 @@ func TestProxiedExpunge(t *testing.T) {
 				t.Errorf("[imap.TestProxiedExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 			}
 
-			firstAnswer = fmt.Sprintf("%s\n%s", firstAnswer, nextAnswer)
+			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
 		}
 
 		answer = firstAnswer

@@ -693,7 +693,7 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 	// TODO: Add other SELECT response elements if needed.
 
 	// Send answer to requesting client.
-	err = comm.InternalSend(c.Conn, fmt.Sprintf("* %d EXISTS\n* %d RECENT\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\n%s OK [READ-WRITE] SELECT completed", len(selMailboxContents), recentMails, req.Tag), cLocal, cRemote)
+	err = comm.InternalSend(c.Conn, fmt.Sprintf("* %d EXISTS\r\n* %d RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\n%s OK [READ-WRITE] SELECT completed", len(selMailboxContents), recentMails, req.Tag), cLocal, cRemote)
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false

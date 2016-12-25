@@ -32,10 +32,10 @@ type TestEnv struct {
 // CreateTestEnv initializes the needed environment
 // for performing various tests against a potentially
 // complete pluto setup.
-func CreateTestEnv() (*TestEnv, error) {
+func CreateTestEnv(configFilePath string) (*TestEnv, error) {
 
 	// Read configuration from file.
-	config, err := config.LoadConfig("../test-config.toml")
+	config, err := config.LoadConfig(configFilePath)
 	if err != nil {
 		return nil, err
 	}

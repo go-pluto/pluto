@@ -34,7 +34,7 @@ func TestSenderReceiver(t *testing.T) {
 	n2DownSender := make(chan struct{})
 
 	// Create needed test environment.
-	testEnv, err := utils.CreateTestEnv()
+	testEnv, err := utils.CreateTestEnv("../test-config.toml")
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected test environment creation not to fail but received: %s\n", err.Error())
 	}

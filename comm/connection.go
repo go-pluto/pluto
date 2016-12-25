@@ -62,7 +62,7 @@ func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, r
 	conn.SetWriteDeadline(time.Now().Add(time.Duration(timeout) * time.Millisecond))
 
 	// Test long-lived connection.
-	_, err = conn.Write([]byte("> ping <\n"))
+	_, err = conn.Write([]byte("> ping <\r\n"))
 	if err != nil {
 		return nil, false, fmt.Errorf("sending ping to node '%s' failed with: %s\n", remoteName, err.Error())
 	}
@@ -74,7 +74,7 @@ func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, r
 	conn.SetDeadline(time.Time{})
 
 	// Write message to TLS connections.
-	_, err = fmt.Fprintf(conn, "%s\n", text)
+	_, err = fmt.Fprintf(conn, "%s\r\n", text)
 	for err != nil {
 
 		log.Printf("[comm.ReliableSend] Sending to node '%s' failed, trying to recover...\n", remoteName)
@@ -97,7 +97,7 @@ func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, r
 			time.Sleep(time.Duration(retry) * time.Millisecond)
 
 			// Retry transfer.
-			_, err = fmt.Fprintf(replacedConn, "%s\n", text)
+			_, err = fmt.Fprintf(replacedConn, "%s\r\n", text)
 		} else {
 			return nil, false, fmt.Errorf("could not reestablish connection with '%s': %s\n", remoteName, err.Error())
 		}
@@ -117,13 +117,13 @@ func ReliableSend(conn *tls.Conn, text string, name string, remoteName string, r
 func InternalSend(conn *tls.Conn, text string, name string, remoteName string) error {
 
 	// Test long-lived connection.
-	_, err := conn.Write([]byte("> ping <\n"))
+	_, err := conn.Write([]byte("> ping <\r\n"))
 	if err != nil {
 		return fmt.Errorf("%s: sending ping to node '%s' failed: %s\n", name, remoteName, err.Error())
 	}
 
 	// Write message to TLS connections.
-	_, err = fmt.Fprintf(conn, "%s\n", text)
+	_, err = fmt.Fprintf(conn, "%s\r\n", text)
 	for err != nil {
 		return fmt.Errorf("%s: sending message to node '%s' failed: %s\n", name, remoteName, err.Error())
 	}
@@ -140,9 +140,9 @@ func InternalReceive(reader *bufio.Reader) (string, error) {
 
 	// Initial value for received message in order
 	// to skip past the mandatory ping message.
-	text := "> ping <\n"
+	text := "> ping <\r\n"
 
-	for text == "> ping <\n" {
+	for text == "> ping <\r\n" {
 
 		text, err = reader.ReadString('\n')
 		if err != nil {
@@ -155,5 +155,5 @@ func InternalReceive(reader *bufio.Reader) (string, error) {
 		return "", err
 	}
 
-	return strings.TrimRight(text, "\n"), nil
+	return strings.TrimRight(text, "\r\n"), nil
 }

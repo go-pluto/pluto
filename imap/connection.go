@@ -65,9 +65,9 @@ func (c *Connection) Receive() (string, error) {
 
 	// Initial value for received message in order
 	// to skip past the mandatory ping message.
-	text := "> ping <\n"
+	text := "> ping <\r\n"
 
-	for text == "> ping <\n" {
+	for text == "> ping <\r\n" {
 
 		text, err = c.Reader.ReadString('\n')
 		if err != nil {
@@ -85,7 +85,7 @@ func (c *Connection) Receive() (string, error) {
 		return "", err
 	}
 
-	return strings.TrimRight(text, "\n"), nil
+	return strings.TrimRight(text, "\r\n"), nil
 }
 
 // Send takes in an answer text from server as a
@@ -94,7 +94,7 @@ func (c *Connection) Receive() (string, error) {
 // the calling function.
 func (c *Connection) Send(text string) error {
 
-	if _, err := fmt.Fprintf(c.Conn, "%s\n", text); err != nil {
+	if _, err := fmt.Fprintf(c.Conn, "%s\r\n", text); err != nil {
 		return err
 	}
 
@@ -156,10 +156,10 @@ func (c *Connection) SignalSessionError(node *tls.Conn) error {
 
 	if node != nil {
 		// Any node: send error signal to other node.
-		_, err = fmt.Fprint(node, "> error <\n")
+		_, err = fmt.Fprint(node, "> error <\r\n")
 	} else {
 		// Worker: send error signal to distributor.
-		_, err = fmt.Fprint(c.Conn, "> error <\n")
+		_, err = fmt.Fprint(c.Conn, "> error <\r\n")
 	}
 
 	if err != nil {
@@ -178,10 +178,10 @@ func (c *Connection) SignalSessionDone(node *tls.Conn) error {
 
 	if node != nil {
 		// Any node: send done signal to other node.
-		_, err = fmt.Fprint(node, "> done <\n")
+		_, err = fmt.Fprint(node, "> done <\r\n")
 	} else {
 		// Worker: send done signal to distributor.
-		_, err = fmt.Fprint(c.Conn, "> done <\n")
+		_, err = fmt.Fprint(c.Conn, "> done <\r\n")
 	}
 
 	if err != nil {
@@ -200,7 +200,7 @@ func (c *Connection) SignalAwaitingLiteral(awaiting int) error {
 	var err error
 
 	// Indicate how many bytes of literal data are awaited.
-	_, err = fmt.Fprintf(c.Conn, "> literal: %d <\n", awaiting)
+	_, err = fmt.Fprintf(c.Conn, "> literal: %d <\r\n", awaiting)
 	if err != nil {
 		return err
 	}
