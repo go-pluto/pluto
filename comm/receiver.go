@@ -404,8 +404,6 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn, downStoring chan struct{}) {
 		// Unlock mutex.
 		recv.lock.Unlock()
 
-		log.Println("[comm.StoreIncMsgs] Wrote a CRDT message to log.")
-
 		// Indicate to applying routine that a new message
 		// is available to process.
 		if len(recv.msgInLog) < 1 {
