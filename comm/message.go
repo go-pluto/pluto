@@ -129,7 +129,7 @@ func Parse(msg string) (*Message, error) {
 	m := InitMessage()
 
 	// Remove attached newline symbol.
-	msg = strings.TrimRight(msg, "\n")
+	msg = strings.TrimSuffix(msg, "\n")
 
 	// Split message at pipe symbol at maximum two times.
 	tmpMsg := strings.SplitN(msg, "|", 3)

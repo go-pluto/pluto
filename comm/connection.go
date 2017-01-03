@@ -155,5 +155,5 @@ func InternalReceive(reader *bufio.Reader) (string, error) {
 		return "", err
 	}
 
-	return strings.TrimRight(text, "\r\n"), nil
+	return strings.TrimSuffix(text, "\r\n"), nil
 }

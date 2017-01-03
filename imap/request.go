@@ -206,17 +206,15 @@ func ParseFlags(recv string) (map[string]struct{}, error) {
 	flags := make(map[string]struct{})
 
 	if strings.HasPrefix(recv, "(") {
-
 		// Remove leading parenthesis.
-		recv = strings.TrimLeft(recv, "(")
+		recv = strings.TrimPrefix(recv, "(")
 	} else {
 		return nil, fmt.Errorf("Command STORE was sent with invalid parenthesized flags list")
 	}
 
 	if strings.HasSuffix(recv, ")") {
-
 		// Remove trailing parenthesis.
-		recv = strings.TrimRight(recv, ")")
+		recv = strings.TrimSuffix(recv, ")")
 	} else {
 		return nil, fmt.Errorf("Command STORE was sent with invalid parenthesized flags list")
 	}

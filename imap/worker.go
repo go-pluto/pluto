@@ -577,8 +577,8 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 
 			// Strip off left and right elements of signal.
 			// This leaves the awaited amount of bytes.
-			numBytesString := strings.TrimLeft(curResp, "> literal: ")
-			numBytesString = strings.TrimRight(numBytesString, " <")
+			numBytesString := strings.TrimPrefix(curResp, "> literal: ")
+			numBytesString = strings.TrimSuffix(numBytesString, " <")
 
 			// Convert string amount to int.
 			numBytes, err := strconv.Atoi(numBytesString)

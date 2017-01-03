@@ -1206,8 +1206,8 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 	}
 
 	// Parse out how many bytes we are expecting.
-	numBytesString := strings.TrimLeft(numBytesRaw, "{")
-	numBytesString = strings.TrimRight(numBytesString, "}")
+	numBytesString := strings.TrimPrefix(numBytesRaw, "{")
+	numBytesString = strings.TrimSuffix(numBytesString, "}")
 
 	// Convert string number to int.
 	numBytes, err := strconv.Atoi(numBytesString)
