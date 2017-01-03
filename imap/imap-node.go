@@ -1611,11 +1611,20 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 		return true
 	}
 
+	// Set currently selected mailbox with respect to special
+	// case of INBOX as current location.
+	var selectedMailbox string
+	if node.Contexts[clientID].SelectedMailbox == "INBOX" {
+		selectedMailbox = node.Contexts[clientID].UserMaildirPath
+	} else {
+		selectedMailbox = filepath.Join(node.Contexts[clientID].UserMaildirPath, node.Contexts[clientID].SelectedMailbox)
+	}
+
 	// Prepare answer slice.
 	answerLines := make([]string, 0, len(msgNums))
 
 	// Construct path and Maildir for selected mailbox.
-	mailMaildir := maildir.Dir(filepath.Join(node.Contexts[clientID].UserMaildirPath, node.Contexts[clientID].SelectedMailbox))
+	mailMaildir := maildir.Dir(selectedMailbox)
 
 	for _, msgNum := range msgNums {
 
@@ -1651,7 +1660,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 		mailFileName := node.MailboxContents[node.Contexts[clientID].UserName][node.Contexts[clientID].SelectedMailbox][msgNum]
 
 		// Read message contents from file.
-		mailFileContents, err := ioutil.ReadFile(filepath.Join(node.Contexts[clientID].UserMaildirPath, node.Contexts[clientID].SelectedMailbox, "cur", mailFileName))
+		mailFileContents, err := ioutil.ReadFile(filepath.Join(selectedMailbox, "cur", mailFileName))
 		if err != nil {
 			c.Error("Error while reading in mail file contents in STORE operation", err)
 			return false

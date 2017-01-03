@@ -109,28 +109,34 @@ var storeTests = []struct {
 	out string
 }{
 	{"a LOGIN user3 password3", "a OK LOGIN completed"},
-	{"b CREATE Sports", "b OK CREATE completed"},
-	{"c APPEND Sports {301}", "+ Ready for literal data"},
-	{msg1, "c OK APPEND completed"},
-	{"d APPEND Sports {301}", "+ Ready for literal data"},
-	{msg1, "d OK APPEND completed"},
-	{"e APPEND Sports {301}", "+ Ready for literal data"},
-	{msg1, "e OK APPEND completed"},
-	{"f APPEND Sports {301}", "+ Ready for literal data"},
-	{msg1, "f OK APPEND completed"},
-	{"g APPEND Sports {301}", "+ Ready for literal data"},
-	{msg1, "g OK APPEND completed"},
-	{"h STORE anything", "h BAD No mailbox selected for store"},
-	{"i SELECT Sports", "* 5 EXISTS\r\n* 5 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\ni OK [READ-WRITE] SELECT completed"},
-	{"j STORE too few", "j BAD Command STORE was not sent with three parameters"},
-	{"k STORE one,two FLAGS (\\Seen)", "k BAD Command STORE was sent with an invalid number parameter"},
-	{"l STORE 2,4:* WHYNOTTHIS? (\\Seen)", "l BAD Unknown data item type specified"},
-	{"m STORE 2,4:* -FLAGS.SILENT \\Seen", "m BAD Command STORE was sent with invalid parenthesized flags list"},
-	{"n STORE 2,4:* +FLAGS (\\Seen \\Answered)", "* 2 FETCH (FLAGS (\\Answered \\Seen))\r\n* 4 FETCH (FLAGS (\\Answered \\Seen))\r\n* 5 FETCH (FLAGS (\\Answered \\Seen))\r\nn OK STORE completed"},
-	{"o STORE 3,2,1 -FLAGS (\\Answered)", "* 1 FETCH (FLAGS ())\r\n* 2 FETCH (FLAGS (\\Seen))\r\n* 3 FETCH (FLAGS ())\r\no OK STORE completed"},
-	{"p STORE 1,2,3:* FLAGS.SILENT (\\Draft \\Deleted)", "p OK STORE completed"},
-	{"q STORE 5,3,4,1,2 +FLAGS (\\Answered)", "* 1 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 2 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 3 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 4 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 5 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\nq OK STORE completed"},
-	{"r LOGOUT", "* BYE Terminating connection\r\nr OK LOGOUT completed"},
+	{"b APPEND INBOX {301}", "+ Ready for literal data"},
+	{msg1, "b OK APPEND completed"},
+	{"c SELECT INBOX", "* 1 EXISTS\r\n* 1 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\nc OK [READ-WRITE] SELECT completed"},
+	{"d STORE 1 FLAGS.SILENT (\\Answered \\Draft \\Deleted)", "d OK STORE completed"},
+	{"e LOGOUT", "* BYE Terminating connection\r\ne OK LOGOUT completed"},
+	{"f LOGIN user3 password3", "f OK LOGIN completed"},
+	{"g CREATE Sports", "g OK CREATE completed"},
+	{"h APPEND Sports {301}", "+ Ready for literal data"},
+	{msg1, "h OK APPEND completed"},
+	{"i APPEND Sports {301}", "+ Ready for literal data"},
+	{msg1, "i OK APPEND completed"},
+	{"j APPEND Sports {301}", "+ Ready for literal data"},
+	{msg1, "j OK APPEND completed"},
+	{"k APPEND Sports {301}", "+ Ready for literal data"},
+	{msg1, "k OK APPEND completed"},
+	{"l APPEND Sports {301}", "+ Ready for literal data"},
+	{msg1, "l OK APPEND completed"},
+	{"m STORE anything", "m BAD No mailbox selected for store"},
+	{"n SELECT Sports", "* 5 EXISTS\r\n* 5 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\nn OK [READ-WRITE] SELECT completed"},
+	{"o STORE too few", "o BAD Command STORE was not sent with three parameters"},
+	{"p STORE one,two FLAGS (\\Seen)", "p BAD Command STORE was sent with an invalid number parameter"},
+	{"q STORE 2,4:* WHYNOTTHIS? (\\Seen)", "q BAD Unknown data item type specified"},
+	{"r STORE 2,4:* -FLAGS.SILENT \\Seen", "r BAD Command STORE was sent with invalid parenthesized flags list"},
+	{"s STORE 2,4:* +FLAGS (\\Seen \\Answered)", "* 2 FETCH (FLAGS (\\Answered \\Seen))\r\n* 4 FETCH (FLAGS (\\Answered \\Seen))\r\n* 5 FETCH (FLAGS (\\Answered \\Seen))\r\ns OK STORE completed"},
+	{"t STORE 3,2,1 -FLAGS (\\Answered)", "* 1 FETCH (FLAGS ())\r\n* 2 FETCH (FLAGS (\\Seen))\r\n* 3 FETCH (FLAGS ())\r\nt OK STORE completed"},
+	{"u STORE 1,2,3:* FLAGS.SILENT (\\Draft \\Deleted)", "u OK STORE completed"},
+	{"v STORE 5,3,4,1,2 +FLAGS (\\Answered)", "* 1 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 2 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 3 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 4 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 5 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\nv OK STORE completed"},
+	{"w LOGOUT", "* BYE Terminating connection\r\nw OK LOGOUT completed"},
 }
 
 var expungeTests = []struct {
@@ -241,28 +247,34 @@ var proxiedStoreTests = []struct {
 	out string
 }{
 	{"a LOGIN user8 password8", "a OK LOGIN completed"},
-	{"b CREATE Sports", "b OK CREATE completed"},
-	{"c APPEND Sports {301}", "+ Ready for literal data"},
-	{msg1, "c OK APPEND completed"},
-	{"d APPEND Sports {301}", "+ Ready for literal data"},
-	{msg1, "d OK APPEND completed"},
-	{"e APPEND Sports {301}", "+ Ready for literal data"},
-	{msg1, "e OK APPEND completed"},
-	{"f APPEND Sports {301}", "+ Ready for literal data"},
-	{msg1, "f OK APPEND completed"},
-	{"g APPEND Sports {301}", "+ Ready for literal data"},
-	{msg1, "g OK APPEND completed"},
-	{"h STORE anything", "h BAD No mailbox selected for store"},
-	{"i SELECT Sports", "* 5 EXISTS\r\n* 5 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\ni OK [READ-WRITE] SELECT completed"},
-	{"j STORE too few", "j BAD Command STORE was not sent with three parameters"},
-	{"k STORE one,two FLAGS (\\Seen)", "k BAD Command STORE was sent with an invalid number parameter"},
-	{"l STORE 2,4:* WHYNOTTHIS? (\\Seen)", "l BAD Unknown data item type specified"},
-	{"m STORE 2,4:* -FLAGS.SILENT \\Seen", "m BAD Command STORE was sent with invalid parenthesized flags list"},
-	{"n STORE 2,4:* +FLAGS (\\Seen \\Answered)", "* 2 FETCH (FLAGS (\\Answered \\Seen))\r\n* 4 FETCH (FLAGS (\\Answered \\Seen))\r\n* 5 FETCH (FLAGS (\\Answered \\Seen))\r\nn OK STORE completed"},
-	{"o STORE 3,2,1 -FLAGS (\\Answered)", "* 1 FETCH (FLAGS ())\r\n* 2 FETCH (FLAGS (\\Seen))\r\n* 3 FETCH (FLAGS ())\r\no OK STORE completed"},
-	{"p STORE 1,2,3:* FLAGS.SILENT (\\Draft \\Deleted)", "p OK STORE completed"},
-	{"q STORE 5,3,4,1,2 +FLAGS (\\Answered)", "* 1 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 2 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 3 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 4 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 5 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\nq OK STORE completed"},
-	{"r LOGOUT", "* BYE Terminating connection\r\nr OK LOGOUT completed"},
+	{"b APPEND INBOX {301}", "+ Ready for literal data"},
+	{msg1, "b OK APPEND completed"},
+	{"c SELECT INBOX", "* 1 EXISTS\r\n* 1 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\nc OK [READ-WRITE] SELECT completed"},
+	{"d STORE 1 FLAGS.SILENT (\\Answered \\Draft \\Deleted)", "d OK STORE completed"},
+	{"e LOGOUT", "* BYE Terminating connection\r\ne OK LOGOUT completed"},
+	{"f LOGIN user8 password8", "f OK LOGIN completed"},
+	{"g CREATE Sports", "g OK CREATE completed"},
+	{"h APPEND Sports {301}", "+ Ready for literal data"},
+	{msg1, "h OK APPEND completed"},
+	{"i APPEND Sports {301}", "+ Ready for literal data"},
+	{msg1, "i OK APPEND completed"},
+	{"j APPEND Sports {301}", "+ Ready for literal data"},
+	{msg1, "j OK APPEND completed"},
+	{"k APPEND Sports {301}", "+ Ready for literal data"},
+	{msg1, "k OK APPEND completed"},
+	{"l APPEND Sports {301}", "+ Ready for literal data"},
+	{msg1, "l OK APPEND completed"},
+	{"m STORE anything", "m BAD No mailbox selected for store"},
+	{"n SELECT Sports", "* 5 EXISTS\r\n* 5 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\nn OK [READ-WRITE] SELECT completed"},
+	{"o STORE too few", "o BAD Command STORE was not sent with three parameters"},
+	{"p STORE one,two FLAGS (\\Seen)", "p BAD Command STORE was sent with an invalid number parameter"},
+	{"q STORE 2,4:* WHYNOTTHIS? (\\Seen)", "q BAD Unknown data item type specified"},
+	{"r STORE 2,4:* -FLAGS.SILENT \\Seen", "r BAD Command STORE was sent with invalid parenthesized flags list"},
+	{"s STORE 2,4:* +FLAGS (\\Seen \\Answered)", "* 2 FETCH (FLAGS (\\Answered \\Seen))\r\n* 4 FETCH (FLAGS (\\Answered \\Seen))\r\n* 5 FETCH (FLAGS (\\Answered \\Seen))\r\ns OK STORE completed"},
+	{"t STORE 3,2,1 -FLAGS (\\Answered)", "* 1 FETCH (FLAGS ())\r\n* 2 FETCH (FLAGS (\\Seen))\r\n* 3 FETCH (FLAGS ())\r\nt OK STORE completed"},
+	{"u STORE 1,2,3:* FLAGS.SILENT (\\Draft \\Deleted)", "u OK STORE completed"},
+	{"v STORE 5,3,4,1,2 +FLAGS (\\Answered)", "* 1 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 2 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 3 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 4 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\n* 5 FETCH (FLAGS (\\Answered \\Draft \\Deleted))\r\nv OK STORE completed"},
+	{"w LOGOUT", "* BYE Terminating connection\r\nw OK LOGOUT completed"},
 }
 
 var proxiedExpungeTests = []struct {
@@ -307,7 +319,7 @@ func TestSelect(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestSelect] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestSelect] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for _, tt := range selectTests {
@@ -323,7 +335,7 @@ func TestSelect(t *testing.T) {
 		// Receive answer to SELECT request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
+			t.Fatalf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -336,7 +348,7 @@ func TestSelect(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
+				t.Fatalf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -369,7 +381,7 @@ func TestCreate(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestCreate] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestCreate] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for _, tt := range createTests {
@@ -385,7 +397,7 @@ func TestCreate(t *testing.T) {
 		// Receive answer to CREATE request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestCreate] Error during receiving table test CREATE: %s\n", err.Error())
+			t.Fatalf("[imap.TestCreate] Error during receiving table test CREATE: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -398,7 +410,7 @@ func TestCreate(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestCreate] Error during receiving table test CREATE: %s\n", err.Error())
+				t.Fatalf("[imap.TestCreate] Error during receiving table test CREATE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -431,7 +443,7 @@ func TestDelete(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestDelete] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestDelete] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for _, tt := range deleteTests {
@@ -447,7 +459,7 @@ func TestDelete(t *testing.T) {
 		// Receive answer to DELETE request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
+			t.Fatalf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -460,7 +472,7 @@ func TestDelete(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
+				t.Fatalf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -493,7 +505,7 @@ func TestList(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestList] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestList] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for _, tt := range listTests {
@@ -509,7 +521,7 @@ func TestList(t *testing.T) {
 		// Receive answer to LIST request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
+			t.Fatalf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -522,7 +534,7 @@ func TestList(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
+				t.Fatalf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -555,7 +567,7 @@ func TestAppend(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestAppend] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestAppend] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for i, tt := range appendTests {
@@ -581,7 +593,7 @@ func TestAppend(t *testing.T) {
 		// Receive answer to APPEND request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
+			t.Fatalf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -594,7 +606,7 @@ func TestAppend(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
+				t.Fatalf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -627,20 +639,48 @@ func TestStore(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestStore] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestStore] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for i, tt := range storeTests {
 
 		var answer string
 
-		if (i == 3) || (i == 5) || (i == 7) || (i == 9) || (i == 11) {
+		if i == 6 {
+
+			// As the command prior to this command logged out
+			// the user, we have to terminate and re-establish
+			// the used connection.
+			c.Terminate()
+
+			conn, err = tls.Dial("tcp", (testEnv.Config.Distributor.IP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+			if err != nil {
+				t.Fatalf("[imap.TestStore] Error during connection attempt to IMAP server: %s\n", err.Error())
+			}
+
+			// Create new connection struct.
+			c = imap.NewConnection(conn)
+
+			// Consume mandatory IMAP greeting.
+			_, err = c.Receive()
+			if err != nil {
+				t.Fatalf("[imap.TestStore] Error during receiving initial server greeting: %s\n", err.Error())
+			}
+
+			// Now, send login command.
+			err = c.Send(tt.in)
+			if err != nil {
+				t.Fatalf("[imap.TestStore] Sending message to server failed with: %s\n", err.Error())
+			}
+
+		} else if (i == 2) || (i == 9) || (i == 11) || (i == 13) || (i == 15) || (i == 17) {
 
 			// Send mail message without additional newline.
 			_, err = fmt.Fprintf(c.Conn, "%s", tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestStore] Sending mail message to server failed with: %s\n", err.Error())
 			}
+
 		} else {
 
 			// Table test: send 'in' part of each line.
@@ -653,7 +693,7 @@ func TestStore(t *testing.T) {
 		// Receive answer to STORE request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestStore] Error during receiving table test STORE: %s\n", err.Error())
+			t.Fatalf("[imap.TestStore] Error during receiving table test STORE: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -666,7 +706,7 @@ func TestStore(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestStore] Error during receiving table test STORE: %s\n", err.Error())
+				t.Fatalf("[imap.TestStore] Error during receiving table test STORE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -699,7 +739,7 @@ func TestExpunge(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestExpunge] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestExpunge] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for i, tt := range expungeTests {
@@ -725,7 +765,7 @@ func TestExpunge(t *testing.T) {
 		// Receive answer to EXPUNGE request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
+			t.Fatalf("[imap.TestExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -738,7 +778,7 @@ func TestExpunge(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
+				t.Fatalf("[imap.TestExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -771,7 +811,7 @@ func TestProxiedSelect(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestProxiedSelect] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedSelect] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for _, tt := range proxiedSelectTests {
@@ -787,7 +827,7 @@ func TestProxiedSelect(t *testing.T) {
 		// Receive answer to SELECT request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestProxiedSelect] Error during receiving table test SELECT: %s\n", err.Error())
+			t.Fatalf("[imap.TestProxiedSelect] Error during receiving table test SELECT: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -800,7 +840,7 @@ func TestProxiedSelect(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestProxiedSelect] Error during receiving table test SELECT: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedSelect] Error during receiving table test SELECT: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -833,7 +873,7 @@ func TestProxiedCreate(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestProxiedCreate] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedCreate] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for _, tt := range proxiedCreateTests {
@@ -849,7 +889,7 @@ func TestProxiedCreate(t *testing.T) {
 		// Receive answer to CREATE request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestProxiedCreate] Error during receiving table test CREATE: %s\n", err.Error())
+			t.Fatalf("[imap.TestProxiedCreate] Error during receiving table test CREATE: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -862,7 +902,7 @@ func TestProxiedCreate(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestProxiedCreate] Error during receiving table test CREATE: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedCreate] Error during receiving table test CREATE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -895,7 +935,7 @@ func TestProxiedDelete(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestProxiedDelete] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedDelete] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for _, tt := range proxiedDeleteTests {
@@ -911,7 +951,7 @@ func TestProxiedDelete(t *testing.T) {
 		// Receive answer to DELETE request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestProxiedDelete] Error during receiving table test DELETE: %s\n", err.Error())
+			t.Fatalf("[imap.TestProxiedDelete] Error during receiving table test DELETE: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -924,7 +964,7 @@ func TestProxiedDelete(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestProxiedDelete] Error during receiving table test DELETE: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedDelete] Error during receiving table test DELETE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -957,7 +997,7 @@ func TestProxiedList(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestProxiedList] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedList] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for _, tt := range proxiedListTests {
@@ -973,7 +1013,7 @@ func TestProxiedList(t *testing.T) {
 		// Receive answer to LIST request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestProxiedList] Error during receiving table test LIST: %s\n", err.Error())
+			t.Fatalf("[imap.TestProxiedList] Error during receiving table test LIST: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -986,7 +1026,7 @@ func TestProxiedList(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestProxiedList] Error during receiving table test LIST: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedList] Error during receiving table test LIST: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -1019,7 +1059,7 @@ func TestProxiedAppend(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestProxiedAppend] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedAppend] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for i, tt := range proxiedAppendTests {
@@ -1045,7 +1085,7 @@ func TestProxiedAppend(t *testing.T) {
 		// Receive answer to APPEND request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestProxiedAppend] Error during receiving table test APPEND: %s\n", err.Error())
+			t.Fatalf("[imap.TestProxiedAppend] Error during receiving table test APPEND: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -1058,7 +1098,7 @@ func TestProxiedAppend(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestProxiedAppend] Error during receiving table test APPEND: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedAppend] Error during receiving table test APPEND: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -1091,20 +1131,48 @@ func TestProxiedStore(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestProxiedStore] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedStore] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for i, tt := range proxiedStoreTests {
 
 		var answer string
 
-		if (i == 3) || (i == 5) || (i == 7) || (i == 9) || (i == 11) {
+		if i == 6 {
+
+			// As the command prior to this command logged out
+			// the user, we have to terminate and re-establish
+			// the used connection.
+			c.Terminate()
+
+			conn, err = tls.Dial("tcp", (testEnv.Config.Distributor.IP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+			if err != nil {
+				t.Fatalf("[imap.TestProxiedStore] Error during connection attempt to IMAP server: %s\n", err.Error())
+			}
+
+			// Create new connection struct.
+			c = imap.NewConnection(conn)
+
+			// Consume mandatory IMAP greeting.
+			_, err = c.Receive()
+			if err != nil {
+				t.Fatalf("[imap.TestProxiedStore] Error during receiving initial server greeting: %s\n", err.Error())
+			}
+
+			// Now, send login command.
+			err = c.Send(tt.in)
+			if err != nil {
+				t.Fatalf("[imap.TestProxiedStore] Sending message to server failed with: %s\n", err.Error())
+			}
+
+		} else if (i == 2) || (i == 9) || (i == 11) || (i == 13) || (i == 15) || (i == 17) {
 
 			// Send mail message without additional newline.
 			_, err = fmt.Fprintf(c.Conn, "%s", tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedStore] Sending mail message to server failed with: %s\n", err.Error())
 			}
+
 		} else {
 
 			// Table test: send 'in' part of each line.
@@ -1117,7 +1185,7 @@ func TestProxiedStore(t *testing.T) {
 		// Receive answer to STORE request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestProxiedStore] Error during receiving table test STORE: %s\n", err.Error())
+			t.Fatalf("[imap.TestProxiedStore] Error during receiving table test STORE: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -1130,7 +1198,7 @@ func TestProxiedStore(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestProxiedStore] Error during receiving table test STORE: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedStore] Error during receiving table test STORE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
@@ -1163,7 +1231,7 @@ func TestProxiedExpunge(t *testing.T) {
 	// Consume mandatory IMAP greeting.
 	_, err = c.Receive()
 	if err != nil {
-		t.Errorf("[imap.TestProxiedExpunge] Error during receiving initial server greeting: %s\n", err.Error())
+		t.Fatalf("[imap.TestProxiedExpunge] Error during receiving initial server greeting: %s\n", err.Error())
 	}
 
 	for i, tt := range proxiedExpungeTests {
@@ -1189,7 +1257,7 @@ func TestProxiedExpunge(t *testing.T) {
 		// Receive answer to EXPUNGE request.
 		firstAnswer, err := c.Receive()
 		if err != nil {
-			t.Errorf("[imap.TestProxiedExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
+			t.Fatalf("[imap.TestProxiedExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 		}
 
 		// As long as the IMAP command termination indicator
@@ -1202,7 +1270,7 @@ func TestProxiedExpunge(t *testing.T) {
 			// Receive next line from distributor.
 			nextAnswer, err := c.Receive()
 			if err != nil {
-				t.Errorf("[imap.TestProxiedExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
+				t.Fatalf("[imap.TestProxiedExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 			}
 
 			firstAnswer = fmt.Sprintf("%s\r\n%s", firstAnswer, nextAnswer)
