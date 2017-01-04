@@ -96,8 +96,11 @@ func (p *PostgresAuthenticator) AuthenticatePlain(username string, password stri
 	// Encode the hashed text with base64.
 	encHashedPassword := base64.StdEncoding.EncodeToString(hashedPassword)
 
+	// Prepare query for database.
+	query := fmt.Sprintf("SELECT id FROM users WHERE username = '%s' AND password = '{SHA512}%s'", username, encHashedPassword)
+
 	// Query database for user matching all criteria.
-	err = p.Conn.QueryRow("SELECT id FROM users WHERE username = '$1' AND password = '$2'", username, encHashedPassword).Scan(&dbUserID)
+	err = p.Conn.QueryRow(query).Scan(&dbUserID)
 	if err != nil {
 
 		// Check what type of error we received.

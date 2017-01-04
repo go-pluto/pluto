@@ -85,7 +85,7 @@ func (c *Connection) Receive() (string, error) {
 		return "", err
 	}
 
-	return strings.TrimSuffix(text, "\r\n"), nil
+	return strings.TrimRight(text, "\r\n"), nil
 }
 
 // Send takes in an answer text from server as a
