@@ -3,7 +3,9 @@ package auth
 import (
 	"fmt"
 
+	"crypto/sha512"
 	"crypto/tls"
+	"encoding/base64"
 
 	"github.com/numbleroot/pluto/config"
 	"gopkg.in/jackc/pgx.v2"
@@ -77,5 +79,37 @@ func (p *PostgresAuthenticator) GetWorkerForUser(workers map[string]config.Worke
 // and match with an user entry in the PostgreSQL database.
 func (p *PostgresAuthenticator) AuthenticatePlain(username string, password string, clientAddr string) (int, string, error) {
 
-	return 0, "", nil
+	var dbUserID int
+
+	// Create new SHA512 hash.
+	shaHash := sha512.New()
+
+	// Input supplied password into hash function.
+	_, err := shaHash.Write([]byte(password))
+	if err != nil {
+		return -1, "", fmt.Errorf("failed to write password to hash: %s", err.Error())
+	}
+
+	// Produce the actual hash and save it.
+	hashedPassword := shaHash.Sum(nil)
+
+	// Encode the hashed text with base64.
+	encHashedPassword := base64.StdEncoding.EncodeToString(hashedPassword)
+
+	// Query database for user matching all criteria.
+	err = p.Conn.QueryRow("SELECT id FROM users WHERE username = '$1' AND password = '$2'", username, encHashedPassword).Scan(&dbUserID)
+	if err != nil {
+
+		// Check what type of error we received.
+		if err == pgx.ErrNoRows {
+			return -1, "", fmt.Errorf("username not found in users table or password wrong")
+		} else {
+			return -1, "", fmt.Errorf("error while trying to locate user: %s", err.Error())
+		}
+	}
+
+	// Build the deterministic client-specific session identifier.
+	clientID := fmt.Sprintf("%s:%s", clientAddr, username)
+
+	return dbUserID, clientID, nil
 }
