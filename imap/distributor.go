@@ -48,9 +48,15 @@ func InitDistributor(config *config.Config) (*Distributor, error) {
 
 		// Open authentication file and read user information.
 		distr.AuthAdapter, err = auth.NewFileAuthenticator(config.Distributor.AuthFile.File, config.Distributor.AuthFile.Separator)
-		if err != nil {
-			return nil, err
-		}
+
+	} else if config.Distributor.AuthAdapter == "Postgres" {
+
+		// Connect to PostgreSQL database.
+		distr.AuthAdapter, err = auth.NewPostgresAuthenticator(config.Distributor.AuthPostgres.IP, config.Distributor.AuthPostgres.Port, config.Distributor.AuthPostgres.Database, config.Distributor.AuthPostgres.User, config.Distributor.AuthPostgres.Password, config.Distributor.AuthPostgres.UseTLS)
+
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	// Load internal TLS config.
