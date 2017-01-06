@@ -112,25 +112,13 @@ func TestSenderReceiver(t *testing.T) {
 	// Wait shortly for goroutines to have started.
 	time.Sleep(200 * time.Millisecond)
 
-	// Connect via TLS from worker-1 to storage.
-	cToN2, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", testEnv.Config.Storage.IP, testEnv.Config.Storage.SyncPort), internalTLSConfigN1)
-	if err != nil {
-		t.Fatalf("[comm_test.TestSenderReceiver] Expected to be able to connect from worker-1 to storage but received: %s\n", err.Error())
-	}
-
 	// Create map of connections for worker-1.
-	connsN1 := make(map[string]*tls.Conn)
-	connsN1[n2] = cToN2
-
-	// Connect via TLS from storage to worker-1.
-	cToN1, err := tls.Dial("tcp", fmt.Sprintf("%s:%s", testEnv.Config.Workers[n1].IP, testEnv.Config.Workers[n1].SyncPort), internalTLSConfigN2)
-	if err != nil {
-		t.Fatalf("[comm_test.TestSenderReceiver] Expected to be able to connect from storage to worker-1 but received: %s\n", err.Error())
-	}
+	connsN1 := make(map[string]string)
+	connsN1[n2] = fmt.Sprintf("%s:%s", testEnv.Config.Storage.IP, testEnv.Config.Storage.SyncPort)
 
 	// Create map of connections for storage.
-	connsN2 := make(map[string]*tls.Conn)
-	connsN2[n1] = cToN1
+	connsN2 := make(map[string]string)
+	connsN2[n1] = fmt.Sprintf("%s:%s", testEnv.Config.Workers[n1].IP, testEnv.Config.Workers[n1].SyncPort)
 
 	// Initialize sending interface for worker-1.
 	chan1, err := comm.InitSender(n1, "../test-comm-sending-worker-1.log", internalTLSConfigN1, testEnv.Config.IntlConnTimeout, testEnv.Config.IntlConnRetry, chanIncN1, chanUpdN1, n1DownSender, connsN1)

@@ -1,5 +1,0 @@
-package imap
-
-// Structs
-
-// Functions

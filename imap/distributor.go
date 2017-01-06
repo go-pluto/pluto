@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net"
@@ -9,7 +10,6 @@ import (
 	"crypto/tls"
 
 	"github.com/numbleroot/pluto/auth"
-	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crypto"
 )
@@ -65,19 +65,6 @@ func InitDistributor(config *config.Config) (*Distributor, error) {
 		return nil, err
 	}
 
-	for workerName, workerNode := range config.Workers {
-
-		// Try to connect to mail port of each worker node the
-		// distributor is responsible for.
-		c, err := comm.ReliableConnect("distributor", workerName, workerNode.IP, workerNode.MailPort, distr.IntlTLSConfig, config.IntlConnRetry)
-		if err != nil {
-			return nil, err
-		}
-
-		// Save connection for later use.
-		distr.Connections[workerName] = c
-	}
-
 	// Load public TLS config based on config values.
 	publicTLSConfig, err := crypto.NewPublicTLSConfig(config.Distributor.PublicTLS.CertLoc, config.Distributor.PublicTLS.KeyLoc)
 	if err != nil {
@@ -127,10 +114,13 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 	}
 
 	// Create a new connection struct for incoming request.
-	c := NewConnection(tlsConn)
+	c := &Connection{
+		IncConn:   tlsConn,
+		IncReader: bufio.NewReader(tlsConn),
+	}
 
 	// Send initial server greeting.
-	err := c.Send(fmt.Sprintf("* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] %s", distr.Config.IMAP.Greeting))
+	err := c.Send(true, fmt.Sprintf("* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] %s", distr.Config.IMAP.Greeting))
 	if err != nil {
 		c.Error("Encountered error while sending IMAP greeting", err)
 		return
@@ -143,7 +133,7 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 	for recvUntil != "LOGOUT" {
 
 		// Receive next incoming client command.
-		rawReq, err := c.Receive()
+		rawReq, err := c.Receive(true)
 		if err != nil {
 
 			// Check if error was a simple disconnect.
@@ -151,33 +141,11 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 
 				// If so and if a worker was already assigned,
 				// inform the worker about the disconnect.
-				if c.Worker != "" {
+				if c.OutConn != nil {
 
-					distr.lock.RLock()
-
-					// Store worker connection information.
-					workerConn := distr.Connections[c.Worker]
-					workerIP := distr.Config.Workers[c.Worker].IP
-					workerPort := distr.Config.Workers[c.Worker].MailPort
-
-					distr.lock.RUnlock()
-
-					// Prefix the information with context.
-					conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnTimeout, distr.Config.IntlConnRetry)
+					// Signal to worker node that session is done.
+					err := c.SignalSessionDone(false)
 					if err != nil {
-						c.Error("Encountered send error when distributor was signalling context to worker", err)
-						return
-					}
-
-					distr.lock.Lock()
-
-					// Replace stored connection by possibly new one.
-					distr.Connections[c.Worker] = conn
-
-					distr.lock.Unlock()
-
-					// Now signal that client disconnected.
-					if err := c.SignalSessionDone(conn); err != nil {
 						c.Error("Encountered send error when distributor was signalling end to worker", err)
 						return
 					}
@@ -200,7 +168,7 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 		if err != nil {
 
 			// Signal error to client.
-			err := c.Send(err.Error())
+			err := c.Send(true, err.Error())
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return
@@ -227,16 +195,22 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 		case req.Command == "LOGIN":
 			distr.Login(c, req)
 
-		case c.Worker != "":
+		case c.OutConn != nil:
 			distr.Proxy(c, rawReq)
 
 		default:
 			// Client sent inappropriate command. Signal tagged error.
-			err := c.Send(fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
+			err := c.Send(true, fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return
 			}
 		}
+	}
+
+	// Terminate connection after logout.
+	err = c.Terminate()
+	if err != nil {
+		log.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
 	}
 }

@@ -22,17 +22,17 @@ func NewPublicTLSConfig(certPath string, keyPath string) (*tls.Config, error) {
 	// Good parts of them were taken from the excellent post:
 	// "Achieving a Perfect SSL Labs Score with Go":
 	// https://blog.bracelab.com/achieving-perfect-ssl-labs-score-with-go
+	// With further optimizations for speed and security from here:
+	// "So you want to expose Go on the Internet"
+	// https://blog.gopheracademy.com/advent-2016/exposing-go-on-the-internet/
 	config := &tls.Config{
 		Certificates:             make([]tls.Certificate, 1),
 		InsecureSkipVerify:       false,
 		MinVersion:               tls.VersionTLS12,
-		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+		CurvePreferences:         []tls.CurveID{tls.CurveP256},
 		PreferServerCipherSuites: true,
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
 		},
 	}
 
@@ -62,6 +62,9 @@ func NewInternalTLSConfig(certPath string, keyPath string, rootCertPath string) 
 	// Good parts of them were taken from the excellent post:
 	// "Achieving a Perfect SSL Labs Score with Go":
 	// https://blog.bracelab.com/achieving-perfect-ssl-labs-score-with-go
+	// With further optimizations for speed and security from here:
+	// "So you want to expose Go on the Internet"
+	// https://blog.gopheracademy.com/advent-2016/exposing-go-on-the-internet/
 	config := &tls.Config{
 		RootCAs:                  x509.NewCertPool(),
 		ClientCAs:                x509.NewCertPool(),
@@ -69,13 +72,11 @@ func NewInternalTLSConfig(certPath string, keyPath string, rootCertPath string) 
 		Certificates:             make([]tls.Certificate, 1),
 		InsecureSkipVerify:       false,
 		MinVersion:               tls.VersionTLS12,
-		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+		CurvePreferences:         []tls.CurveID{tls.CurveP256},
 		PreferServerCipherSuites: true,
+		SessionTicketsDisabled:   false,
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
 		},
 	}
 

@@ -32,7 +32,6 @@ type IMAPNode struct {
 	MailSocket       net.Listener
 	SyncSocket       net.Listener
 	Connections      map[string]*tls.Conn
-	Contexts         map[string]*Context
 	MailboxStructure map[string]map[string]*crdt.ORSet
 	MailboxContents  map[string]map[string][]string
 	CRDTLayerRoot    string
@@ -579,24 +578,14 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 // (e.g. a missing mailbox to select) but otherwise correct
 // handling, this function would send a useful message to
 // the client and still return true.
-func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncChan chan string) bool {
+func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
-	// Save local and remote address of current connection
-	// for later use in logging of communication.
-	cLocal := c.Conn.LocalAddr().String()
-	cRemote := c.Conn.RemoteAddr().String()
+	if (c.IMAPState != AUTHENTICATED) && (c.IMAPState != MAILBOX) {
 
-	// Lock node exclusively and unlock whenever
-	// this handler exits.
-	node.lock.Lock()
-	defer node.lock.Unlock()
-
-	if (node.Contexts[clientID].IMAPState != AUTHENTICATED) && (node.Contexts[clientID].IMAPState != MAILBOX) {
-
-		// If connection was not correct state when this
+		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command SELECT cannot be executed in this state", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command SELECT cannot be executed in this state", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -605,14 +594,11 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 		return true
 	}
 
-	// Save maildir for later use.
-	mailboxPath := node.Contexts[clientID].UserMaildirPath
-
 	if len(req.Payload) < 1 {
 
 		// If no mailbox to select was specified in payload,
 		// this is a client error. Return BAD statement.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -628,7 +614,7 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 
 		// If there were more than two names supplied to select,
 		// this is a client error. Return BAD statement.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -637,7 +623,8 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 		return true
 	}
 
-	// Check if mailbox exists.
+	// Save maildir for later use.
+	mailboxPath := c.UserMaildirPath
 
 	// If any other mailbox than INBOX was specified,
 	// append it to mailbox in order to check it.
@@ -654,7 +641,7 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 
 		// If specified maildir did not turn out to be a valid one,
 		// this is a client error. Return NO statement.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -663,14 +650,17 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 		return true
 	}
 
-	// Set selected mailbox in context to supplied one
+	// Set selected mailbox in connection to supplied one
 	// and advance IMAP state of connection to MAILBOX.
-	node.Contexts[clientID].IMAPState = MAILBOX
-	node.Contexts[clientID].SelectedMailbox = mailboxes[0]
+	c.IMAPState = MAILBOX
+	c.SelectedMailbox = mailboxes[0]
 
-	// Store contents structure of selected mailbox for
-	// later convenient use.
-	selMailboxContents := node.MailboxContents[node.Contexts[clientID].UserName][mailboxes[0]]
+	node.lock.RLock()
+	defer node.lock.RUnlock()
+
+	// Store contents structure of selected mailbox
+	// for later convenient use.
+	selMailboxContents := node.MailboxContents[c.UserName][c.SelectedMailbox]
 
 	// Count how many mails do not have the \Seen
 	// flag attached, i.e. recent mails.
@@ -693,7 +683,7 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 	// TODO: Add other SELECT response elements if needed.
 
 	// Send answer to requesting client.
-	err = comm.InternalSend(c.Conn, fmt.Sprintf("* %d EXISTS\r\n* %d RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\n%s OK [READ-WRITE] SELECT completed", len(selMailboxContents), recentMails, req.Tag), cLocal, cRemote)
+	err = c.InternalSend(true, fmt.Sprintf("* %d EXISTS\r\n* %d RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\n%s OK [READ-WRITE] SELECT completed", len(selMailboxContents), recentMails, req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -704,24 +694,14 @@ func (node *IMAPNode) Select(c *Connection, req *Request, clientID string, syncC
 
 // Create attempts to create a mailbox with name
 // taken from payload of request.
-func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncChan chan string) bool {
+func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
-	// Save local and remote address of current connection
-	// for later use in logging of communication.
-	cLocal := c.Conn.LocalAddr().String()
-	cRemote := c.Conn.RemoteAddr().String()
+	if (c.IMAPState != AUTHENTICATED) && (c.IMAPState != MAILBOX) {
 
-	// Lock node exclusively and unlock whenever
-	// this handler exits.
-	node.lock.Lock()
-	defer node.lock.Unlock()
-
-	if (node.Contexts[clientID].IMAPState != AUTHENTICATED) && (node.Contexts[clientID].IMAPState != MAILBOX) {
-
-		// If connection was not correct state when this
+		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -737,7 +717,7 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 
 		// If payload did not contain exactly one element,
 		// this is a client error. Return BAD statement.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command CREATE was not sent with exactly one parameter", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command CREATE was not sent with exactly one parameter", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -754,7 +734,7 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 
 		// If mailbox to-be-created was named INBOX,
 		// this is a client error. Return NO response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s NO New mailbox cannot be named INBOX", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s NO New mailbox cannot be named INBOX", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -763,34 +743,40 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 		return true
 	}
 
+	node.lock.RLock()
+
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
-	userMainCRDT := node.MailboxStructure[node.Contexts[clientID].UserName]["Structure"]
+	userMainCRDT := node.MailboxStructure[c.UserName]["Structure"]
 
 	if userMainCRDT.Lookup(posMailbox, true) {
 
 		// If mailbox to-be-created already exists for user,
 		// this is a client error. Return NO response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
+			node.lock.RUnlock()
 			return false
 		}
+
+		node.lock.RUnlock()
 
 		return true
 	}
 
 	// Create a new Maildir on stable storage.
-	posMaildir := maildir.Dir(filepath.Join(node.Contexts[clientID].UserMaildirPath, posMailbox))
+	posMaildir := maildir.Dir(filepath.Join(c.UserMaildirPath, posMailbox))
 
 	err := posMaildir.Create()
 	if err != nil {
 		c.Error("Error while creating Maildir for new mailbox", err)
+		node.lock.RUnlock()
 		return false
 	}
 
 	// Construct path to new CRDT file.
-	posMailboxCRDTPath := filepath.Join(node.Contexts[clientID].UserCRDTPath, fmt.Sprintf("%s.log", posMailbox))
+	posMailboxCRDTPath := filepath.Join(c.UserCRDTPath, fmt.Sprintf("%s.log", posMailbox))
 
 	// Initialize new ORSet for new mailbox.
 	posMailboxCRDT, err := crdt.InitORSetWithFile(posMailboxCRDTPath)
@@ -809,21 +795,26 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 			log.Printf("[imap.Create] ... done. Exiting.\n")
 		}
 
+		node.lock.RUnlock()
+
 		// Exit node.
 		os.Exit(1)
 	}
 
+	node.lock.RUnlock()
+	node.lock.Lock()
+
 	// Place newly created CRDT in mailbox structure.
-	node.MailboxStructure[node.Contexts[clientID].UserName][posMailbox] = posMailboxCRDT
+	node.MailboxStructure[c.UserName][posMailbox] = posMailboxCRDT
 
 	// Initialize contents slice for new mailbox to track
 	// message sequence numbers in it.
-	node.MailboxContents[node.Contexts[clientID].UserName][posMailbox] = make([]string, 0, 6)
+	node.MailboxContents[c.UserName][posMailbox] = make([]string, 0, 6)
 
 	// If succeeded, add a new folder in user's main CRDT
 	// and synchronise it to other replicas.
 	err = userMainCRDT.Add(posMailbox, func(payload string) {
-		syncChan <- fmt.Sprintf("create|%s|%s|%s", node.Contexts[clientID].UserName, base64.StdEncoding.EncodeToString([]byte(posMailbox)), payload)
+		syncChan <- fmt.Sprintf("create|%s|%s|%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(posMailbox)), payload)
 	})
 	if err != nil {
 
@@ -833,8 +824,8 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 
 		// Remove just added CRDT of new maildir from mailbox structure
 		// and corresponding contents slice.
-		delete(node.MailboxStructure[node.Contexts[clientID].UserName], posMailbox)
-		delete(node.MailboxContents[node.Contexts[clientID].UserName], posMailbox)
+		delete(node.MailboxStructure[c.UserName], posMailbox)
+		delete(node.MailboxContents[c.UserName], posMailbox)
 
 		log.Printf("[imap.Create] ... done. Removing just created Maildir completely...\n")
 
@@ -847,12 +838,16 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 			log.Printf("[imap.Create] ... done. Exiting.\n")
 		}
 
+		node.lock.Unlock()
+
 		// Exit node.
 		os.Exit(1)
 	}
 
+	node.lock.Unlock()
+
 	// Send success answer.
-	err = comm.InternalSend(c.Conn, fmt.Sprintf("%s OK CREATE completed", req.Tag), cLocal, cRemote)
+	err = c.InternalSend(true, fmt.Sprintf("%s OK CREATE completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -863,24 +858,14 @@ func (node *IMAPNode) Create(c *Connection, req *Request, clientID string, syncC
 
 // Delete attempts to remove an existing mailbox with
 // all included content in CRDT as well as file system.
-func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncChan chan string) bool {
+func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
-	// Save local and remote address of current connection
-	// for later use in logging of communication.
-	cLocal := c.Conn.LocalAddr().String()
-	cRemote := c.Conn.RemoteAddr().String()
+	if (c.IMAPState != AUTHENTICATED) && (c.IMAPState != MAILBOX) {
 
-	// Lock node exclusively and unlock whenever
-	// this handler exits.
-	node.lock.Lock()
-	defer node.lock.Unlock()
-
-	if (node.Contexts[clientID].IMAPState != AUTHENTICATED) && (node.Contexts[clientID].IMAPState != MAILBOX) {
-
-		// If connection was not correct state when this
+		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command DELETE cannot be executed in this state", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command DELETE cannot be executed in this state", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -896,7 +881,7 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 
 		// If payload did not contain exactly one element,
 		// this is a client error. Return BAD statement.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command DELETE was not sent with exactly one parameter", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command DELETE was not sent with exactly one parameter", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -913,7 +898,7 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 
 		// If mailbox to-be-deleted was named INBOX,
 		// this is a client error. Return NO response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s NO Forbidden to delete INBOX", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s NO Forbidden to delete INBOX", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -922,9 +907,12 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 		return true
 	}
 
+	node.lock.Lock()
+	defer node.lock.Unlock()
+
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
-	userMainCRDT := node.MailboxStructure[node.Contexts[clientID].UserName]["Structure"]
+	userMainCRDT := node.MailboxStructure[c.UserName]["Structure"]
 
 	// TODO: Add routines to take care of mailboxes that
 	//       are tagged with a \Noselect tag.
@@ -932,9 +920,7 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 	// Remove element from user's main CRDT and send out
 	// remove update operations to all other replicas.
 	err := userMainCRDT.Remove(delMailbox, func(payload string) {
-
-		syncChan <- fmt.Sprintf("delete|%s|%s|%s", node.Contexts[clientID].UserName, base64.StdEncoding.EncodeToString([]byte(delMailbox)), payload)
-
+		syncChan <- fmt.Sprintf("delete|%s|%s|%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(delMailbox)), payload)
 	})
 	if err != nil {
 
@@ -943,7 +929,7 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 		if err.Error() == "element to be removed not found in set" {
 
 			// If so, return a NO response.
-			err := comm.InternalSend(c.Conn, fmt.Sprintf("%s NO Cannot delete folder that does not exist", req.Tag), cLocal, cRemote)
+			err := c.InternalSend(true, fmt.Sprintf("%s NO Cannot delete folder that does not exist", req.Tag))
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return false
@@ -962,11 +948,11 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 
 	// Remove CRDT from mailbox structure and corresponding
 	// mail contents slice.
-	delete(node.MailboxStructure[node.Contexts[clientID].UserName], delMailbox)
-	delete(node.MailboxContents[node.Contexts[clientID].UserName], delMailbox)
+	delete(node.MailboxStructure[c.UserName], delMailbox)
+	delete(node.MailboxContents[c.UserName], delMailbox)
 
 	// Construct path to CRDT file to delete.
-	delMailboxCRDTPath := filepath.Join(node.Contexts[clientID].UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
+	delMailboxCRDTPath := filepath.Join(c.UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
 
 	// Remove CRDT file of mailbox.
 	err = os.Remove(delMailboxCRDTPath)
@@ -978,7 +964,7 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 
 	// Remove files associated with deleted mailbox
 	// from stable storage.
-	delMaildir := maildir.Dir(filepath.Join(node.Contexts[clientID].UserMaildirPath, delMailbox))
+	delMaildir := maildir.Dir(filepath.Join(c.UserMaildirPath, delMailbox))
 
 	err = delMaildir.Remove()
 	if err != nil {
@@ -988,7 +974,7 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 	}
 
 	// Send success answer.
-	err = comm.InternalSend(c.Conn, fmt.Sprintf("%s OK DELETE completed", req.Tag), cLocal, cRemote)
+	err = c.InternalSend(true, fmt.Sprintf("%s OK DELETE completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -999,24 +985,14 @@ func (node *IMAPNode) Delete(c *Connection, req *Request, clientID string, syncC
 
 // List allows clients to learn about the mailboxes
 // available and also returns the hierarchy delimiter.
-func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncChan chan string) bool {
+func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
-	// Save local and remote address of current connection
-	// for later use in logging of communication.
-	cLocal := c.Conn.LocalAddr().String()
-	cRemote := c.Conn.RemoteAddr().String()
+	if (c.IMAPState != AUTHENTICATED) && (c.IMAPState != MAILBOX) {
 
-	// Lock node exclusively and unlock whenever
-	// this handler exits.
-	node.lock.Lock()
-	defer node.lock.Unlock()
-
-	if (node.Contexts[clientID].IMAPState != AUTHENTICATED) && (node.Contexts[clientID].IMAPState != MAILBOX) {
-
-		// If connection was not correct state when this
+		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command LIST cannot be executed in this state", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command LIST cannot be executed in this state", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1032,7 +1008,7 @@ func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncCha
 
 		// If payload did not contain between exactly two elements,
 		// this is a client error. Return BAD statement.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command LIST was not sent with exactly two arguments", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command LIST was not sent with exactly two arguments", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1045,7 +1021,7 @@ func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncCha
 
 		// If second argument is not one of two wildcards,
 		// this is a client error. Return BAD statement.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command LIST needs either '%%' or '*' as mailbox name", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command LIST needs either '%%' or '*' as mailbox name", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1054,9 +1030,11 @@ func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncCha
 		return true
 	}
 
+	node.lock.RLock()
+
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
-	userMainCRDT := node.MailboxStructure[node.Contexts[clientID].UserName]
+	userMainCRDT := node.MailboxStructure[c.UserName]
 
 	// Reserve space for answer.
 	listAnswerLines := make([]string, 0, (len(userMainCRDT) - 1))
@@ -1079,10 +1057,12 @@ func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncCha
 		}
 	}
 
+	node.lock.RUnlock()
+
 	// Send out LIST response lines.
 	for _, listAnswerLine := range listAnswerLines {
 
-		err := comm.InternalSend(c.Conn, listAnswerLine, cLocal, cRemote)
+		err := c.InternalSend(true, listAnswerLine)
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1090,7 +1070,7 @@ func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncCha
 	}
 
 	// Send success answer.
-	err := comm.InternalSend(c.Conn, fmt.Sprintf("%s OK LIST completed", req.Tag), cLocal, cRemote)
+	err := c.InternalSend(true, fmt.Sprintf("%s OK LIST completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -1102,34 +1082,19 @@ func (node *IMAPNode) List(c *Connection, req *Request, clientID string, syncCha
 // Mail functions
 
 // Append puts supplied message into specified mailbox.
-func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncChan chan string) bool {
+func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
-	// Arguments of append command.
 	var mailbox string
 	var flagsRaw string
 	var dateTimeRaw string
 	var numBytesRaw string
 
-	// Save local and remote address of current connection
-	// for later use in logging of communication.
-	cLocal := c.Conn.LocalAddr().String()
-	cRemote := c.Conn.RemoteAddr().String()
+	if (c.IMAPState != AUTHENTICATED) && (c.IMAPState != MAILBOX) {
 
-	// Lock node.
-	node.lock.Lock()
-
-	// Save current state of IMAP connection.
-	curIMAPState := node.Contexts[clientID].IMAPState
-
-	// Unlock node again.
-	node.lock.Unlock()
-
-	if (curIMAPState != AUTHENTICATED) && (curIMAPState != MAILBOX) {
-
-		// If connection was not correct state when this
+		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1147,7 +1112,7 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 		// If payload did not contain between two and four
 		// elements, this is a client error.
 		// Return BAD statement.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command APPEND was not sent with appropriate number of parameters", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND was not sent with appropriate number of parameters", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1188,7 +1153,7 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 
 			// Parsing flags from APPEND request produced
 			// an error. Return tagged BAD response.
-			err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), cLocal, cRemote)
+			err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return false
@@ -1215,7 +1180,7 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 
 		// If we were not able to parse out the number,
 		// it was probably a client error. Send tagged BAD.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command APPEND did not contain proper literal data byte number", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND did not contain proper literal data byte number", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1224,41 +1189,42 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 		return true
 	}
 
-	// Lock node.
-	node.lock.Lock()
+	node.lock.RLock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
-	userMainCRDT := node.MailboxStructure[node.Contexts[clientID].UserName]["Structure"]
-
-	// Unlock node again.
-	node.lock.Unlock()
+	userMainCRDT := node.MailboxStructure[c.UserName]["Structure"]
 
 	if userMainCRDT.Lookup(mailbox, true) != true {
 
 		// If mailbox to append message to does not exist,
 		// this is a client error. Return NO response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
+			node.lock.RUnlock()
 			return false
 		}
+
+		node.lock.RUnlock()
 
 		return true
 	}
 
 	// Send command continuation to client.
-	err = comm.InternalSend(c.Conn, "+ Ready for literal data", cLocal, cRemote)
+	err = c.InternalSend(true, "+ Ready for literal data")
 	if err != nil {
 		c.Error("Encountered send error", err)
+		node.lock.RUnlock()
 		return false
 	}
 
 	// Signal proxying distributor that we expect an
 	// inbound answer from the client.
-	err = c.SignalAwaitingLiteral(numBytes)
+	err = c.SignalAwaitingLiteral(true, numBytes)
 	if err != nil {
 		c.Error("Encountered send error", err)
+		node.lock.RUnlock()
 		return false
 	}
 
@@ -1266,24 +1232,24 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 	msgBuffer := make([]byte, numBytes)
 
 	// Read in that amount from connection to distributor.
-	_, err = io.ReadFull(c.Reader, msgBuffer)
+	_, err = io.ReadFull(c.IncReader, msgBuffer)
 	if err != nil {
 		c.Error("Encountered error while reading distributor literal data", err)
+		node.lock.RUnlock()
 		return false
 	}
-
-	// Lock node exclusively and unlock whenever
-	// this handler exits.
-	node.lock.Lock()
-	defer node.lock.Unlock()
 
 	// Construct path to maildir on node.
 	var appMaildir maildir.Dir
 	if mailbox == "INBOX" {
-		appMaildir = maildir.Dir(node.Contexts[clientID].UserMaildirPath)
+		appMaildir = maildir.Dir(c.UserMaildirPath)
 	} else {
-		appMaildir = maildir.Dir(filepath.Join(node.Contexts[clientID].UserMaildirPath, mailbox))
+		appMaildir = maildir.Dir(filepath.Join(c.UserMaildirPath, mailbox))
 	}
+
+	node.lock.RUnlock()
+	node.lock.Lock()
+	defer node.lock.Unlock()
 
 	// Open a new Maildir delivery.
 	appDelivery, err := appMaildir.NewDelivery()
@@ -1322,15 +1288,15 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 	mailFileName := filepath.Base(mailFileNamePath)
 
 	// Retrieve CRDT of mailbox to append mail to.
-	appMailboxCRDT := node.MailboxStructure[node.Contexts[clientID].UserName][mailbox]
+	appMailboxCRDT := node.MailboxStructure[c.UserName][mailbox]
 
 	// Append new mail to mailbox' contents CRDT.
-	node.MailboxContents[node.Contexts[clientID].UserName][mailbox] = append(node.MailboxContents[node.Contexts[clientID].UserName][mailbox], mailFileName)
+	node.MailboxContents[c.UserName][mailbox] = append(node.MailboxContents[c.UserName][mailbox], mailFileName)
 
 	// Add new mail to mailbox' CRDT and send update
 	// message to other replicas.
 	err = appMailboxCRDT.Add(mailFileName, func(payload string) {
-		syncChan <- fmt.Sprintf("append|%s|%s|%s;%s", node.Contexts[clientID].UserName, base64.StdEncoding.EncodeToString([]byte(mailbox)), payload, base64.StdEncoding.EncodeToString(msgBuffer))
+		syncChan <- fmt.Sprintf("append|%s|%s|%s;%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(mailbox)), payload, base64.StdEncoding.EncodeToString(msgBuffer))
 	})
 	if err != nil {
 
@@ -1351,7 +1317,7 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 	}
 
 	// Send success answer.
-	err = comm.InternalSend(c.Conn, fmt.Sprintf("%s OK APPEND completed", req.Tag), cLocal, cRemote)
+	err = c.InternalSend(true, fmt.Sprintf("%s OK APPEND completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -1363,24 +1329,14 @@ func (node *IMAPNode) Append(c *Connection, req *Request, clientID string, syncC
 // Expunge deletes messages permanently from currently
 // selected mailbox that have been flagged as Deleted
 // prior to calling this function.
-func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, syncChan chan string) bool {
+func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
-	// Save local and remote address of current connection
-	// for later use in logging of communication.
-	cLocal := c.Conn.LocalAddr().String()
-	cRemote := c.Conn.RemoteAddr().String()
+	if c.IMAPState != MAILBOX {
 
-	// Lock node exclusively and unlock whenever
-	// this handler exits.
-	node.lock.Lock()
-	defer node.lock.Unlock()
-
-	if node.Contexts[clientID].IMAPState != MAILBOX {
-
-		// If connection was not correct state when this
+		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD No mailbox selected to expunge", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD No mailbox selected to expunge", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1393,7 +1349,7 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 
 		// If payload was not empty to EXPUNGE command,
 		// this is a client error. Return BAD statement.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command EXPUNGE was sent with extra parameters", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command EXPUNGE was sent with extra parameters", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1402,21 +1358,13 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 		return true
 	}
 
-	// Retrieve CRDT of mailbox to expunge.
-	expMailboxCRDT := node.MailboxStructure[node.Contexts[clientID].UserName][node.Contexts[clientID].SelectedMailbox]
-
 	// Construct path to Maildir to expunge.
 	var expMaildir maildir.Dir
-	if node.Contexts[clientID].SelectedMailbox == "INBOX" {
-		expMaildir = maildir.Dir(filepath.Join(node.Contexts[clientID].UserMaildirPath, "cur"))
+	if c.SelectedMailbox == "INBOX" {
+		expMaildir = maildir.Dir(filepath.Join(c.UserMaildirPath, "cur"))
 	} else {
-		expMaildir = maildir.Dir(filepath.Join(node.Contexts[clientID].UserMaildirPath, node.Contexts[clientID].SelectedMailbox, "cur"))
+		expMaildir = maildir.Dir(filepath.Join(c.UserMaildirPath, c.SelectedMailbox, "cur"))
 	}
-
-	// Save all mails possibly to delete and
-	// amount of these files.
-	expMails := node.MailboxContents[node.Contexts[clientID].UserName][node.Contexts[clientID].SelectedMailbox]
-	numExpMails := len(expMails)
 
 	// Reserve space for mails to expunge.
 	expMailNums := make([]int, 0, 6)
@@ -1425,9 +1373,20 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 	// individual remove operations.
 	var expAnswerLines []string
 
+	node.lock.RLock()
+
+	// Save all mails possibly to delete and
+	// amount of these files.
+	expMails := node.MailboxContents[c.UserName][c.SelectedMailbox]
+	numExpMails := len(expMails)
+
+	node.lock.RUnlock()
+
 	// Only do the work if there are any mails
 	// present in mailbox.
 	if numExpMails > 0 {
+
+		node.lock.Lock()
 
 		// Iterate over all mail files in reverse order.
 		for i := (numExpMails - 1); i >= 0; i-- {
@@ -1436,6 +1395,7 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 			mailFlags, err := expMaildir.Flags(expMails[i], false)
 			if err != nil {
 				c.Error("Encountered error while retrieving flags for expunging mails", err)
+				node.lock.Unlock()
 				return false
 			}
 
@@ -1449,17 +1409,22 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 		// Reserve space for answer lines.
 		expAnswerLines = make([]string, 0, len(expMailNums))
 
+		// Retrieve CRDT of mailbox to expunge.
+		expMailboxCRDT := node.MailboxStructure[c.UserName][c.SelectedMailbox]
+
 		for _, msgNum := range expMailNums {
 
 			// Remove each mail to expunge from mailbox CRDT.
 			err := expMailboxCRDT.Remove(expMails[msgNum], func(payload string) {
-				syncChan <- fmt.Sprintf("expunge|%s|%s|%s", node.Contexts[clientID].UserName, base64.StdEncoding.EncodeToString([]byte(node.Contexts[clientID].SelectedMailbox)), payload)
+				syncChan <- fmt.Sprintf("expunge|%s|%s|%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(c.SelectedMailbox)), payload)
 			})
 			if err != nil {
 
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
 				log.Printf("[imap.Expunge] Failed to remove mails from user's selected mailbox CRDT: %s\n", err.Error())
+
+				node.lock.Unlock()
 
 				// Exit node.
 				os.Exit(1)
@@ -1472,6 +1437,7 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 			err = os.Remove(expMailPath)
 			if err != nil {
 				c.Error("Error while removing expunged mail file from stable storage", err)
+				node.lock.Unlock()
 				return false
 			}
 
@@ -1483,10 +1449,12 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 			expAnswerLines = append(expAnswerLines, fmt.Sprintf("* %d EXPUNGE", realMsgNum))
 		}
 
+		node.lock.Unlock()
+
 		// Send out FETCH part with new flags.
 		for _, expAnswerLine := range expAnswerLines {
 
-			err := comm.InternalSend(c.Conn, expAnswerLine, cLocal, cRemote)
+			err := c.InternalSend(true, expAnswerLine)
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return false
@@ -1495,7 +1463,7 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 	}
 
 	// Send success answer.
-	err := comm.InternalSend(c.Conn, fmt.Sprintf("%s OK EXPUNGE completed", req.Tag), cLocal, cRemote)
+	err := c.InternalSend(true, fmt.Sprintf("%s OK EXPUNGE completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -1507,30 +1475,18 @@ func (node *IMAPNode) Expunge(c *Connection, req *Request, clientID string, sync
 // Store takes in message sequence numbers and some set
 // of flags to change in those messages and changes the
 // attributes for these mails throughout the system.
-func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncChan chan string) bool {
-
-	var err error
+func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
 	// Set updated flags list indicator
 	// initially to false.
 	silent := false
 
-	// Save local and remote address of current connection
-	// for later use in logging of communication.
-	cLocal := c.Conn.LocalAddr().String()
-	cRemote := c.Conn.RemoteAddr().String()
+	if c.IMAPState != MAILBOX {
 
-	// Lock node exclusively and unlock whenever
-	// this handler exits.
-	node.lock.Lock()
-	defer node.lock.Unlock()
-
-	if node.Contexts[clientID].IMAPState != MAILBOX {
-
-		// If connection was not correct state when this
+		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD No mailbox selected for store", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD No mailbox selected for store", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1547,7 +1503,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 		// If payload did not contain at least three
 		// elements, this is a client error.
 		// Return BAD statement.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Command STORE was not sent with three parameters", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command STORE was not sent with three parameters", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1556,13 +1512,20 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 		return true
 	}
 
+	node.lock.RLock()
+
+	// Retrieve number of messages in mailbox.
+	lenMailboxContents := len(node.MailboxContents[c.UserName][c.SelectedMailbox])
+
+	node.lock.RUnlock()
+
 	// Parse sequence numbers argument.
-	msgNums, err := ParseSeqNumbers(storeArgs[0], node.MailboxContents[node.Contexts[clientID].UserName][node.Contexts[clientID].SelectedMailbox])
+	msgNums, err := ParseSeqNumbers(storeArgs[0], lenMailboxContents)
 	if err != nil {
 
 		// Parsing sequence numbers from STORE request produced
 		// an error. Return tagged BAD response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1581,7 +1544,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 		// If supplied data item type is none of the
 		// supported ones, this is a client error.
 		// Send tagged BAD response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Unknown data item type specified", req.Tag), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Unknown data item type specified", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1602,7 +1565,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 
 		// Parsing flags from STORE request produced
 		// an error. Return tagged BAD response.
-		err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), cLocal, cRemote)
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1614,10 +1577,10 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 	// Set currently selected mailbox with respect to special
 	// case of INBOX as current location.
 	var selectedMailbox string
-	if node.Contexts[clientID].SelectedMailbox == "INBOX" {
-		selectedMailbox = node.Contexts[clientID].UserMaildirPath
+	if c.SelectedMailbox == "INBOX" {
+		selectedMailbox = c.UserMaildirPath
 	} else {
-		selectedMailbox = filepath.Join(node.Contexts[clientID].UserMaildirPath, node.Contexts[clientID].SelectedMailbox)
+		selectedMailbox = filepath.Join(c.UserMaildirPath, c.SelectedMailbox)
 	}
 
 	// Prepare answer slice.
@@ -1656,8 +1619,10 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 			newMailFlags = append(newMailFlags, 'T')
 		}
 
+		node.lock.RLock()
+
 		// Retrieve mail file name.
-		mailFileName := node.MailboxContents[node.Contexts[clientID].UserName][node.Contexts[clientID].SelectedMailbox][msgNum]
+		mailFileName := node.MailboxContents[c.UserName][c.SelectedMailbox][msgNum]
 
 		// Read message contents from file.
 		mailFileContents, err := ioutil.ReadFile(filepath.Join(selectedMailbox, "cur", mailFileName))
@@ -1672,6 +1637,8 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 			c.Error("Error while retrieving flags from mail file", err)
 			return false
 		}
+
+		node.lock.RUnlock()
 
 		// Check if supplied flags should be added
 		// to existing flags if not yet present.
@@ -1715,16 +1682,19 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 		// across the system or if we can save the energy.
 		if mailFlags != string(newMailFlags) {
 
+			node.lock.Lock()
+
 			// Set just constructed new flags string in mail's
 			// file name (renaming it).
 			newMailFileName, err := mailMaildir.SetFlags(mailFileName, string(newMailFlags), false)
 			if err != nil {
 				c.Error("Error renaming mail file in STORE operation", err)
+				node.lock.Unlock()
 				return false
 			}
 
 			// Save CRDT of mailbox.
-			storeMailboxCRDT := node.MailboxStructure[node.Contexts[clientID].UserName][node.Contexts[clientID].SelectedMailbox]
+			storeMailboxCRDT := node.MailboxStructure[c.UserName][c.SelectedMailbox]
 
 			// First, remove the former name of the mail file
 			// but do not yet send out an update operation.
@@ -1737,6 +1707,8 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 				// log file. Reverting actions were already taken, log error.
 				log.Printf("[imap.Store] Failed to remove old mail name from selected mailbox CRDT: %s\n", err.Error())
 
+				node.lock.Unlock()
+
 				// Exit node.
 				os.Exit(1)
 			}
@@ -1744,7 +1716,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 			// Second, add the new mail file's name and finally
 			// instruct all other nodes to do the same.
 			err = storeMailboxCRDT.Add(newMailFileName, func(payload string) {
-				syncChan <- fmt.Sprintf("store|%s|%s|%s|%s;%s", node.Contexts[clientID].UserName, base64.StdEncoding.EncodeToString([]byte(node.Contexts[clientID].SelectedMailbox)), rmvElements, payload, base64.StdEncoding.EncodeToString(mailFileContents))
+				syncChan <- fmt.Sprintf("store|%s|%s|%s|%s;%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(c.SelectedMailbox)), rmvElements, payload, base64.StdEncoding.EncodeToString(mailFileContents))
 			})
 			if err != nil {
 
@@ -1752,13 +1724,17 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 				// log file. Reverting actions were already taken, log error.
 				log.Printf("[imap.Store] Failed to add renamed mail name to selected mailbox CRDT: %s\n", err.Error())
 
+				node.lock.Unlock()
+
 				// Exit node.
 				os.Exit(1)
 			}
 
 			// If we are done with that, also replace the mail's
 			// file name in the corresponding contents slice.
-			node.MailboxContents[node.Contexts[clientID].UserName][node.Contexts[clientID].SelectedMailbox][msgNum] = newMailFileName
+			node.MailboxContents[c.UserName][c.SelectedMailbox][msgNum] = newMailFileName
+
+			node.lock.Unlock()
 		}
 
 		// Check if client requested update information.
@@ -1827,7 +1803,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 		// Send out FETCH part with new flags.
 		for _, answerLine := range answerLines {
 
-			err = comm.InternalSend(c.Conn, answerLine, cLocal, cRemote)
+			err = c.InternalSend(true, answerLine)
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return false
@@ -1836,7 +1812,7 @@ func (node *IMAPNode) Store(c *Connection, req *Request, clientID string, syncCh
 	}
 
 	// Send success answer.
-	err = comm.InternalSend(c.Conn, fmt.Sprintf("%s OK STORE completed", req.Tag), cLocal, cRemote)
+	err = c.InternalSend(true, fmt.Sprintf("%s OK STORE completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false

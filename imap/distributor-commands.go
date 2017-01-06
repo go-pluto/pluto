@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"strconv"
 	"strings"
 
@@ -21,7 +20,7 @@ func (distr *Distributor) Capability(c *Connection, req *Request) bool {
 
 		// If payload was not empty to CAPABILITY command,
 		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command CAPABILITY was sent with extra parameters", req.Tag))
+		err := c.Send(true, fmt.Sprintf("%s BAD Command CAPABILITY was sent with extra parameters", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -34,11 +33,14 @@ func (distr *Distributor) Capability(c *Connection, req *Request) bool {
 	// This means, AUTH=PLAIN is allowed and nothing else.
 	// STARTTLS will be answered but is not listed as
 	// each connection already is a TLS connection.
-	err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 AUTH=PLAIN\r\n%s OK CAPABILITY completed", req.Tag))
+	err := c.Send(true, fmt.Sprintf("* CAPABILITY IMAP4rev1 AUTH=PLAIN\r\n%s OK CAPABILITY completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
 	}
+
+	// TODO: Change returned capabilites based on IMAP state of
+	//       connection, e.g. more capabilites if authenticated.
 
 	return true
 }
@@ -52,7 +54,7 @@ func (distr *Distributor) Logout(c *Connection, req *Request) bool {
 
 		// If payload was not empty to LOGOUT command,
 		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command LOGOUT was sent with extra parameters", req.Tag))
+		err := c.Send(true, fmt.Sprintf("%s BAD Command LOGOUT was sent with extra parameters", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -62,52 +64,22 @@ func (distr *Distributor) Logout(c *Connection, req *Request) bool {
 	}
 
 	// If already a worker was assigned, signal logout.
-	if c.Worker != "" {
-
-		distr.lock.RLock()
-
-		// Store worker connection information.
-		workerConn := distr.Connections[c.Worker]
-		workerIP := distr.Config.Workers[c.Worker].IP
-		workerPort := distr.Config.Workers[c.Worker].MailPort
-
-		distr.lock.RUnlock()
-
-		// Inform worker node about which session will log out.
-		conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnTimeout, distr.Config.IntlConnRetry)
-		if err != nil {
-			c.Error("Encountered send error when distributor was signalling context to worker", err)
-			return false
-		}
-
-		distr.lock.Lock()
-
-		// Replace stored connection by possibly new one.
-		distr.Connections[c.Worker] = conn
-
-		distr.lock.Unlock()
+	if c.OutConn != nil {
 
 		// Signal to worker node that session is done.
-		if err := c.SignalSessionDone(conn); err != nil {
+		err := c.SignalSessionDone(false)
+		if err != nil {
 			c.Error("Encountered send error when distributor was signalling end to worker", err)
 			return false
 		}
 	}
 
 	// Signal success to client.
-	err := c.Send(fmt.Sprintf("* BYE Terminating connection\r\n%s OK LOGOUT completed", req.Tag))
+	err := c.Send(true, fmt.Sprintf("* BYE Terminating connection\r\n%s OK LOGOUT completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
 	}
-
-	// Delete context information from connection struct.
-	c.Worker = ""
-	c.UserToken = ""
-	c.UserName = ""
-
-	// Terminate connection.
-	c.Terminate()
 
 	return true
 }
@@ -120,7 +92,7 @@ func (distr *Distributor) StartTLS(c *Connection, req *Request) bool {
 
 		// If payload was not empty to STARTTLS command,
 		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command STARTTLS was sent with extra parameters", req.Tag))
+		err := c.Send(true, fmt.Sprintf("%s BAD Command STARTTLS was sent with extra parameters", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -131,7 +103,7 @@ func (distr *Distributor) StartTLS(c *Connection, req *Request) bool {
 
 	// As the connection is already TLS encrypted,
 	// tell client that a TLS session is active.
-	err := c.Send(fmt.Sprintf("%s BAD TLS is already active", req.Tag))
+	err := c.Send(true, fmt.Sprintf("%s BAD TLS is already active", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -144,12 +116,12 @@ func (distr *Distributor) StartTLS(c *Connection, req *Request) bool {
 // as part of the distributor config.
 func (distr *Distributor) Login(c *Connection, req *Request) bool {
 
-	if (c.Worker != "") && (c.UserToken != "") && (c.UserName != "") {
+	if c.OutConn != nil {
 
 		// Connection was already once authenticated,
 		// cannot do that a second time, client error.
 		// Send tagged BAD response.
-		err := c.Send(fmt.Sprintf("%s BAD Command LOGIN cannot be executed in this state", req.Tag))
+		err := c.Send(true, fmt.Sprintf("%s BAD Command LOGIN cannot be executed in this state", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -165,7 +137,7 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 
 		// If payload did not contain exactly two elements,
 		// this is a client error. Return BAD statement.
-		err := c.Send(fmt.Sprintf("%s BAD Command LOGIN was not sent with exactly two parameters", req.Tag))
+		err := c.Send(true, fmt.Sprintf("%s BAD Command LOGIN was not sent with exactly two parameters", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -174,12 +146,12 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 		return true
 	}
 
-	id, clientID, err := distr.AuthAdapter.AuthenticatePlain(userCredentials[0], userCredentials[1], c.Conn.RemoteAddr().String())
+	id, clientID, err := distr.AuthAdapter.AuthenticatePlain(userCredentials[0], userCredentials[1], c.IncConn.RemoteAddr().String())
 	if err != nil {
 
 		// If supplied credentials failed to authenticate client,
 		// they are invalid. Return NO statement.
-		err := c.Send(fmt.Sprintf("%s NO Name and / or password wrong", req.Tag))
+		err := c.Send(true, fmt.Sprintf("%s NO Name and / or password wrong", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -195,13 +167,38 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 		return false
 	}
 
+	distr.lock.RLock()
+
+	// Store worker connection information.
+	workerIP := distr.Config.Workers[respWorker].IP
+	workerPort := distr.Config.Workers[respWorker].MailPort
+
+	distr.lock.RUnlock()
+
+	// Establish TLS connection to worker.
+	conn, err := comm.ReliableConnect(respWorker, fmt.Sprintf("%s:%s", workerIP, workerPort), distr.IntlTLSConfig, distr.Config.IntlConnRetry)
+	if err != nil {
+		c.Error("Internal connection failure", err)
+		return false
+	}
+
 	// Save context to connection.
-	c.Worker = respWorker
-	c.UserToken = clientID
+	c.OutConn = conn
+	c.OutReader = bufio.NewReader(conn)
+	c.OutIP = workerIP
+	c.OutPort = workerPort
+	c.ClientID = clientID
 	c.UserName = userCredentials[0]
 
+	// Inform worker node about which session just started.
+	err = c.SignalSessionStart(false)
+	if err != nil {
+		c.Error("Encountered send error when distributor was signalling context to worker", err)
+		return false
+	}
+
 	// Signal success to client.
-	err = c.Send(fmt.Sprintf("%s OK LOGIN completed", req.Tag))
+	err = c.Send(true, fmt.Sprintf("%s OK LOGIN completed", req.Tag))
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -214,34 +211,8 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 // node and the responsible worker node.
 func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 
-	distr.lock.RLock()
-
-	// Store worker connection information.
-	workerConn := distr.Connections[c.Worker]
-	workerIP := distr.Config.Workers[c.Worker].IP
-	workerPort := distr.Config.Workers[c.Worker].MailPort
-
-	distr.lock.RUnlock()
-
-	// Inform worker node about which session will continue.
-	conn, err := c.SignalSessionPrefixWorker(workerConn, "distributor", c.Worker, workerIP, workerPort, distr.IntlTLSConfig, distr.Config.IntlConnTimeout, distr.Config.IntlConnRetry)
-	if err != nil {
-		c.Error("Encountered send error when distributor was signalling context to worker", err)
-		return false
-	}
-
-	distr.lock.Lock()
-
-	// Replace stored connection by possibly new one.
-	distr.Connections[c.Worker] = conn
-
-	distr.lock.Unlock()
-
-	// Create a buffered reader from worker connection.
-	workerReader := bufio.NewReader(conn)
-
 	// Send received client command to worker node.
-	err = comm.InternalSend(conn, rawReq, "distributor", c.Worker)
+	err := c.InternalSend(false, rawReq)
 	if err != nil {
 		c.Error("Encountered send error to worker", err)
 		return false
@@ -251,7 +222,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	bufResp := make([]string, 0, 6)
 
 	// Receive incoming worker response.
-	curResp, err := comm.InternalReceive(workerReader)
+	curResp, err := c.InternalReceive(false)
 	if err != nil {
 		c.Error("Encountered receive error from worker", err)
 		return false
@@ -260,13 +231,13 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	// As long as the responsible worker has not
 	// indicated the end of the current operation,
 	// continue to buffer answers.
-	for (curResp != "> done <") && (curResp != "> error <") && (strings.HasPrefix(curResp, "> literal: ") != true) {
+	for (curResp != "> done <") && (strings.HasPrefix(curResp, "> literal: ") != true) {
 
 		// Append it to answer buffer.
 		bufResp = append(bufResp, curResp)
 
 		// Receive incoming worker response.
-		curResp, err = comm.InternalReceive(workerReader)
+		curResp, err = c.InternalReceive(false)
 		if err != nil {
 			c.Error("Encountered receive error from worker", err)
 			return false
@@ -276,7 +247,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	for i := range bufResp {
 
 		// Send all buffered worker answers to client.
-		err = c.Send(bufResp[i])
+		err = c.Send(true, bufResp[i])
 		if err != nil {
 			c.Error("Encountered send error to client", err)
 			return false
@@ -303,7 +274,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 		msgBuffer := make([]byte, numBytes)
 
 		// Read in that amount from connection to client.
-		_, err = io.ReadFull(c.Reader, msgBuffer)
+		_, err = io.ReadFull(c.IncReader, msgBuffer)
 		if err != nil {
 			c.Error("Encountered error while reading client literal data", err)
 			return false
@@ -311,7 +282,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 
 		// Pass on data to worker. Mails have to be ended by
 		// newline symbol.
-		_, err = fmt.Fprintf(conn, "%s", msgBuffer)
+		_, err = fmt.Fprintf(c.OutConn, "%s", msgBuffer)
 		if err != nil {
 			c.Error("Encountered passing send error to worker", err)
 			return false
@@ -321,7 +292,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 		bufResp := make([]string, 0, 6)
 
 		// Receive incoming worker response.
-		curResp, err := comm.InternalReceive(workerReader)
+		curResp, err := c.InternalReceive(false)
 		if err != nil {
 			c.Error("Encountered receive error from worker after literal data was sent", err)
 			return false
@@ -330,13 +301,13 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 		// As long as the responsible worker has not
 		// indicated the end of the current operation,
 		// continue to buffer answers.
-		for (curResp != "> done <") && (curResp != "> error <") {
+		for curResp != "> done <" {
 
 			// Append it to answer buffer.
 			bufResp = append(bufResp, curResp)
 
 			// Receive incoming worker response.
-			curResp, err = comm.InternalReceive(workerReader)
+			curResp, err = c.InternalReceive(false)
 			if err != nil {
 				c.Error("Encountered receive error from worker after literal data was sent", err)
 				return false
@@ -346,20 +317,11 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 		for i := range bufResp {
 
 			// Send all buffered worker answers to client.
-			err = c.Send(bufResp[i])
+			err = c.Send(true, bufResp[i])
 			if err != nil {
 				c.Error("Encountered send error to client after literal data was sent", err)
 				return false
 			}
-		}
-	}
-
-	// If the involved worker node indicated that an error
-	// occurred, terminate connection to client.
-	if curResp == "> error <" {
-		err = c.Terminate()
-		if err != nil {
-			log.Fatal(err)
 		}
 	}
 

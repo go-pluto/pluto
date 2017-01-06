@@ -84,7 +84,7 @@ func ParseRequest(req string) (*Request, error) {
 
 // ParseSeqNumbers returns complete and normalized list
 // of message sequence numbers for use in e.g. STORE command.
-func ParseSeqNumbers(recv string, mailboxContents []string) ([]int, error) {
+func ParseSeqNumbers(recv string, lenMailboxContents int) ([]int, error) {
 
 	// TODO: Check for each value if it is a valid sequence
 	//       number inside the provided mail list.
@@ -109,7 +109,7 @@ func ParseSeqNumbers(recv string, mailboxContents []string) ([]int, error) {
 
 			// If wildcard symbol was set as beginning range
 			// number, replace it with maximum number in mailbox.
-			numStart = len(mailboxContents)
+			numStart = lenMailboxContents
 
 			if numStart == 0 {
 
@@ -147,7 +147,7 @@ func ParseSeqNumbers(recv string, mailboxContents []string) ([]int, error) {
 
 				// If wildcard symbol was set as end number of range,
 				// replace it with maximum number in mailbox.
-				numEnd = len(mailboxContents)
+				numEnd = lenMailboxContents
 
 				if numEnd == 0 {
 

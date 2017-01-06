@@ -55,7 +55,6 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		IMAPNode: &IMAPNode{
 			lock:             new(sync.RWMutex),
 			Connections:      make(map[string]*tls.Conn),
-			Contexts:         make(map[string]*Context),
 			MailboxStructure: make(map[string]map[string]*crdt.ORSet),
 			MailboxContents:  make(map[string]map[string][]string),
 			Config:           config,
@@ -176,18 +175,12 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		return nil, err
 	}
 
-	// Try to connect to sync port of storage node to which this node
-	// sends data for long-term storage, but in background.
-	c, err := comm.ReliableConnect(worker.Name, "storage", config.Storage.IP, config.Storage.SyncPort, internalTLSConfig, config.IntlConnRetry)
-	if err != nil {
-		return nil, err
-	}
-
-	// Save connection for later use.
-	worker.Connections["storage"] = c
+	// Create subnet to distribute CRDT changes in.
+	curCRDTSubnet := make(map[string]string)
+	curCRDTSubnet["storage"] = fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.SyncPort)
 
 	// Init sending part of CRDT communication and send messages in background.
-	worker.SyncSendChan, err = comm.InitSender(worker.Name, sendCRDTLog, internalTLSConfig, config.IntlConnTimeout, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, worker.Connections)
+	worker.SyncSendChan, err = comm.InitSender(worker.Name, sendCRDTLog, internalTLSConfig, config.IntlConnTimeout, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
 	if err != nil {
 		return nil, err
 	}
@@ -241,16 +234,6 @@ func InitFailoverWorker(config *config.Config, workerName string) (*FailoverWork
 
 	log.Printf("[imap.InitFailoverWorker] Listening for incoming IMAP requests on %s.\n", failWorker.MailSocket.Addr())
 
-	// Try to connect to mail port of storage node to which this node
-	// forwards all traffic it received from distributor.
-	c, err := comm.ReliableConnect(failWorker.Name, "storage", config.Storage.IP, config.Storage.MailPort, failWorker.IntlTLSConfig, config.IntlConnRetry)
-	if err != nil {
-		return nil, err
-	}
-
-	// Save connection for later use.
-	failWorker.Connections["storage"] = c
-
 	return failWorker, nil
 }
 
@@ -284,48 +267,63 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 	}
 
 	// Create a new connection struct for incoming request.
-	c := NewConnection(tlsConn)
+	c := &IMAPConnection{
+		Connection: &Connection{
+			IncConn:   tlsConn,
+			IncReader: bufio.NewReader(tlsConn),
+		},
+		IMAPState: AUTHENTICATED,
+	}
 
 	// Receive opening information.
-	opening, err := comm.InternalReceive(c.Reader)
+	clientInfo, err := c.InternalReceive(true)
 	if err != nil {
-		c.ErrorLogOnly("Encountered receive error", err)
+		c.Error("Receive error waiting for client information", err)
+		return
+	}
+
+	worker.lock.RLock()
+
+	// Extract CRDT and Maildir location for later use.
+	CRDTLayerRoot := worker.Config.Workers[worker.Name].CRDTLayerRoot
+	MaildirRoot := worker.Config.Workers[worker.Name].MaildirRoot
+
+	worker.lock.RUnlock()
+
+	// Based on received client information, update IMAP
+	// connection to reflect these information.
+	_, err = c.UpdateClientContext(clientInfo, CRDTLayerRoot, MaildirRoot)
+	if err != nil {
+		c.Error("Error extracting client information", err)
+		return
+	}
+
+	// Receive actual client command.
+	rawReq, err := c.InternalReceive(true)
+	if err != nil {
+		c.Error("Encountered receive error waiting for first request", err)
 		return
 	}
 
 	// As long as the distributor node did not indicate that
-	// the system is about to shut down, we accept requests.
-	for opening != "> done <" {
-
-		// Extract the prefixed clientID and update or create context.
-		clientID, err := worker.UpdateClientContext(opening)
-		if err != nil {
-			c.ErrorLogOnly("Error extracting context", err)
-			return
-		}
-
-		// Receive incoming actual client command.
-		rawReq, err := comm.InternalReceive(c.Reader)
-		if err != nil {
-			c.ErrorLogOnly("Encountered receive error", err)
-			return
-		}
+	// the client connection was ended, we accept requests.
+	for rawReq != "> done <" {
 
 		// Parse received next raw request into struct.
 		req, err := ParseRequest(rawReq)
 		if err != nil {
 
 			// Signal error to client.
-			err := comm.InternalSend(c.Conn, err.Error(), worker.Name, "distributor")
+			err := c.InternalSend(true, err.Error())
 			if err != nil {
-				c.ErrorLogOnly("Encountered send error", err)
+				c.Error("Encountered send error", err)
 				return
 			}
 
 			// In case of failure, wait for next sent command.
-			rawReq, err = comm.InternalReceive(c.Reader)
+			rawReq, err = c.InternalReceive(true)
 			if err != nil {
-				c.ErrorLogOnly("Encountered receive error", err)
+				c.Error("Encountered receive error", err)
 				return
 			}
 
@@ -335,112 +333,114 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 
 		switch {
 
-		case rawReq == "> done <":
-			// Remove context of connection for this client
-			// from structure that keeps track of it.
-			// Effectively destroying all authentication and
-			// IMAP state information about this client.
-			delete(worker.Contexts, clientID)
-
 		case req.Command == "SELECT":
-			if ok := worker.Select(c, req, clientID, worker.SyncSendChan); ok {
+			if ok := worker.Select(c, req, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		case req.Command == "CREATE":
-			if ok := worker.Create(c, req, clientID, worker.SyncSendChan); ok {
+			if ok := worker.Create(c, req, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		case req.Command == "DELETE":
-			if ok := worker.Delete(c, req, clientID, worker.SyncSendChan); ok {
+			if ok := worker.Delete(c, req, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		case req.Command == "LIST":
-			if ok := worker.List(c, req, clientID, worker.SyncSendChan); ok {
+			if ok := worker.List(c, req, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		case req.Command == "APPEND":
-			if ok := worker.Append(c, req, clientID, worker.SyncSendChan); ok {
+			if ok := worker.Append(c, req, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		case req.Command == "EXPUNGE":
-			if ok := worker.Expunge(c, req, clientID, worker.SyncSendChan); ok {
+			if ok := worker.Expunge(c, req, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		case req.Command == "STORE":
-			if ok := worker.Store(c, req, clientID, worker.SyncSendChan); ok {
+			if ok := worker.Store(c, req, worker.SyncSendChan); ok {
 
 				// If successful, signal end of operation to distributor.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		default:
 			// Client sent inappropriate command. Signal tagged error.
-			err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag), worker.Name, "distributor")
+			err := c.InternalSend(true, fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
 			if err != nil {
-				c.ErrorLogOnly("Encountered send error", err)
+				c.Error("Encountered send error", err)
 				return
 			}
 
-			err = c.SignalSessionDone(nil)
+			err = c.SignalSessionDone(true)
 			if err != nil {
-				c.ErrorLogOnly("Encountered send error", err)
+				c.Error("Encountered send error", err)
 				return
 			}
 		}
 
 		// Receive next incoming proxied request.
-		opening, err = comm.InternalReceive(c.Reader)
+		rawReq, err = c.InternalReceive(true)
 		if err != nil {
-			c.ErrorLogOnly("Encountered receive error", err)
+			c.Error("Encountered receive error", err)
 			return
 		}
 	}
+
+	// Terminate connection after logout.
+	err = c.Terminate()
+	if err != nil {
+		log.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
+	}
+
+	// Set IMAP state to logged out.
+	c.IMAPState = LOGOUT
 }
 
 // RunFailover is the main method called when starting a
@@ -475,63 +475,53 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 	}
 
 	// Create a new connection struct for incoming request.
-	c := NewConnection(tlsConn)
+	c := &Connection{
+		IncConn:   tlsConn,
+		IncReader: bufio.NewReader(tlsConn),
+	}
 
 	// Receive opening information.
-	opening, err := comm.InternalReceive(c.Reader)
+	clientInfo, err := c.InternalReceive(true)
 	if err != nil {
-		c.ErrorLogOnly("Encountered receive error", err)
+		c.Error("Receive error waiting for client information", err)
+		return
+	}
+
+	// Connect via TLS to storage.
+	storageConn, err := comm.ReliableConnect("storage", fmt.Sprintf("%s:%s", failWorker.Config.Storage.IP, failWorker.Config.Storage.MailPort), failWorker.IntlTLSConfig, failWorker.Config.IntlConnRetry)
+	if err != nil {
+		c.Error("Internal connection failure", err)
+		return
+	}
+
+	// Save context to connection.
+	c.OutConn = storageConn
+	c.OutReader = bufio.NewReader(storageConn)
+	c.OutIP = failWorker.Config.Storage.IP
+	c.OutPort = failWorker.Config.Storage.MailPort
+
+	// Send storage node context about client.
+	err = c.SignalSessionStartFailover(false, clientInfo, failWorker.Name)
+	if err != nil {
+		c.Error("Failure while sending context from failover to storage", err)
+		return
+	}
+
+	// Receive actual client command.
+	rawReq, err := c.InternalReceive(true)
+	if err != nil {
+		c.Error("Encountered receive error waiting for first request", err)
 		return
 	}
 
 	// As long as the distributor node did not indicate that
-	// the system is about to shut down, we accept requests.
-	for opening != "> done <" {
-
-		// Extract the prefixed clientID.
-		clientID, err := failWorker.ExtractClientContext(opening)
-		if err != nil {
-			c.ErrorLogOnly("Error extracting context", err)
-			return
-		}
-
-		// Receive incoming actual client command.
-		rawReq, err := comm.InternalReceive(c.Reader)
-		if err != nil {
-			c.ErrorLogOnly("Encountered receive error", err)
-			return
-		}
-
-		failWorker.lock.RLock()
-
-		// Save connection information to storage for later use.
-		storageConn := failWorker.Connections["storage"]
-		storageIP := failWorker.Config.Storage.IP
-		storagePort := failWorker.Config.Storage.MailPort
-
-		failWorker.lock.RUnlock()
-
-		// Inform storage about which session will continue.
-		conn, err := c.SignalSessionPrefixStorage(clientID, storageConn, failWorker.Name, "storage", storageIP, storagePort, failWorker.IntlTLSConfig, failWorker.Config.IntlConnTimeout, failWorker.Config.IntlConnRetry)
-		if err != nil {
-			c.ErrorLogOnly("Encountered send error when failover worker signalled context to storage", err)
-			return
-		}
-
-		failWorker.lock.Lock()
-
-		// Replace stored connection by possibly new one.
-		failWorker.Connections["storage"] = conn
-
-		failWorker.lock.Unlock()
-
-		// Create a buffered reader from storage connection.
-		storageReader := bufio.NewReader(conn)
+	// the client connection was ended, we accept requests.
+	for rawReq != "> done <" {
 
 		// Send received client command to storage.
-		err = comm.InternalSend(conn, rawReq, failWorker.Name, "storage")
+		err = c.InternalSend(false, rawReq)
 		if err != nil {
-			c.ErrorLogOnly("Encountered send error to storage", err)
+			c.Error("Encountered send error to storage", err)
 			return
 		}
 
@@ -539,24 +529,24 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 		bufResp := make([]string, 0, 6)
 
 		// Receive incoming storage response.
-		curResp, err := comm.InternalReceive(storageReader)
+		curResp, err := c.InternalReceive(false)
 		if err != nil {
-			c.ErrorLogOnly("Encountered receive error from storage", err)
+			c.Error("Encountered receive error from storage", err)
 			return
 		}
 
 		// As long as the storage node has not indicated
 		// the end of the current operation, continue
 		// to buffer answers.
-		for (curResp != "> done <") && (curResp != "> error <") && (strings.HasPrefix(curResp, "> literal: ") != true) {
+		for (curResp != "> done <") && (strings.HasPrefix(curResp, "> literal: ") != true) {
 
 			// Append it to answer buffer.
 			bufResp = append(bufResp, curResp)
 
 			// Receive incoming storage response.
-			curResp, err = comm.InternalReceive(storageReader)
+			curResp, err = c.InternalReceive(false)
 			if err != nil {
-				c.ErrorLogOnly("Encountered receive error from storage", err)
+				c.Error("Encountered receive error from storage", err)
 				return
 			}
 		}
@@ -564,9 +554,9 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 		for i := range bufResp {
 
 			// Send all buffered storage answers to distributor.
-			err = comm.InternalSend(c.Conn, bufResp[i], failWorker.Name, "distributor")
+			err = c.InternalSend(true, bufResp[i])
 			if err != nil {
-				c.ErrorLogOnly("Encountered send error to distributor", err)
+				c.Error("Encountered send error to distributor", err)
 				return
 			}
 		}
@@ -583,14 +573,14 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 			// Convert string amount to int.
 			numBytes, err := strconv.Atoi(numBytesString)
 			if err != nil {
-				c.ErrorLogOnly("Encountered conversion error for string to int", err)
+				c.Error("Encountered conversion error for string to int", err)
 				return
 			}
 
 			// Signal distributor what amount of literal bytes we are expecting.
-			err = c.SignalAwaitingLiteral(numBytes)
+			err = c.SignalAwaitingLiteral(true, numBytes)
 			if err != nil {
-				c.ErrorLogOnly("Error during signalling distributor literal byte number", err)
+				c.Error("Error during signalling distributor literal byte number", err)
 				return
 			}
 
@@ -598,17 +588,16 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 			msgBuffer := make([]byte, numBytes)
 
 			// Read in that amount from connection to client.
-			_, err = io.ReadFull(c.Reader, msgBuffer)
+			_, err = io.ReadFull(c.IncReader, msgBuffer)
 			if err != nil {
-				c.ErrorLogOnly("Encountered error while reading client literal data", err)
+				c.Error("Encountered error while reading client literal data", err)
 				return
 			}
 
-			// Pass on data to storage. Mails have to be ended by
-			// newline symbol.
-			_, err = fmt.Fprintf(conn, "%s", msgBuffer)
+			// Pass on data to storage. Mails have to end with newline symbol.
+			_, err = fmt.Fprintf(c.OutConn, "%s", msgBuffer)
 			if err != nil {
-				c.ErrorLogOnly("Encountered passing send error to storage", err)
+				c.Error("Failure while passing mail message to storage", err)
 				return
 			}
 
@@ -616,24 +605,24 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 			bufResp := make([]string, 0, 6)
 
 			// Receive incoming storage response.
-			curResp, err := comm.InternalReceive(storageReader)
+			curResp, err := c.InternalReceive(false)
 			if err != nil {
-				c.ErrorLogOnly("Encountered receive error from storage after literal data was sent", err)
+				c.Error("Encountered receive error from storage after literal data was sent", err)
 				return
 			}
 
 			// As long as the storage node has not indicated
 			// the end of the current operation, continue
 			// to buffer answers.
-			for (curResp != "> done <") && (curResp != "> error <") {
+			for curResp != "> done <" {
 
 				// Append it to answer buffer.
 				bufResp = append(bufResp, curResp)
 
 				// Receive incoming storage response.
-				curResp, err = comm.InternalReceive(storageReader)
+				curResp, err = c.InternalReceive(false)
 				if err != nil {
-					c.ErrorLogOnly("Encountered receive error from storage after literal data was sent", err)
+					c.Error("Encountered receive error from storage after literal data was sent", err)
 					return
 				}
 			}
@@ -641,35 +630,40 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 			for i := range bufResp {
 
 				// Send all buffered storage answers to distributor.
-				err = comm.InternalSend(c.Conn, bufResp[i], failWorker.Name, "distributor")
+				err = c.InternalSend(true, bufResp[i])
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error to distributor after literal data was sent", err)
+					c.Error("Encountered send error to distributor after literal data was sent", err)
 					return
 				}
 			}
 		}
 
-		if (curResp == "> done <") || (strings.HasPrefix(curResp, "> literal: ")) {
-
-			// If successful, signal end of operation to distributor.
-			err := c.SignalSessionDone(nil)
-			if err != nil {
-				c.ErrorLogOnly("Encountered send error signalling done to distributor while in proxy", err)
-				return
-			}
-		} else if curResp == "> error <" {
-
-			// If the involved storage node indicated that an error
-			// occurred, terminate connection to client.
-			c.ErrorLogOnly("Storage indicated error, failover worker passed on", err)
+		// If successful, signal end of operation to distributor.
+		err = c.SignalSessionDone(true)
+		if err != nil {
+			c.Error("Encountered send error signalling done to distributor while in proxy", err)
 			return
 		}
 
 		// Receive next incoming proxied request.
-		opening, err = comm.InternalReceive(c.Reader)
+		rawReq, err = c.InternalReceive(true)
 		if err != nil {
-			c.ErrorLogOnly("Encountered receive error on failover waiting for next request", err)
+			c.Error("Encountered receive error on failover waiting for next request", err)
 			return
 		}
+	}
+
+	// If distributor sent a done signal, send along
+	// to storage node waiting for next request.
+	err = c.SignalSessionDone(false)
+	if err != nil {
+		c.Error("Failure signalling storage that session is done while in proxy", err)
+		return
+	}
+
+	// Terminate connection after logout.
+	err = c.Terminate()
+	if err != nil {
+		log.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
 	}
 }

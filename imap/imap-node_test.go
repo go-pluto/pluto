@@ -1,6 +1,7 @@
 package imap_test
 
 import (
+	"bufio"
 	"fmt"
 	"strings"
 	"testing"
@@ -314,10 +315,13 @@ func TestSelect(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestSelect] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -327,13 +331,13 @@ func TestSelect(t *testing.T) {
 		var answer string
 
 		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
+		err = c.Send(false, tt.in)
 		if err != nil {
 			t.Fatalf("[imap.TestSelect] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive answer to SELECT request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
 		}
@@ -346,7 +350,7 @@ func TestSelect(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
 			}
@@ -376,10 +380,13 @@ func TestCreate(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestCreate] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -389,13 +396,13 @@ func TestCreate(t *testing.T) {
 		var answer string
 
 		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
+		err = c.Send(false, tt.in)
 		if err != nil {
 			t.Fatalf("[imap.TestCreate] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive answer to CREATE request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestCreate] Error during receiving table test CREATE: %s\n", err.Error())
 		}
@@ -408,7 +415,7 @@ func TestCreate(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestCreate] Error during receiving table test CREATE: %s\n", err.Error())
 			}
@@ -438,10 +445,13 @@ func TestDelete(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestDelete] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -451,13 +461,13 @@ func TestDelete(t *testing.T) {
 		var answer string
 
 		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
+		err = c.Send(false, tt.in)
 		if err != nil {
 			t.Fatalf("[imap.TestDelete] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive answer to DELETE request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
 		}
@@ -470,7 +480,7 @@ func TestDelete(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
 			}
@@ -500,10 +510,13 @@ func TestList(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestList] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -513,13 +526,13 @@ func TestList(t *testing.T) {
 		var answer string
 
 		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
+		err = c.Send(false, tt.in)
 		if err != nil {
 			t.Fatalf("[imap.TestList] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive answer to LIST request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
 		}
@@ -532,7 +545,7 @@ func TestList(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
 			}
@@ -562,10 +575,13 @@ func TestAppend(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestAppend] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -577,21 +593,21 @@ func TestAppend(t *testing.T) {
 		if (i == 3) || (i == 5) || (i == 8) {
 
 			// Send mail message without additional newline.
-			_, err = fmt.Fprintf(c.Conn, "%s", tt.in)
+			_, err = fmt.Fprintf(c.OutConn, "%s", tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestAppend] Sending mail message to server failed with: %s\n", err.Error())
 			}
 		} else {
 
 			// Table test: send 'in' part of each line.
-			err = c.Send(tt.in)
+			err = c.Send(false, tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestAppend] Sending message to server failed with: %s\n", err.Error())
 			}
 		}
 
 		// Receive answer to APPEND request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
 		}
@@ -604,7 +620,7 @@ func TestAppend(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
 			}
@@ -634,10 +650,13 @@ func TestStore(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestStore] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -659,16 +678,19 @@ func TestStore(t *testing.T) {
 			}
 
 			// Create new connection struct.
-			c = imap.NewConnection(conn)
+			c = &imap.Connection{
+				OutConn:   conn,
+				OutReader: bufio.NewReader(conn),
+			}
 
 			// Consume mandatory IMAP greeting.
-			_, err = c.Receive()
+			_, err = c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestStore] Error during receiving initial server greeting: %s\n", err.Error())
 			}
 
 			// Now, send login command.
-			err = c.Send(tt.in)
+			err = c.Send(false, tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestStore] Sending message to server failed with: %s\n", err.Error())
 			}
@@ -676,7 +698,7 @@ func TestStore(t *testing.T) {
 		} else if (i == 2) || (i == 9) || (i == 11) || (i == 13) || (i == 15) || (i == 17) {
 
 			// Send mail message without additional newline.
-			_, err = fmt.Fprintf(c.Conn, "%s", tt.in)
+			_, err = fmt.Fprintf(c.OutConn, "%s", tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestStore] Sending mail message to server failed with: %s\n", err.Error())
 			}
@@ -684,14 +706,14 @@ func TestStore(t *testing.T) {
 		} else {
 
 			// Table test: send 'in' part of each line.
-			err = c.Send(tt.in)
+			err = c.Send(false, tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestStore] Sending message to server failed with: %s\n", err.Error())
 			}
 		}
 
 		// Receive answer to STORE request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestStore] Error during receiving table test STORE: %s\n", err.Error())
 		}
@@ -704,7 +726,7 @@ func TestStore(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestStore] Error during receiving table test STORE: %s\n", err.Error())
 			}
@@ -734,10 +756,13 @@ func TestExpunge(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestExpunge] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -749,21 +774,21 @@ func TestExpunge(t *testing.T) {
 		if (i == 3) || (i == 5) || (i == 7) || (i == 9) || (i == 11) {
 
 			// Send mail message without additional newline.
-			_, err = fmt.Fprintf(c.Conn, "%s", tt.in)
+			_, err = fmt.Fprintf(c.OutConn, "%s", tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestExpunge] Sending mail message to server failed with: %s\n", err.Error())
 			}
 		} else {
 
 			// Table test: send 'in' part of each line.
-			err = c.Send(tt.in)
+			err = c.Send(false, tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestExpunge] Sending message to server failed with: %s\n", err.Error())
 			}
 		}
 
 		// Receive answer to EXPUNGE request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 		}
@@ -776,7 +801,7 @@ func TestExpunge(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 			}
@@ -806,10 +831,13 @@ func TestProxiedSelect(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedSelect] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -819,13 +847,13 @@ func TestProxiedSelect(t *testing.T) {
 		var answer string
 
 		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
+		err = c.Send(false, tt.in)
 		if err != nil {
 			t.Fatalf("[imap.TestProxiedSelect] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive answer to SELECT request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestProxiedSelect] Error during receiving table test SELECT: %s\n", err.Error())
 		}
@@ -838,7 +866,7 @@ func TestProxiedSelect(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedSelect] Error during receiving table test SELECT: %s\n", err.Error())
 			}
@@ -868,10 +896,13 @@ func TestProxiedCreate(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedCreate] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -881,13 +912,13 @@ func TestProxiedCreate(t *testing.T) {
 		var answer string
 
 		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
+		err = c.Send(false, tt.in)
 		if err != nil {
 			t.Fatalf("[imap.TestProxiedCreate] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive answer to CREATE request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestProxiedCreate] Error during receiving table test CREATE: %s\n", err.Error())
 		}
@@ -900,7 +931,7 @@ func TestProxiedCreate(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedCreate] Error during receiving table test CREATE: %s\n", err.Error())
 			}
@@ -930,10 +961,13 @@ func TestProxiedDelete(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedDelete] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -943,13 +977,13 @@ func TestProxiedDelete(t *testing.T) {
 		var answer string
 
 		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
+		err = c.Send(false, tt.in)
 		if err != nil {
 			t.Fatalf("[imap.TestProxiedDelete] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive answer to DELETE request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestProxiedDelete] Error during receiving table test DELETE: %s\n", err.Error())
 		}
@@ -962,7 +996,7 @@ func TestProxiedDelete(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedDelete] Error during receiving table test DELETE: %s\n", err.Error())
 			}
@@ -992,10 +1026,13 @@ func TestProxiedList(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedList] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -1005,13 +1042,13 @@ func TestProxiedList(t *testing.T) {
 		var answer string
 
 		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
+		err = c.Send(false, tt.in)
 		if err != nil {
 			t.Fatalf("[imap.TestProxiedList] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive answer to LIST request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestProxiedList] Error during receiving table test LIST: %s\n", err.Error())
 		}
@@ -1024,7 +1061,7 @@ func TestProxiedList(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedList] Error during receiving table test LIST: %s\n", err.Error())
 			}
@@ -1054,10 +1091,13 @@ func TestProxiedAppend(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedAppend] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -1069,21 +1109,21 @@ func TestProxiedAppend(t *testing.T) {
 		if (i == 3) || (i == 5) || (i == 8) {
 
 			// Send mail message without additional newline.
-			_, err = fmt.Fprintf(c.Conn, "%s", tt.in)
+			_, err = fmt.Fprintf(c.OutConn, "%s", tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedAppend] Sending mail message to server failed with: %s\n", err.Error())
 			}
 		} else {
 
 			// Table test: send 'in' part of each line.
-			err = c.Send(tt.in)
+			err = c.Send(false, tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedAppend] Sending message to server failed with: %s\n", err.Error())
 			}
 		}
 
 		// Receive answer to APPEND request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestProxiedAppend] Error during receiving table test APPEND: %s\n", err.Error())
 		}
@@ -1096,7 +1136,7 @@ func TestProxiedAppend(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedAppend] Error during receiving table test APPEND: %s\n", err.Error())
 			}
@@ -1126,10 +1166,13 @@ func TestProxiedStore(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedStore] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -1151,16 +1194,19 @@ func TestProxiedStore(t *testing.T) {
 			}
 
 			// Create new connection struct.
-			c = imap.NewConnection(conn)
+			c = &imap.Connection{
+				OutConn:   conn,
+				OutReader: bufio.NewReader(conn),
+			}
 
 			// Consume mandatory IMAP greeting.
-			_, err = c.Receive()
+			_, err = c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedStore] Error during receiving initial server greeting: %s\n", err.Error())
 			}
 
 			// Now, send login command.
-			err = c.Send(tt.in)
+			err = c.Send(false, tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedStore] Sending message to server failed with: %s\n", err.Error())
 			}
@@ -1168,7 +1214,7 @@ func TestProxiedStore(t *testing.T) {
 		} else if (i == 2) || (i == 9) || (i == 11) || (i == 13) || (i == 15) || (i == 17) {
 
 			// Send mail message without additional newline.
-			_, err = fmt.Fprintf(c.Conn, "%s", tt.in)
+			_, err = fmt.Fprintf(c.OutConn, "%s", tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedStore] Sending mail message to server failed with: %s\n", err.Error())
 			}
@@ -1176,14 +1222,14 @@ func TestProxiedStore(t *testing.T) {
 		} else {
 
 			// Table test: send 'in' part of each line.
-			err = c.Send(tt.in)
+			err = c.Send(false, tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedStore] Sending message to server failed with: %s\n", err.Error())
 			}
 		}
 
 		// Receive answer to STORE request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestProxiedStore] Error during receiving table test STORE: %s\n", err.Error())
 		}
@@ -1196,7 +1242,7 @@ func TestProxiedStore(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedStore] Error during receiving table test STORE: %s\n", err.Error())
 			}
@@ -1226,10 +1272,13 @@ func TestProxiedExpunge(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedExpunge] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -1241,21 +1290,21 @@ func TestProxiedExpunge(t *testing.T) {
 		if (i == 3) || (i == 5) || (i == 7) || (i == 9) || (i == 11) {
 
 			// Send mail message without additional newline.
-			_, err = fmt.Fprintf(c.Conn, "%s", tt.in)
+			_, err = fmt.Fprintf(c.OutConn, "%s", tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedExpunge] Sending mail message to server failed with: %s\n", err.Error())
 			}
 		} else {
 
 			// Table test: send 'in' part of each line.
-			err = c.Send(tt.in)
+			err = c.Send(false, tt.in)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedExpunge] Sending message to server failed with: %s\n", err.Error())
 			}
 		}
 
 		// Receive answer to EXPUNGE request.
-		firstAnswer, err := c.Receive()
+		firstAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Fatalf("[imap.TestProxiedExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 		}
@@ -1268,7 +1317,7 @@ func TestProxiedExpunge(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive()
+			nextAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 			}

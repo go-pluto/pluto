@@ -7,8 +7,7 @@ import (
 	"strings"
 
 	"crypto/tls"
-
-	"github.com/numbleroot/pluto/comm"
+	"path/filepath"
 )
 
 // Constants
@@ -33,35 +32,99 @@ type IMAPState int
 
 // Connection carries all information specific
 // to one observed connection on its way through
-// the IMAP server.
+// a pluto node that only authenticates and proxies
+// IMAP connections.
 type Connection struct {
-	Conn      *tls.Conn
-	Worker    string
-	Reader    *bufio.Reader
-	UserToken string
+	IncConn   *tls.Conn
+	IncReader *bufio.Reader
+	OutConn   *tls.Conn
+	OutReader *bufio.Reader
+	OutIP     string
+	OutPort   string
+	ClientID  string
 	UserName  string
+}
+
+// IMAPConnection contains additional elements needed
+// for performing the actual IMAP operations for an
+// authenticated client.
+type IMAPConnection struct {
+	*Connection
+	IMAPState       IMAPState
+	UserCRDTPath    string
+	UserMaildirPath string
+	SelectedMailbox string
 }
 
 // Functions
 
-// NewConnection creates a new element of above
-// connection struct and fills it with content from
-// a supplied, real IMAP connection.
-func NewConnection(c *tls.Conn) *Connection {
-
-	return &Connection{
-		Conn:   c,
-		Reader: bufio.NewReader(c),
-	}
-}
-
-// Receive wraps the main io.Reader function that
-// awaits text until a newline symbol and deletes
-// that symbol afterwards again. It returns the
-// resulting string or an error.
-func (c *Connection) Receive() (string, error) {
+// Send takes in an answer text from a node as a
+// string and writes it to the connection to the client.
+// In case an error occurs, this method returns it to
+// the calling function.
+func (c *Connection) Send(inc bool, text string) error {
 
 	var err error
+
+	// Check which attached connection should be used.
+	conn := c.IncConn
+	if inc != true {
+		conn = c.OutConn
+	}
+
+	// Send message.
+	_, err = fmt.Fprintf(conn, "%s\r\n", text)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// InternalSend is used by nodes of the pluto system to
+// successfully transmit a message to another node or fail
+// definitely. This prevents further handler advancement
+// in case a link failed.
+func (c *Connection) InternalSend(inc bool, text string) error {
+
+	// Check which attached connection should be used.
+	conn := c.IncConn
+	if inc != true {
+		conn = c.OutConn
+	}
+
+	// Test if connection is still healthy.
+	_, err := conn.Write([]byte("> ping <\r\n"))
+	if err != nil {
+		return fmt.Errorf("sending ping to node '%s' failed: %s\n", conn.RemoteAddr().String(), err.Error())
+	}
+
+	// Write message to TLS connections.
+	_, err = fmt.Fprintf(conn, "%s\r\n", text)
+	for err != nil {
+		return fmt.Errorf("sending message to node '%s' failed: %s\n", conn.RemoteAddr().String(), err.Error())
+	}
+
+	return nil
+}
+
+// Receive wraps the main io.Reader function that awaits text
+// until an IMAP newline symbol and deletes the symbols after-
+// wards again. It returns the resulting string or an error.
+func (c *Connection) Receive(inc bool) (string, error) {
+
+	var err error
+
+	// Check which attached connection should be used.
+	conn := c.IncConn
+	if inc != true {
+		conn = c.OutConn
+	}
+
+	reader := c.IncReader
+	if inc != true {
+		reader = c.OutReader
+	}
 
 	// Initial value for received message in order
 	// to skip past the mandatory ping message.
@@ -69,11 +132,11 @@ func (c *Connection) Receive() (string, error) {
 
 	for text == "> ping <\r\n" {
 
-		text, err = c.Reader.ReadString('\n')
+		text, err = reader.ReadString('\n')
 		if err != nil {
 
 			if err.Error() == "EOF" {
-				log.Printf("[imap.Receive] Node at %s disconnected...\n", c.Conn.RemoteAddr())
+				log.Printf("[imap.Receive] Node at '%s' disconnected.\n", conn.RemoteAddr().String())
 			}
 
 			break
@@ -88,80 +151,64 @@ func (c *Connection) Receive() (string, error) {
 	return strings.TrimRight(text, "\r\n"), nil
 }
 
-// Send takes in an answer text from server as a
-// string and writes it to the connection to the client.
-// In case an error occurs, this method returns it to
-// the calling function.
-func (c *Connection) Send(text string) error {
+// InternalReceive is used by nodes in the pluto system
+// receive an incoming message and filter out all prior
+// received ping message.
+func (c *Connection) InternalReceive(inc bool) (string, error) {
 
-	if _, err := fmt.Fprintf(c.Conn, "%s\r\n", text); err != nil {
+	var err error
+
+	// Check which attached connection should be used.
+	reader := c.IncReader
+	if inc != true {
+		reader = c.OutReader
+	}
+
+	// Initial value for received message in order
+	// to skip past the mandatory ping message.
+	text := "> ping <\r\n"
+
+	for text == "> ping <\r\n" {
+
+		text, err = reader.ReadString('\n')
+		if err != nil {
+			break
+		}
+	}
+
+	// If an error happened, return it.
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimRight(text, "\r\n"), nil
+}
+
+// SignalSessionStart is used by the distributor node to signal
+// an involved worker node context about future requests.
+func (c *Connection) SignalSessionStart(inc bool) error {
+
+	// Text to send.
+	msg := fmt.Sprintf("> id: %s <", c.ClientID)
+
+	// Send session information internally.
+	err := c.InternalSend(inc, msg)
+	if err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// SignalSessionPrefixWorker is used by the distributor node to
-// signal an involved worker node context about future requests.
-func (c *Connection) SignalSessionPrefixWorker(conn *tls.Conn, name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, timeout int, retry int) (*tls.Conn, error) {
-
-	// Text to send.
-	msg := fmt.Sprintf("> id: %s <", c.UserToken)
-
-	// Reliably send message to node.
-	newConn, replaced, err := comm.ReliableSend(conn, msg, name, remoteName, remoteIP, remotePort, tlsConfig, timeout, retry)
-	if err != nil {
-		return nil, err
-	}
-
-	// If connection had to be reestablished,
-	// returned renewed connection.
-	if replaced {
-		return newConn, nil
-	}
-
-	// Otherwise, return the working prior one.
-	return conn, nil
-}
-
-// SignalSessionPrefixStorage is used by a failover worker node
+// SignalSessionStartFailover is used by a failover worker node
 // to signal the storage node context about future requests.
-func (c *Connection) SignalSessionPrefixStorage(clientID string, conn *tls.Conn, name string, remoteName string, remoteIP string, remotePort string, tlsConfig *tls.Config, timeout int, retry int) (*tls.Conn, error) {
+func (c *Connection) SignalSessionStartFailover(inc bool, recvClientID string, origWorker string) error {
 
 	// Text to send.
-	msg := fmt.Sprintf("> id: %s %s <", clientID, name)
+	msg := strings.Replace(recvClientID, " <", fmt.Sprintf("%s <", origWorker), -1)
 
-	// Reliably send message to node.
-	newConn, replaced, err := comm.ReliableSend(conn, msg, name, remoteName, remoteIP, remotePort, tlsConfig, timeout, retry)
-	if err != nil {
-		return nil, err
-	}
-
-	// If connection had to be reestablished,
-	// returned renewed connection.
-	if replaced {
-		return newConn, nil
-	}
-
-	// Otherwise, return the working prior one.
-	return conn, nil
-}
-
-// SignalSessionError can be used by distributor or worker nodes
-// to signal other nodes that an fatal error occurred during
-// processing a request.
-func (c *Connection) SignalSessionError(node *tls.Conn) error {
-
-	var err error
-
-	if node != nil {
-		// Any node: send error signal to other node.
-		_, err = fmt.Fprint(node, "> error <\r\n")
-	} else {
-		// Worker: send error signal to distributor.
-		_, err = fmt.Fprint(c.Conn, "> error <\r\n")
-	}
-
+	// Send session information internally.
+	err := c.InternalSend(inc, msg)
 	if err != nil {
 		return err
 	}
@@ -172,18 +219,10 @@ func (c *Connection) SignalSessionError(node *tls.Conn) error {
 // SignalSessionDone is either used by the distributor to signal
 // the worker that a client logged out or by any node to indicated
 // that the current operation is done.
-func (c *Connection) SignalSessionDone(node *tls.Conn) error {
+func (c *Connection) SignalSessionDone(inc bool) error {
 
-	var err error
-
-	if node != nil {
-		// Any node: send done signal to other node.
-		_, err = fmt.Fprint(node, "> done <\r\n")
-	} else {
-		// Worker: send done signal to distributor.
-		_, err = fmt.Fprint(c.Conn, "> done <\r\n")
-	}
-
+	// Send done signal.
+	err := c.InternalSend(inc, "> done <")
 	if err != nil {
 		return err
 	}
@@ -195,12 +234,13 @@ func (c *Connection) SignalSessionDone(node *tls.Conn) error {
 // a proxying distributor node that they are awaiting
 // literal data from a client. The amount of awaited data
 // is sent along this signal.
-func (c *Connection) SignalAwaitingLiteral(awaiting int) error {
+func (c *Connection) SignalAwaitingLiteral(inc bool, awaiting int) error {
 
-	var err error
+	// Text to send.
+	msg := fmt.Sprintf("> literal: %d <", awaiting)
 
 	// Indicate how many bytes of literal data are awaited.
-	_, err = fmt.Fprintf(c.Conn, "> literal: %d <\r\n", awaiting)
+	err := c.InternalSend(inc, msg)
 	if err != nil {
 		return err
 	}
@@ -213,8 +253,22 @@ func (c *Connection) SignalAwaitingLiteral(awaiting int) error {
 // It returns nil or eventual errors.
 func (c *Connection) Terminate() error {
 
-	if err := c.Conn.Close(); err != nil {
-		return err
+	if c.IncConn != nil {
+
+		// Possibly close incoming connection.
+		err := c.IncConn.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.OutConn != nil {
+
+		// Possibly close outgoing connection.
+		err := c.OutConn.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -225,7 +279,7 @@ func (c *Connection) Terminate() error {
 func (c *Connection) Error(msg string, err error) {
 
 	// Log error.
-	log.Printf("%s: %s. Terminating connection to %s\n", msg, err.Error(), c.Conn.RemoteAddr().String())
+	log.Printf("%s: %s. Terminating connection to %s\n", msg, err.Error(), c.IncConn.RemoteAddr().String())
 
 	// Terminate connection.
 	err = c.Terminate()
@@ -234,17 +288,43 @@ func (c *Connection) Error(msg string, err error) {
 	}
 }
 
-// ErrorLogOnly is used by nodes to log and indicate fatal
-// errors but without closing the permanent connection
-// to other nodes, e.g. the distributor.
-func (c *Connection) ErrorLogOnly(msg string, err error) {
+// UpdateClientContext expects the initial client information
+// string sent when the proxying node opened a connection to
+// a worker node. It updates the existing connection with the
+// contained information.
+func (c *IMAPConnection) UpdateClientContext(clientIDRaw string, CRDTLayerRoot string, MaildirRoot string) (string, error) {
 
-	// Log error.
-	log.Printf("%s: %s. Signalling error to proxying node.\n", msg, err.Error())
-
-	// Signal error to distributor node.
-	err = c.SignalSessionError(nil)
-	if err != nil {
-		log.Fatal(err)
+	// Split received clientID string at white spaces
+	// and check for correct amount of found fields.
+	fields := strings.Fields(clientIDRaw)
+	if (len(fields) != 4) && (len(fields) != 5) {
+		return "", fmt.Errorf("received an invalid clientID information")
 	}
+
+	if len(fields) == 4 {
+
+		// Check if structure for worker node is correct.
+		if fields[0] != ">" || fields[1] != "id:" || fields[3] != "<" {
+			return "", fmt.Errorf("received an invalid clientID information")
+		}
+
+	} else if len(fields) == 5 {
+
+		// Check if structure for storage node is correct.
+		if fields[0] != ">" || fields[1] != "id:" || fields[4] != "<" {
+			return "", fmt.Errorf("received an invalid clientID information")
+		}
+
+	}
+
+	// Parse parts including user name from clientID.
+	clientInfo := strings.SplitN(fields[2], ":", 3)
+
+	// Update existing IMAP connection.
+	c.ClientID = fields[2]
+	c.UserName = clientInfo[2]
+	c.UserCRDTPath = filepath.Join(CRDTLayerRoot, clientInfo[2])
+	c.UserMaildirPath = filepath.Join(MaildirRoot, clientInfo[2])
+
+	return fields[3], nil
 }

@@ -28,7 +28,7 @@ type Sender struct {
 	updLog          *os.File
 	incVClock       chan string
 	updVClock       chan map[string]int
-	nodes           map[string]*tls.Conn
+	nodes           map[string]string
 	wg              *sync.WaitGroup
 	shutdown        chan struct{}
 }
@@ -40,7 +40,7 @@ type Sender struct {
 // with. It returns a channel local processes can put
 // CRDT changes into, so that those changes will be
 // communicated to connected nodes.
-func InitSender(name string, logFilePath string, tlsConfig *tls.Config, timeout int, retry int, incVClock chan string, updVClock chan map[string]int, downSender chan struct{}, nodes map[string]*tls.Conn) (chan string, error) {
+func InitSender(name string, logFilePath string, tlsConfig *tls.Config, timeout int, retry int, incVClock chan string, updVClock chan map[string]int, downSender chan struct{}, nodes map[string]string) (chan string, error) {
 
 	// Create and initialize what we need for
 	// a CRDT sender routine.
@@ -282,24 +282,18 @@ func (sender *Sender) SendMsgs() {
 				// Unlock mutex.
 				sender.lock.Unlock()
 
-				for i, conn := range sender.nodes {
+				for nodeName, nodeAddr := range sender.nodes {
 
-					// Extract address to reconnect to.
-					addrParts := strings.Split(conn.RemoteAddr().String(), ":")
-
-					// Send payload reliably to other nodes.
-					conn, replaced, err := ReliableSend(conn, marshalledMsg, sender.name, i, addrParts[0], addrParts[1], sender.tlsConfig, sender.intlConnTimeout, sender.intlConnRetry)
+					// Connect to node.
+					conn, err := ReliableConnect(nodeName, nodeAddr, sender.tlsConfig, sender.intlConnRetry)
 					if err != nil {
-						log.Fatalf("[comm.SendMsgs] Failed to send: %s\n", err.Error())
+						log.Fatalf("[comm.SendMsgs] Failed to connect to %s: %s\n", err.Error())
 					}
 
-					if replaced {
-
-						// If connection had to be re-established, lock
-						// sender and exchange old connection with new one.
-						sender.lock.Lock()
-						sender.nodes[i] = conn
-						sender.lock.Unlock()
+					// Send payload reliably to other nodes.
+					err = ReliableSend(conn, marshalledMsg, nodeName, nodeAddr, sender.tlsConfig, sender.intlConnTimeout, sender.intlConnRetry)
+					if err != nil {
+						log.Fatalf("[comm.SendMsgs] Failed to send: %s\n", err.Error())
 					}
 				}
 

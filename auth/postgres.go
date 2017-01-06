@@ -106,9 +106,9 @@ func (p *PostgresAuthenticator) AuthenticatePlain(username string, password stri
 		// Check what type of error we received.
 		if err == pgx.ErrNoRows {
 			return -1, "", fmt.Errorf("username not found in users table or password wrong")
-		} else {
-			return -1, "", fmt.Errorf("error while trying to locate user: %s", err.Error())
 		}
+
+		return -1, "", fmt.Errorf("error while trying to locate user: %s", err.Error())
 	}
 
 	// Build the deterministic client-specific session identifier.

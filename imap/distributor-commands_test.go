@@ -1,6 +1,7 @@
 package imap_test
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -100,10 +101,13 @@ func TestCapability(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Errorf("[imap.TestCapability] Error during receiving initial distributor greeting: %s\n", err.Error())
 	}
@@ -113,13 +117,13 @@ func TestCapability(t *testing.T) {
 		var answer string
 
 		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
+		err = c.Send(false, tt.in)
 		if err != nil {
 			t.Fatalf("[imap.TestCapability] Sending message to distributor failed with: %s\n", err.Error())
 		}
 
 		// Receive options listed in CAPABILITY command.
-		capAnswer, err := c.Receive()
+		capAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Errorf("[imap.TestCapability] Error during receiving table test CAPABILITY: %s\n", err.Error())
 		}
@@ -127,7 +131,7 @@ func TestCapability(t *testing.T) {
 		if i < 2 {
 
 			// Receive command termination message from distributor.
-			okAnswer, err := c.Receive()
+			okAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Errorf("[imap.TestCapability] Error during receiving table test CAPABILITY: %s\n", err.Error())
 			}
@@ -161,22 +165,25 @@ func TestLogout(t *testing.T) {
 		}
 
 		// Create new connection struct.
-		c := imap.NewConnection(conn)
+		c := &imap.Connection{
+			OutConn:   conn,
+			OutReader: bufio.NewReader(conn),
+		}
 
 		// Consume mandatory IMAP greeting.
-		_, err = c.Receive()
+		_, err = c.Receive(false)
 		if err != nil {
 			t.Errorf("[imap.TestLogout] Error during receiving initial distributor greeting: %s\n", err.Error())
 		}
 
 		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
+		err = c.Send(false, tt.in)
 		if err != nil {
 			t.Fatalf("[imap.TestLogout] Sending message to distributor failed with: %s\n", err.Error())
 		}
 
 		// Receive logout response.
-		logoutAnswer, err := c.Receive()
+		logoutAnswer, err := c.Receive(false)
 		if err != nil {
 			t.Errorf("[imap.TestLogout] Error during receiving table test LOGOUT: %s\n", err.Error())
 		}
@@ -184,7 +191,7 @@ func TestLogout(t *testing.T) {
 		if i < 2 {
 
 			// Receive command termination message from distributor.
-			okAnswer, err := c.Receive()
+			okAnswer, err := c.Receive(false)
 			if err != nil {
 				t.Errorf("[imap.TestLogout] Error during receiving table test LOGOUT: %s\n", err.Error())
 			}
@@ -217,10 +224,13 @@ func TestStartTLS(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Errorf("[imap.TestStartTLS] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -228,13 +238,13 @@ func TestStartTLS(t *testing.T) {
 	for _, tt := range starttlsTests {
 
 		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
+		err = c.Send(false, tt.in)
 		if err != nil {
 			t.Fatalf("[imap.TestStartTLS] Sending message to server failed with: %s\n", err.Error())
 		}
 
 		// Receive go ahead signal for TLS negotiation.
-		answer, err := c.Receive()
+		answer, err := c.Receive(false)
 		if err != nil {
 			t.Errorf("[imap.TestStartTLS] Error during receiving table test LOGIN: %s\n", err.Error())
 		}
@@ -259,10 +269,13 @@ func TestLogin(t *testing.T) {
 	}
 
 	// Create new connection struct.
-	c := imap.NewConnection(conn)
+	c := &imap.Connection{
+		OutConn:   conn,
+		OutReader: bufio.NewReader(conn),
+	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive()
+	_, err = c.Receive(false)
 	if err != nil {
 		t.Errorf("[imap.TestLogin] Error during receiving initial distributor greeting: %s\n", err.Error())
 	}
@@ -270,13 +283,13 @@ func TestLogin(t *testing.T) {
 	for _, tt := range loginTests {
 
 		// Table test: send 'in' part of each line.
-		err = c.Send(tt.in)
+		err = c.Send(false, tt.in)
 		if err != nil {
 			t.Fatalf("[imap.TestLogin] Sending message to distributor failed with: %s\n", err.Error())
 		}
 
 		// Receive successful LOGIN message.
-		answer, err := c.Receive()
+		answer, err := c.Receive(false)
 		if err != nil {
 			t.Errorf("[imap.TestLogin] Error during receiving table test LOGIN: %s\n", err.Error())
 		}

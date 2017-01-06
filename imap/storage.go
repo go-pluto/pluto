@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net"
@@ -37,7 +38,6 @@ func InitStorage(config *config.Config) (*Storage, error) {
 		IMAPNode: &IMAPNode{
 			lock:             new(sync.RWMutex),
 			Connections:      make(map[string]*tls.Conn),
-			Contexts:         make(map[string]*Context),
 			MailboxStructure: make(map[string]map[string]*crdt.ORSet),
 			MailboxContents:  make(map[string]map[string][]string),
 			CRDTLayerRoot:    config.Storage.CRDTLayerRoot,
@@ -146,17 +146,9 @@ func InitStorage(config *config.Config) (*Storage, error) {
 			return nil, err
 		}
 
-		// Try to connect to sync port of each worker node this storage
-		// node is serving as long-term storage backend as.
-		c, err := comm.ReliableConnect("storage", workerName, workerNode.IP, workerNode.SyncPort, internalTLSConfig, config.IntlConnRetry)
-		if err != nil {
-			return nil, err
-		}
-
-		// Save connection for later use.
-		curCRDTSubnet := make(map[string]*tls.Conn)
-		curCRDTSubnet[workerName] = c
-		storage.Connections[workerName] = c
+		// Create subnet to distribute CRDT changes in.
+		curCRDTSubnet := make(map[string]string)
+		curCRDTSubnet[workerName] = fmt.Sprintf("%s:%s", workerNode.IP, workerNode.SyncPort)
 
 		// Init sending part of CRDT communication and send messages in background.
 		storage.SyncSendChans[workerName], err = comm.InitSender("storage", sendCRDTLog, internalTLSConfig, config.IntlConnTimeout, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
@@ -201,48 +193,55 @@ func (storage *Storage) HandleConnection(conn net.Conn) {
 	}
 
 	// Create a new connection struct for incoming request.
-	c := NewConnection(tlsConn)
+	c := &IMAPConnection{
+		Connection: &Connection{
+			IncConn:   tlsConn,
+			IncReader: bufio.NewReader(tlsConn),
+		},
+		IMAPState: AUTHENTICATED,
+	}
 
 	// Receive opening information.
-	opening, err := comm.InternalReceive(c.Reader)
+	clientInfo, err := c.InternalReceive(true)
 	if err != nil {
-		c.ErrorLogOnly("Encountered receive error", err)
+		c.Error("Receive error waiting for client information", err)
 		return
 	}
 
-	// As long as this node did not receive an indicator that
-	// the system is about to shut down, we accept requests.
-	for opening != "> done <" {
+	// Based on received client information, update IMAP
+	// connection to reflect these information.
+	origWorker, err := c.UpdateClientContext(clientInfo, storage.Config.Storage.CRDTLayerRoot, storage.Config.Storage.MaildirRoot)
+	if err != nil {
+		c.Error("Error extracting client information", err)
+		return
+	}
 
-		// Extract the prefixed clientID and update or create context.
-		clientID, origWorker, err := storage.UpdateClientContext(opening)
-		if err != nil {
-			c.ErrorLogOnly("Error extracting context", err)
-			return
-		}
+	// Receive actual client command.
+	rawReq, err := c.InternalReceive(true)
+	if err != nil {
+		c.Error("Encountered receive error waiting for first request", err)
+		return
+	}
 
-		// Receive incoming actual client command.
-		rawReq, err := comm.InternalReceive(c.Reader)
-		if err != nil {
-			c.ErrorLogOnly("Encountered receive error", err)
-			return
-		}
+	// As long as the proxying node did not indicate that
+	// the client connection was ended, we accept requests.
+	for rawReq != "> done <" {
 
 		// Parse received next raw request into struct.
 		req, err := ParseRequest(rawReq)
 		if err != nil {
 
 			// Signal error to client.
-			err := comm.InternalSend(c.Conn, err.Error(), "storage", origWorker)
+			err := c.InternalSend(true, err.Error())
 			if err != nil {
-				c.ErrorLogOnly("Encountered send error", err)
+				c.Error("Encountered send error", err)
 				return
 			}
 
 			// In case of failure, wait for next sent command.
-			rawReq, err = comm.InternalReceive(c.Reader)
+			rawReq, err = c.InternalReceive(true)
 			if err != nil {
-				c.ErrorLogOnly("Encountered receive error", err)
+				c.Error("Encountered receive error", err)
 				return
 			}
 
@@ -250,123 +249,123 @@ func (storage *Storage) HandleConnection(conn net.Conn) {
 			continue
 		}
 
-		// Read-lock storage shortly.
 		storage.lock.RLock()
 
 		// Retrieve sync channel for node.
 		workerSyncChan := storage.SyncSendChans[origWorker]
 
-		// Release read-lock on storage.
 		storage.lock.RUnlock()
 
 		log.Printf("[imap.HandleConnection] Storage: working on failover request from %s: '%s'\n", origWorker, rawReq)
 
 		switch {
 
-		case rawReq == "> done <":
-			// Remove context of connection for this client
-			// from structure that keeps track of it.
-			// Effectively destroying all authentication and
-			// IMAP state information about this client.
-			delete(storage.Contexts, clientID)
-
 		case req.Command == "SELECT":
-			if ok := storage.Select(c, req, clientID, workerSyncChan); ok {
+			if ok := storage.Select(c, req, workerSyncChan); ok {
 
 				// If successful, signal end of operation to proxy node.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		case req.Command == "CREATE":
-			if ok := storage.Create(c, req, clientID, workerSyncChan); ok {
+			if ok := storage.Create(c, req, workerSyncChan); ok {
 
 				// If successful, signal end of operation to proxy node.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		case req.Command == "DELETE":
-			if ok := storage.Delete(c, req, clientID, workerSyncChan); ok {
+			if ok := storage.Delete(c, req, workerSyncChan); ok {
 
 				// If successful, signal end of operation to proxy node.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		case req.Command == "LIST":
-			if ok := storage.List(c, req, clientID, workerSyncChan); ok {
+			if ok := storage.List(c, req, workerSyncChan); ok {
 
 				// If successful, signal end of operation to proxy node.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		case req.Command == "APPEND":
-			if ok := storage.Append(c, req, clientID, workerSyncChan); ok {
+			if ok := storage.Append(c, req, workerSyncChan); ok {
 
 				// If successful, signal end of operation to proxy node.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		case req.Command == "EXPUNGE":
-			if ok := storage.Expunge(c, req, clientID, workerSyncChan); ok {
+			if ok := storage.Expunge(c, req, workerSyncChan); ok {
 
 				// If successful, signal end of operation to proxy node.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		case req.Command == "STORE":
-			if ok := storage.Store(c, req, clientID, workerSyncChan); ok {
+			if ok := storage.Store(c, req, workerSyncChan); ok {
 
 				// If successful, signal end of operation to proxy node.
-				err := c.SignalSessionDone(nil)
+				err := c.SignalSessionDone(true)
 				if err != nil {
-					c.ErrorLogOnly("Encountered send error", err)
+					c.Error("Encountered send error", err)
 					return
 				}
 			}
 
 		default:
 			// Client sent inappropriate command. Signal tagged error.
-			err := comm.InternalSend(c.Conn, fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag), "storage", origWorker)
+			err := c.InternalSend(true, fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
 			if err != nil {
-				c.ErrorLogOnly("Encountered send error", err)
+				c.Error("Encountered send error", err)
 				return
 			}
 
-			err = c.SignalSessionDone(nil)
+			err = c.SignalSessionDone(true)
 			if err != nil {
-				c.ErrorLogOnly("Encountered send error", err)
+				c.Error("Encountered send error", err)
 				return
 			}
 		}
 
 		// Receive next incoming proxied request.
-		opening, err = comm.InternalReceive(c.Reader)
+		rawReq, err = c.InternalReceive(true)
 		if err != nil {
-			c.ErrorLogOnly("Encountered receive error", err)
+			c.Error("Encountered receive error", err)
 			return
 		}
 	}
+
+	// Terminate connection after logout.
+	err = c.Terminate()
+	if err != nil {
+		log.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
+	}
+
+	// Set IMAP state to logged out.
+	c.IMAPState = LOGOUT
 }
