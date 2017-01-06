@@ -10,7 +10,7 @@ IntlConnTimeout = 100
 
 # Time in milliseconds to wait between a failed
 # connection attempt and the next one.
-IntlConnRetry = 750
+IntlConnRetry = 400
 
 [IMAP]
 # What the system should send on an incoming new
@@ -23,7 +23,7 @@ HierarchySeparator = "."
 [Distributor]
 IP = "127.0.0.1"
 Port = "993"
-AuthAdapter = "AuthFile"
+AuthAdapter = "AuthPostgres"
 
     [Distributor.PublicTLS]
     # Use these locations to provide your externally
@@ -39,9 +39,13 @@ AuthAdapter = "AuthFile"
     CertLoc = "/very/complicated/and/long/path/to/your/internal-distributor-cert.pem"
     KeyLoc = "/very/complicated/and/long/path/to/your/internal-distributor-key.pem"
 
-    [Distributor.AuthFile]
-    File = "users.txt"
-    Separator = ";"
+    [Distributor.AuthPostgres]
+    IP = "127.0.0.1"
+    Port = 5432
+    Database = "pluto"
+    User = "pluto"
+    Password = "YourSuperSecurePasswordHere12345"
+    UseTLS = true
 
 
 [Workers]
