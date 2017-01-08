@@ -8,6 +8,8 @@ import (
 
 	"crypto/tls"
 	"path/filepath"
+
+	"github.com/numbleroot/pluto/comm"
 )
 
 // Constants
@@ -35,14 +37,15 @@ type IMAPState int
 // a pluto node that only authenticates and proxies
 // IMAP connections.
 type Connection struct {
-	IncConn   *tls.Conn
-	IncReader *bufio.Reader
-	OutConn   *tls.Conn
-	OutReader *bufio.Reader
-	OutIP     string
-	OutPort   string
-	ClientID  string
-	UserName  string
+	IncConn       *tls.Conn
+	IncReader     *bufio.Reader
+	OutConn       *tls.Conn
+	OutReader     *bufio.Reader
+	IntlTLSConfig *tls.Config
+	IntlConnRetry int
+	OutAddr       string
+	ClientID      string
+	UserName      string
 }
 
 // IMAPConnection contains additional elements needed
@@ -83,8 +86,8 @@ func (c *Connection) Send(inc bool, text string) error {
 
 // InternalSend is used by nodes of the pluto system to
 // successfully transmit a message to another node or fail
-// definitely. This prevents further handler advancement
-// in case a link failed.
+// definitely if no reconnection is possible. This prevents
+// further handler advancement in case a link failed.
 func (c *Connection) InternalSend(inc bool, text string) error {
 
 	// Check which attached connection should be used.
@@ -96,13 +99,51 @@ func (c *Connection) InternalSend(inc bool, text string) error {
 	// Test if connection is still healthy.
 	_, err := conn.Write([]byte("> ping <\r\n"))
 	if err != nil {
-		return fmt.Errorf("sending ping to node '%s' failed: %s\n", conn.RemoteAddr().String(), err.Error())
+		return fmt.Errorf("sending ping to node '%s' failed: %s", conn.RemoteAddr().String(), err.Error())
 	}
 
 	// Write message to TLS connections.
 	_, err = fmt.Fprintf(conn, "%s\r\n", text)
 	for err != nil {
-		return fmt.Errorf("sending message to node '%s' failed: %s\n", conn.RemoteAddr().String(), err.Error())
+
+		log.Printf("[imap.InternalSend] Sending to node '%s' failed, trying to recover...\n", conn.RemoteAddr())
+
+		// Define what IP and port of remote node look like.
+		remoteAddr := conn.RemoteAddr().String()
+
+		// Define an error we can deal with.
+		okError := fmt.Sprintf("write tcp %s->%s: write: broken pipe", conn.LocalAddr().String(), remoteAddr)
+
+		if err.Error() == okError {
+
+			// Reestablish TLS connection to remote node.
+			conn, err = comm.ReliableConnect(remoteAddr, c.IntlTLSConfig, c.IntlConnRetry)
+			if err != nil {
+				return fmt.Errorf("failed to reestablish connection with '%s': %s", remoteAddr, err.Error())
+			}
+
+			// Save context to connection.
+			if inc {
+				c.IncConn = conn
+				c.IncReader = bufio.NewReader(conn)
+			} else {
+				c.OutConn = conn
+				c.OutReader = bufio.NewReader(conn)
+
+				// Inform remote node about which session was active.
+				err = c.SignalSessionStart(false)
+				if err != nil {
+					return fmt.Errorf("signalling session to remote node failed with: %s", err.Error())
+				}
+			}
+
+			log.Printf("[imap.InternalSend] Reconnected to '%s'.\n", remoteAddr)
+
+			// Resend message to remote node.
+			_, err = fmt.Fprintf(conn, "%s\r\n", text)
+		} else {
+			return fmt.Errorf("failed to send message to remote node '%s': %s", remoteAddr, err.Error())
+		}
 	}
 
 	return nil
@@ -205,7 +246,7 @@ func (c *Connection) SignalSessionStart(inc bool) error {
 func (c *Connection) SignalSessionStartFailover(inc bool, recvClientID string, origWorker string) error {
 
 	// Text to send.
-	msg := strings.Replace(recvClientID, " <", fmt.Sprintf("%s <", origWorker), -1)
+	msg := strings.Replace(recvClientID, " <", fmt.Sprintf(" %s <", origWorker), -1)
 
 	// Send session information internally.
 	err := c.InternalSend(inc, msg)
@@ -279,7 +320,7 @@ func (c *Connection) Terminate() error {
 func (c *Connection) Error(msg string, err error) {
 
 	// Log error.
-	log.Printf("%s: %s. Terminating connection to %s\n", msg, err.Error(), c.IncConn.RemoteAddr().String())
+	log.Printf("%s: %s. Terminating connection to %s.\n", msg, err.Error(), c.IncConn.RemoteAddr().String())
 
 	// Terminate connection.
 	err = c.Terminate()

@@ -166,13 +166,13 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 			userMainCRDT := node.MailboxStructure[deleteUpd.User]["Structure"]
 
 			// Construct remove set from received values.
-			rSet := make(map[string]string)
+			rmElements := make(map[string]string)
 			for _, element := range deleteUpd.RmvMailbox {
-				rSet[element.Tag] = element.Value
+				rmElements[element.Tag] = element.Value
 			}
 
 			// Remove received pairs from user's main CRDT.
-			err = userMainCRDT.RemoveEffect(rSet, true, true)
+			err = userMainCRDT.RemoveEffect(rmElements, true, true)
 			if err != nil {
 				node.lock.Unlock()
 				log.Fatalf("[imap.ApplyCRDTUpd] Failed to remove elements from user's main CRDT: %s\n", err.Error())
@@ -350,13 +350,13 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 				userMailboxCRDT := node.MailboxStructure[expungeUpd.User][expungeUpd.Mailbox]
 
 				// Construct remove set from received values.
-				rSet := make(map[string]string)
+				rmElements := make(map[string]string)
 				for _, element := range expungeUpd.RmvMail {
-					rSet[element.Tag] = element.Value
+					rmElements[element.Tag] = element.Value
 				}
 
 				// Delete supplied elements from mailbox.
-				err := userMailboxCRDT.RemoveEffect(rSet, true, true)
+				err := userMailboxCRDT.RemoveEffect(rmElements, true, true)
 				if err != nil {
 					node.lock.Unlock()
 					log.Fatalf("[imap.ApplyCRDTUpd] Failed to remove mail elements from respective mailbox CRDT: %s\n", err.Error())
@@ -420,13 +420,13 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 				userMailboxCRDT := node.MailboxStructure[storeUpd.User][storeUpd.Mailbox]
 
 				// Construct remove set from received values.
-				rSet := make(map[string]string)
+				rmElements := make(map[string]string)
 				for _, element := range storeUpd.RmvMail {
-					rSet[element.Tag] = element.Value
+					rmElements[element.Tag] = element.Value
 				}
 
 				// Delete supplied elements from mailbox.
-				err := userMailboxCRDT.RemoveEffect(rSet, true, true)
+				err := userMailboxCRDT.RemoveEffect(rmElements, true, true)
 				if err != nil {
 					node.lock.Unlock()
 					log.Fatalf("[imap.ApplyCRDTUpd] Failed to remove mail elements from respective mailbox CRDT: %s\n", err.Error())

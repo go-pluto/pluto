@@ -487,8 +487,13 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 		return
 	}
 
+	// Prepare connection.
+	c.IntlTLSConfig = failWorker.IntlTLSConfig
+	c.IntlConnRetry = failWorker.Config.IntlConnRetry
+	c.OutAddr = fmt.Sprintf("%s:%s", failWorker.Config.Storage.IP, failWorker.Config.Storage.MailPort)
+
 	// Connect via TLS to storage.
-	storageConn, err := comm.ReliableConnect("storage", fmt.Sprintf("%s:%s", failWorker.Config.Storage.IP, failWorker.Config.Storage.MailPort), failWorker.IntlTLSConfig, failWorker.Config.IntlConnRetry)
+	storageConn, err := comm.ReliableConnect(c.OutAddr, failWorker.IntlTLSConfig, failWorker.Config.IntlConnRetry)
 	if err != nil {
 		c.Error("Internal connection failure", err)
 		return
@@ -497,8 +502,6 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 	// Save context to connection.
 	c.OutConn = storageConn
 	c.OutReader = bufio.NewReader(storageConn)
-	c.OutIP = failWorker.Config.Storage.IP
-	c.OutPort = failWorker.Config.Storage.MailPort
 
 	// Send storage node context about client.
 	err = c.SignalSessionStartFailover(false, clientInfo, failWorker.Name)
@@ -518,10 +521,10 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 	// the client connection was ended, we accept requests.
 	for rawReq != "> done <" {
 
-		// Send received client command to storage.
-		err = c.InternalSend(false, rawReq)
+		// Pass message to storage node.
+		err := c.InternalSend(false, rawReq)
 		if err != nil {
-			c.Error("Encountered send error to storage", err)
+			fmt.Printf("HERE 2 HERE 2 HERE 2: '%s'\n", err.Error())
 			return
 		}
 

@@ -217,7 +217,7 @@ func (recv *Receiver) Shutdown(downRecv chan struct{}) {
 	// Wait for signal.
 	<-downRecv
 
-	log.Printf("[comm.Shutdown] receiver: shutting down...\n")
+	log.Printf("[comm.Shutdown] Receiver: shutting down...\n")
 
 	// Instruct other goroutines to shutdown.
 	recv.shutdown <- struct{}{}
@@ -237,7 +237,7 @@ func (recv *Receiver) Shutdown(downRecv chan struct{}) {
 	recv.socket.Close()
 	recv.lock.Unlock()
 
-	log.Printf("[comm.Shutdown] receiver: done!\n")
+	log.Printf("[comm.Shutdown] Receiver: done!\n")
 }
 
 // IncVClockEntry waits for an incoming name of a node on
@@ -309,24 +309,12 @@ func (recv *Receiver) AcceptIncMsgs() error {
 	// routine on exiting this function.
 	defer recv.wg.Done()
 
-	// Initilize channel to signal end to
-	// storing goroutines further below.
-	downStoring := make(chan struct{})
-
-	// Count how many storing routines were spawned.
-	downNumber := 0
-
 	for {
 
 		select {
 
 		// Check if a shutdown signal was sent.
 		case <-recv.shutdown:
-
-			// Send shutdown signal to each storing routine.
-			for i := 0; i < downNumber; i++ {
-				downStoring <- struct{}{}
-			}
 
 			// Close file descriptor.
 			recv.lock.Lock()
@@ -343,104 +331,64 @@ func (recv *Receiver) AcceptIncMsgs() error {
 				return fmt.Errorf("[comm.AcceptIncMsgs] Accepting incoming sync messages at %s failed with: %s\n", recv.name, err.Error())
 			}
 
-			// Dispatch into own goroutine.
-			downNumber += 1
-			go recv.StoreIncMsgs(conn, downStoring)
+			go recv.StoreIncMsgs(conn)
 		}
 	}
 }
 
 // StoreIncMsgs takes received message string and saves
 // it into incoming CRDT message log file.
-func (recv *Receiver) StoreIncMsgs(conn net.Conn, downStoring chan struct{}) {
+func (recv *Receiver) StoreIncMsgs(conn net.Conn) {
 
 	var err error
 
 	// Initial value for received message in order
 	// to skip past the mandatory ping message.
-	msgRaw := "> ping <\r\n"
+	msgRaw := "> ping <"
 
 	// Create new buffered reader for connection.
 	r := bufio.NewReader(conn)
 
-	for msgRaw == "> ping <\r\n" {
+	for msgRaw == "> ping <" {
 
 		// Read string until newline character is received.
 		msgRaw, err = r.ReadString('\n')
 		if err != nil {
 
 			if err.Error() == "EOF" {
-
-				// Error caused by disconnect. Do not crash.
-				log.Printf("[comm.StoreIncMsgs] Node at %s disconnected...\n", conn.RemoteAddr())
-
-				// Simply end this function.
-				msgRaw = "> done <\r\n"
+				log.Printf("[comm.StoreIncMsgs] Reading from closed connection. Ignoring.\n")
+				return
 			} else {
 				log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
 			}
 		}
+
+		// Remove trailing characters denoting line end.
+		msgRaw = strings.TrimRight(msgRaw, "\r\n")
 	}
 
-	// Unless we do not receive the signal that continuous CRDT
-	// message transmission is done, we accept new messages.
-	for msgRaw != "> done <\r\n" {
+	// Lock mutex.
+	recv.lock.Lock()
 
-		// Lock mutex.
-		recv.lock.Lock()
+	// Write it to message log file.
+	_, err = recv.writeLog.WriteString(msgRaw)
+	if err != nil {
+		log.Fatalf("[comm.StoreIncMsgs] Writing to CRDT log file failed with: %s\n", err.Error())
+	}
 
-		// Write it to message log file.
-		_, err = recv.writeLog.WriteString(msgRaw)
-		if err != nil {
-			log.Fatalf("[comm.StoreIncMsgs] Writing to CRDT log file failed with: %s\n", err.Error())
-		}
+	// Save to stable storage.
+	err = recv.writeLog.Sync()
+	if err != nil {
+		log.Fatalf("[comm.StoreIncMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
+	}
 
-		// Save to stable storage.
-		err = recv.writeLog.Sync()
-		if err != nil {
-			log.Fatalf("[comm.StoreIncMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
-		}
+	// Unlock mutex.
+	recv.lock.Unlock()
 
-		// Unlock mutex.
-		recv.lock.Unlock()
-
-		// Indicate to applying routine that a new message
-		// is available to process.
-		if len(recv.msgInLog) < 1 {
-			recv.msgInLog <- struct{}{}
-		}
-
-		select {
-
-		case <-downStoring:
-
-			// Break from inifinte loop.
-			msgRaw = "> done <\r\n"
-
-		default:
-
-			// Reset message to expected ping.
-			msgRaw = "> ping <\r\n"
-
-			for msgRaw == "> ping <\r\n" {
-
-				// Read next CRDT message until newline character is received.
-				msgRaw, err = r.ReadString('\n')
-				if err != nil {
-
-					if err.Error() == "EOF" {
-
-						// Error caused by disconnect. Do not crash.
-						log.Printf("[comm.StoreIncMsgs] Node at %s disconnected...\n", conn.RemoteAddr())
-
-						// Simply end this function.
-						msgRaw = "> done <\r\n"
-					} else {
-						log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
-					}
-				}
-			}
-		}
+	// Indicate to applying routine that a new message
+	// is available to process.
+	if len(recv.msgInLog) < 1 {
+		recv.msgInLog <- struct{}{}
 	}
 }
 

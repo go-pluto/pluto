@@ -13,7 +13,7 @@ import (
 // ReliableConnect attempts to connect to defined remote node
 // as longs as the error from previous attempts is possible
 // to be dealt with.
-func ReliableConnect(remoteName string, remoteAddr string, tlsConfig *tls.Config, retry int) (*tls.Conn, error) {
+func ReliableConnect(remoteAddr string, tlsConfig *tls.Config, retry int) (*tls.Conn, error) {
 
 	var err error
 	var c *tls.Conn
@@ -33,30 +33,32 @@ func ReliableConnect(remoteName string, remoteAddr string, tlsConfig *tls.Config
 			if err.Error() == okError {
 				time.Sleep(time.Duration(retry) * time.Millisecond)
 			} else {
-				return nil, fmt.Errorf("Could not connect to port of node '%s' because of: %s\n", remoteName, err.Error())
+				return nil, fmt.Errorf("could not connect to port of node '%s' because of: %s", remoteAddr, err.Error())
 			}
 		}
 	}
 
-	log.Printf("Successfully connected to worker node '%s'.\n", remoteName)
-
 	return c, nil
 }
 
-// ReliableSend sends text to other node specified and
-// tries to reconnect in case of simple disconnects.
-func ReliableSend(conn *tls.Conn, text string, remoteName string, remoteAddr string, tlsConfig *tls.Config, timeout int, retry int) error {
+// ReliableSend attempts to transmit a message inbetween
+// pluto nodes. If the first attempt fails, the node will
+// try to reconnect and resend the message until successfully
+// transmitted.
+func ReliableSend(conn *tls.Conn, text string, remoteAddr string, tlsConfig *tls.Config, timeout int, retry int) error {
 
-	var err error
-	var replacedConn *tls.Conn
+	// TODO: Make this routine first check for closed
+	//       pipe and after that attempting 'ping' test
+	//       with exponential (?) backoff for write deadline
+	//       up to timeout.
 
 	// Set configured timeout on waiting for response.
 	conn.SetWriteDeadline(time.Now().Add(time.Duration(timeout) * time.Millisecond))
 
 	// Test long-lived connection.
-	_, err = conn.Write([]byte("> ping <\r\n"))
+	_, err := conn.Write([]byte("> ping <\r\n"))
 	if err != nil {
-		return fmt.Errorf("sending ping to node '%s' failed with: %s\n", remoteName, err.Error())
+		return fmt.Errorf("sending ping to node '%s' failed with: %s\n", remoteAddr, err.Error())
 	}
 
 	// Wait for configured time to pass.
@@ -69,23 +71,25 @@ func ReliableSend(conn *tls.Conn, text string, remoteName string, remoteAddr str
 	_, err = fmt.Fprintf(conn, "%s\r\n", text)
 	for err != nil {
 
-		log.Printf("[comm.ReliableSend] Sending to node '%s' failed, trying to recover...\n", remoteName)
+		log.Printf("[comm.ReliableSend] Sending to node '%s' failed, trying to recover...\n", remoteAddr)
 
 		// Define an error we can deal with.
-		okError := fmt.Sprintf("write tcp %s->%s: write: broken pipe", conn.LocalAddr(), conn.RemoteAddr())
+		okError := fmt.Sprintf("write tcp %s->%s: write: broken pipe", conn.LocalAddr().String(), remoteAddr)
 
 		if err.Error() == okError {
 
 			// Connection was lost. Reconnect.
-			replacedConn, err = ReliableConnect(remoteName, remoteAddr, tlsConfig, retry)
+			conn, err = ReliableConnect(remoteAddr, tlsConfig, retry)
 			if err != nil {
-				return fmt.Errorf("could not reestablish connection with '%s': %s\n", remoteName, err.Error())
+				return fmt.Errorf("could not reestablish connection with '%s': %s", remoteAddr, err.Error())
 			}
 
-			// Retry transfer.
-			_, err = fmt.Fprintf(replacedConn, "%s\r\n", text)
+			log.Printf("[comm.ReliableSend] Reconnected to '%s'.\n", remoteAddr)
+
+			// Resend message.
+			_, err = fmt.Fprintf(conn, "%s\r\n", text)
 		} else {
-			return fmt.Errorf("could not reestablish connection with '%s': %s\n", remoteName, err.Error())
+			return fmt.Errorf("could not reestablish connection with '%s': %s", remoteAddr, err.Error())
 		}
 	}
 

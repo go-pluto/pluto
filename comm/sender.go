@@ -282,16 +282,16 @@ func (sender *Sender) SendMsgs() {
 				// Unlock mutex.
 				sender.lock.Unlock()
 
-				for nodeName, nodeAddr := range sender.nodes {
+				for _, nodeAddr := range sender.nodes {
 
 					// Connect to node.
-					conn, err := ReliableConnect(nodeName, nodeAddr, sender.tlsConfig, sender.intlConnRetry)
+					conn, err := ReliableConnect(nodeAddr, sender.tlsConfig, sender.intlConnRetry)
 					if err != nil {
 						log.Fatalf("[comm.SendMsgs] Failed to connect to %s: %s\n", err.Error())
 					}
 
 					// Send payload reliably to other nodes.
-					err = ReliableSend(conn, marshalledMsg, nodeName, nodeAddr, sender.tlsConfig, sender.intlConnTimeout, sender.intlConnRetry)
+					err = ReliableSend(conn, marshalledMsg, nodeAddr, sender.tlsConfig, sender.intlConnTimeout, sender.intlConnRetry)
 					if err != nil {
 						log.Fatalf("[comm.SendMsgs] Failed to send: %s\n", err.Error())
 					}

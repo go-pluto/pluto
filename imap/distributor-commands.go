@@ -175,8 +175,13 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 
 	distr.lock.RUnlock()
 
+	// Prepare connection.
+	c.IntlTLSConfig = distr.IntlTLSConfig
+	c.IntlConnRetry = distr.Config.IntlConnRetry
+	c.OutAddr = fmt.Sprintf("%s:%s", workerIP, workerPort)
+
 	// Establish TLS connection to worker.
-	conn, err := comm.ReliableConnect(respWorker, fmt.Sprintf("%s:%s", workerIP, workerPort), distr.IntlTLSConfig, distr.Config.IntlConnRetry)
+	conn, err := comm.ReliableConnect(c.OutAddr, distr.IntlTLSConfig, distr.Config.IntlConnRetry)
 	if err != nil {
 		c.Error("Internal connection failure", err)
 		return false
@@ -185,8 +190,6 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 	// Save context to connection.
 	c.OutConn = conn
 	c.OutReader = bufio.NewReader(conn)
-	c.OutIP = workerIP
-	c.OutPort = workerPort
 	c.ClientID = clientID
 	c.UserName = userCredentials[0]
 
@@ -211,10 +214,10 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 // node and the responsible worker node.
 func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 
-	// Send received client command to worker node.
+	// Pass message to worker node.
 	err := c.InternalSend(false, rawReq)
 	if err != nil {
-		c.Error("Encountered send error to worker", err)
+		fmt.Printf("HERE HERE HERE: '%s'\n", err.Error())
 		return false
 	}
 
@@ -224,7 +227,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	// Receive incoming worker response.
 	curResp, err := c.InternalReceive(false)
 	if err != nil {
-		c.Error("Encountered receive error from worker", err)
+		c.Error("123: Encountered receive error from worker", err)
 		return false
 	}
 
