@@ -72,7 +72,7 @@ func InitDistributor(config *config.Config) (*Distributor, error) {
 	}
 
 	// Start to listen for incoming public connections on defined IP and port.
-	distr.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Distributor.IP, config.Distributor.Port), publicTLSConfig)
+	distr.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Distributor.ListenIP, config.Distributor.Port), publicTLSConfig)
 	if err != nil {
 		return nil, fmt.Errorf("[imap.InitDistributor] Listening for public TLS connections failed with: %s\n", err.Error())
 	}

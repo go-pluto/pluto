@@ -232,7 +232,7 @@ func main() {
 	log.Println("[crypto.GeneratePKI] === Done generating root certificate ===\n")
 
 	// Generate distributor's internal key and signed certificate.
-	err = CreateNodeCert(*pathPrefix, "internal-distributor", *rsaBits, notBefore, notAfter, []string{config.Distributor.IP}, rootCert, rootKey)
+	err = CreateNodeCert(*pathPrefix, "internal-distributor", *rsaBits, notBefore, notAfter, []string{config.Distributor.PublicIP}, rootCert, rootKey)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func main() {
 
 		// For each worker node, generate an internal key pair
 		// and a signed certificate.
-		err = CreateNodeCert(*pathPrefix, fmt.Sprintf("internal-%s", name), *rsaBits, notBefore, notAfter, []string{worker.IP}, rootCert, rootKey)
+		err = CreateNodeCert(*pathPrefix, fmt.Sprintf("internal-%s", name), *rsaBits, notBefore, notAfter, []string{worker.PublicIP}, rootCert, rootKey)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -249,7 +249,7 @@ func main() {
 
 	// Generate the storage's internal key pair
 	// and signed certificate.
-	err = CreateNodeCert(*pathPrefix, "internal-storage", *rsaBits, notBefore, notAfter, []string{config.Storage.IP}, rootCert, rootKey)
+	err = CreateNodeCert(*pathPrefix, "internal-storage", *rsaBits, notBefore, notAfter, []string{config.Storage.PublicIP}, rootCert, rootKey)
 	if err != nil {
 		log.Fatal(err)
 	}

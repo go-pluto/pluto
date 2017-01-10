@@ -170,7 +170,7 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 	distr.lock.RLock()
 
 	// Store worker connection information.
-	workerIP := distr.Config.Workers[respWorker].IP
+	workerIP := distr.Config.Workers[respWorker].PublicIP
 	workerPort := distr.Config.Workers[respWorker].MailPort
 
 	distr.lock.RUnlock()

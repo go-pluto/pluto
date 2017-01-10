@@ -143,7 +143,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	}
 
 	// Start to listen for incoming internal connections on defined IP and sync port.
-	worker.SyncSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].IP, config.Workers[worker.Name].SyncPort), internalTLSConfig)
+	worker.SyncSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].ListenIP, config.Workers[worker.Name].SyncPort), internalTLSConfig)
 	if err != nil {
 		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal sync TLS connections failed with: %s\n", err.Error())
 	}
@@ -151,7 +151,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	log.Printf("[imap.InitWorker] Listening for incoming sync requests on %s.\n", worker.SyncSocket.Addr())
 
 	// Start to listen for incoming internal connections on defined IP and mail port.
-	worker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].IP, config.Workers[worker.Name].MailPort), internalTLSConfig)
+	worker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].ListenIP, config.Workers[worker.Name].MailPort), internalTLSConfig)
 	if err != nil {
 		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
 	}
@@ -177,7 +177,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 
 	// Create subnet to distribute CRDT changes in.
 	curCRDTSubnet := make(map[string]string)
-	curCRDTSubnet["storage"] = fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.SyncPort)
+	curCRDTSubnet["storage"] = fmt.Sprintf("%s:%s", config.Storage.PublicIP, config.Storage.SyncPort)
 
 	// Init sending part of CRDT communication and send messages in background.
 	worker.SyncSendChan, err = comm.InitSender(worker.Name, sendCRDTLog, internalTLSConfig, config.IntlConnTimeout, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
@@ -227,7 +227,7 @@ func InitFailoverWorker(config *config.Config, workerName string) (*FailoverWork
 	}
 
 	// Start to listen for incoming internal connections on defined IP and mail port.
-	failWorker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[failWorker.Name].IP, config.Workers[failWorker.Name].MailPort), failWorker.IntlTLSConfig)
+	failWorker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[failWorker.Name].ListenIP, config.Workers[failWorker.Name].MailPort), failWorker.IntlTLSConfig)
 	if err != nil {
 		return nil, fmt.Errorf("[imap.InitFailoverWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
 	}
@@ -490,7 +490,7 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 	// Prepare connection.
 	c.IntlTLSConfig = failWorker.IntlTLSConfig
 	c.IntlConnRetry = failWorker.Config.IntlConnRetry
-	c.OutAddr = fmt.Sprintf("%s:%s", failWorker.Config.Storage.IP, failWorker.Config.Storage.MailPort)
+	c.OutAddr = fmt.Sprintf("%s:%s", failWorker.Config.Storage.PublicIP, failWorker.Config.Storage.MailPort)
 
 	// Connect via TLS to storage.
 	storageConn, err := comm.ReliableConnect(c.OutAddr, failWorker.IntlTLSConfig, failWorker.Config.IntlConnRetry)

@@ -110,7 +110,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 	}
 
 	// Start to listen for incoming internal connections on defined IP and sync port.
-	storage.SyncSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.SyncPort), internalTLSConfig)
+	storage.SyncSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.ListenIP, config.Storage.SyncPort), internalTLSConfig)
 	if err != nil {
 		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal sync TLS connections failed with: %s\n", err.Error())
 	}
@@ -118,7 +118,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 	log.Printf("[imap.InitStorage] Listening for incoming sync requests on %s.\n", storage.SyncSocket.Addr())
 
 	// Start to listen for incoming internal connections on defined IP and mail port.
-	storage.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.IP, config.Storage.MailPort), internalTLSConfig)
+	storage.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.ListenIP, config.Storage.MailPort), internalTLSConfig)
 	if err != nil {
 		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
 	}
@@ -148,7 +148,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 
 		// Create subnet to distribute CRDT changes in.
 		curCRDTSubnet := make(map[string]string)
-		curCRDTSubnet[workerName] = fmt.Sprintf("%s:%s", workerNode.IP, workerNode.SyncPort)
+		curCRDTSubnet[workerName] = fmt.Sprintf("%s:%s", workerNode.PublicIP, workerNode.SyncPort)
 
 		// Init sending part of CRDT communication and send messages in background.
 		storage.SyncSendChans[workerName], err = comm.InitSender("storage", sendCRDTLog, internalTLSConfig, config.IntlConnTimeout, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)

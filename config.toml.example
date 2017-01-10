@@ -21,7 +21,12 @@ Greeting = "Pluto ready."
 HierarchySeparator = "."
 
 [Distributor]
-IP = "127.0.0.1"
+# PublicIP denotes the Internet-facing IP address
+# this pluto node is supposed to be reachable via.
+PublicIP = "127.0.0.1"
+# ListenIP in turn is used by this pluto process to
+# bind locally to and listen for incoming requests.
+ListenIP = "127.0.0.1"
 Port = "993"
 AuthAdapter = "AuthPostgres"
 
@@ -51,7 +56,8 @@ AuthAdapter = "AuthPostgres"
 [Workers]
 
     [Workers.worker-1]
-    IP = "127.0.0.1"
+    PublicIP = "127.0.0.1"
+    ListenIP = "127.0.0.1"
     # MailPort specifies the port for connections
     # concerning the IMAP protocol.
     MailPort = "20001"
@@ -76,7 +82,8 @@ AuthAdapter = "AuthPostgres"
         KeyLoc = "/very/complicated/and/long/path/to/your/internal-worker-1-key.pem"
 
     [Workers.worker-2]
-    IP = "127.0.0.1"
+    PublicIP = "127.0.0.1"
+    ListenIP = "127.0.0.1"
     MailPort = "20002"
     SyncPort = "30002"
     UserStart = 11
@@ -89,7 +96,8 @@ AuthAdapter = "AuthPostgres"
         KeyLoc = "/very/complicated/and/long/path/to/your/internal-worker-2-key.pem"
 
     [Workers.worker-3]
-    IP = "127.0.0.1"
+    PublicIP = "127.0.0.1"
+    ListenIP = "127.0.0.1"
     MailPort = "20003"
     SyncPort = "30003"
     UserStart = 21
@@ -103,7 +111,8 @@ AuthAdapter = "AuthPostgres"
 
 
 [Storage]
-IP = "127.0.0.1"
+PublicIP = "127.0.0.1"
+ListenIP = "127.0.0.1"
 MailPort = "21000"
 SyncPort = "31000"
 MaildirRoot = "/for/example/some/very/unique/path/Maildir/"

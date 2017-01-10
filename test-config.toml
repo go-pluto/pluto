@@ -1,13 +1,14 @@
 RootCertLoc = "private/root-cert.pem"
 IntlConnTimeout = 50
-IntlConnRetry = 10
+IntlConnRetry = 100
 
 [IMAP]
 Greeting = "Pluto ready."
 HierarchySeparator = "."
 
 [Distributor]
-IP = "127.0.0.1"
+PublicIP = "127.0.0.1"
+ListenIP = "127.0.0.1"
 Port = "19933"
 AuthAdapter = "AuthFile"
 
@@ -27,7 +28,8 @@ AuthAdapter = "AuthFile"
 [Workers]
 
     [Workers.worker-1]
-    IP = "127.0.0.1"
+    PublicIP = "127.0.0.1"
+    ListenIP = "127.0.0.1"
     MailPort = "20001"
     SyncPort = "30001"
     UserStart = 1
@@ -40,7 +42,8 @@ AuthAdapter = "AuthFile"
         KeyLoc = "private/internal-worker-1-key.pem"
 
 [Storage]
-IP = "127.0.0.1"
+PublicIP = "127.0.0.1"
+ListenIP = "127.0.0.1"
 MailPort = "21000"
 SyncPort = "31000"
 MaildirRoot = "private/Maildirs/storage/"
