@@ -217,7 +217,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	// Pass message to worker node.
 	err := c.InternalSend(false, rawReq)
 	if err != nil {
-		fmt.Printf("HERE HERE HERE: '%s'\n", err.Error())
+		c.Error("Could not proxy request to worker", err)
 		return false
 	}
 
@@ -227,7 +227,7 @@ func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 	// Receive incoming worker response.
 	curResp, err := c.InternalReceive(false)
 	if err != nil {
-		c.Error("123: Encountered receive error from worker", err)
+		c.Error("Failed to receive worker's response to proxied command", err)
 		return false
 	}
 

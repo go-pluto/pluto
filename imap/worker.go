@@ -524,7 +524,7 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 		// Pass message to storage node.
 		err := c.InternalSend(false, rawReq)
 		if err != nil {
-			fmt.Printf("HERE 2 HERE 2 HERE 2: '%s'\n", err.Error())
+			c.Error("Could not proxy request to storage", err)
 			return
 		}
 
@@ -534,7 +534,7 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 		// Receive incoming storage response.
 		curResp, err := c.InternalReceive(false)
 		if err != nil {
-			c.Error("Encountered receive error from storage", err)
+			c.Error("Failed to receive storage's response to proxied command", err)
 			return
 		}
 

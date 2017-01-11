@@ -376,6 +376,13 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn) {
 		log.Fatalf("[comm.StoreIncMsgs] Writing to CRDT log file failed with: %s\n", err.Error())
 	}
 
+	// Append a newline symbol to just written line.
+	newline := []byte("\n")
+	_, err = recv.writeLog.Write(newline)
+	if err != nil {
+		log.Fatalf("[comm.StoreIncMsgs] Appending a newline symbol to CRDT log file failed with: %s\n", err.Error())
+	}
+
 	// Save to stable storage.
 	err = recv.writeLog.Sync()
 	if err != nil {
