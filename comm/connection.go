@@ -41,10 +41,9 @@ func ReliableConnect(remoteAddr string, tlsConfig *tls.Config, retry int) (*tls.
 	return c, nil
 }
 
-// ReliableSend attempts to transmit a message inbetween
-// pluto nodes. If the first attempt fails, the node will
-// try to reconnect and resend the message until successfully
-// transmitted.
+// ReliableSend attempts to transmit a message between pluto
+// nodes. If the first attempt fails, the node will try to
+// reconnect and resend the message until successfully transmitted.
 func ReliableSend(conn *tls.Conn, text string, remoteAddr string, tlsConfig *tls.Config, timeout int, retry int) error {
 
 	// TODO: Make this routine first check for closed

@@ -39,8 +39,8 @@ func (distr *Distributor) Capability(c *Connection, req *Request) bool {
 		return false
 	}
 
-	// TODO: Change returned capabilites based on IMAP state of
-	//       connection, e.g. more capabilites if authenticated.
+	// TODO: Change returned capabilities based on IMAP state of
+	//       connection, e.g. more capabilities if authenticated.
 
 	return true
 }

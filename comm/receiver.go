@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"io/ioutil"
 )
@@ -123,6 +124,10 @@ func InitReceiver(name string, logFilePath string, vclockLogPath string, socket 
 	// initial run to check if log file contains elements.
 	recv.msgInLog <- struct{}{}
 
+	// Start triggering msgInLog events periodically.
+	recv.wg.Add(1)
+	go recv.TriggerMsgApplier()
+
 	// Accept incoming messages in background.
 	recv.wg.Add(1)
 	go recv.AcceptIncMsgs()
@@ -220,6 +225,7 @@ func (recv *Receiver) Shutdown(downRecv chan struct{}) {
 	log.Printf("[comm.Shutdown] Receiver: shutting down...\n")
 
 	// Instruct other goroutines to shutdown.
+	recv.shutdown <- struct{}{}
 	recv.shutdown <- struct{}{}
 	recv.shutdown <- struct{}{}
 	recv.shutdown <- struct{}{}
@@ -336,6 +342,45 @@ func (recv *Receiver) AcceptIncMsgs() error {
 	}
 }
 
+// TriggerMsgApplier starts a timer that triggers
+// an msgInLog event when duration elapsed. Supposed
+// to routinely poke the ApplyStoredMsgs into checking
+// for unprocessed messages in log.
+func (recv *Receiver) TriggerMsgApplier() {
+
+	// Specify duration to wait between triggers.
+	triggerD := 2 * time.Second
+
+	// Create a timer that waits for one second
+	// to elapse and then fires.
+	triggerT := time.NewTimer(triggerD)
+
+	for {
+
+		select {
+
+		// Check if a shutdown signal was sent.
+		case <-recv.shutdown:
+
+			// Call done handler of wait group for this
+			// routine on exiting this function.
+			defer recv.wg.Done()
+			return
+
+		case <-triggerT.C:
+
+			// If buffered channel indicating an arrived
+			// msg is not full yet, make it full.
+			if len(recv.msgInLog) < 1 {
+				recv.msgInLog <- struct{}{}
+			}
+
+			// Renew timer.
+			triggerT.Reset(triggerD)
+		}
+	}
+}
+
 // StoreIncMsgs takes received message string and saves
 // it into incoming CRDT message log file.
 func (recv *Receiver) StoreIncMsgs(conn net.Conn) {
@@ -358,9 +403,9 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn) {
 			if err.Error() == "EOF" {
 				log.Printf("[comm.StoreIncMsgs] Reading from closed connection. Ignoring.\n")
 				return
-			} else {
-				log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
 			}
+
+			log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
 		}
 
 		// Remove trailing characters denoting line end.
