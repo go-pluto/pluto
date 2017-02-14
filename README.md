@@ -2,12 +2,12 @@
 
 [![GoDoc](https://godoc.org/github.com/numbleroot/pluto?status.svg)](https://godoc.org/github.com/numbleroot/pluto) [![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](https://github.com/numbleroot/pluto/blob/master/LICENSE) [![Build Status](https://travis-ci.org/numbleroot/pluto.svg?branch=master)](https://travis-ci.org/numbleroot/pluto) [![Go Report Card](https://goreportcard.com/badge/github.com/numbleroot/pluto)](https://goreportcard.com/report/github.com/numbleroot/pluto) [![codecov](https://codecov.io/gh/numbleroot/pluto/branch/master/graph/badge.svg)](https://codecov.io/gh/numbleroot/pluto)
 
-Pluto is a distributed IMAP server that implements a subset of the [IMAPv4 standard](https://tools.ietf.org/html/rfc3501). It makes use of [Conflict-free Replicated Data Types](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) to allow state to be kept on each worker node but still achieve system-wide convergence of user data. Pluto is written in Go.
+Pluto is a distributed IMAP server that implements a subset of the [IMAPv4 standard](https://tools.ietf.org/html/rfc3501). It makes use of [Conflict-free Replicated Data Types](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) defined by Shapiro et al. to replicate application state into traditionally stateless tiers (worker nodes) and still achieve system-wide convergence of user data. By this, pluto attempts to offer a solution towards the challenges arising from Brewer's [CAP theorem](https://en.wikipedia.org/wiki/CAP_theorem): in case of failures in the system, choose to stay available by accepting reduced consistency in form of the CRDT's [strong eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency#Strong_eventual_consistency). Pluto is written in Go and provided under copyleft license [GPLv3](https://github.com/numbleroot/pluto/blob/master/LICENSE).
 
 
 ## Status
 
-**Work in progress:** This is the code base for my Bachelor Thesis. It is heavily work in progress and not ready yet.
+**Use with caution and not in production:** this is a prototypical implementation of the system architecture and presented concepts discussed in my Bachelor Thesis.
 
 
 ## Installation
@@ -15,20 +15,24 @@ Pluto is a distributed IMAP server that implements a subset of the [IMAPv4 stand
 If you have a working [Go](https://golang.org/) setup, installation is as easy as:
 
 ```bash
- $ go get github.com/numbleroot/pluto
+ $ go get -u github.com/numbleroot/pluto
 ```
 
 
-## Setup
+## Quick Start
 
-### Quick Setup
+You need to configure your pluto setup in a `config.toml` file. Please refer to the provided [config.toml.example](https://github.com/numbleroot/pluto/blob/master/config.toml.example) for an exemplary configuration that only needs adaptation to your requirements.
+
+**Important:** Please make sure, not to include `|` (pipe character) in names for your distributor, worker and storage nodes as this character is used in marshalled messages sent on internal network.
 
 If you know what happens in background, these are the steps to take in order to ready pluto for use:
 
 ```bash
  $ cp config.toml.example config.toml            # Use example file as basis for your config file
  $ vim config.toml                               # Adjust config to your setup and needs
- $ make prod                                     # Executes clean, deps, pki and build target
+ $ make pki                                      # Creates internally used system of certificates
+ $ make deps                                     # Fetch all dependencies
+ $ make build                                    # Compile pluto
  $ scp pluto-and-private-bundle <other nodes>    # Distribute pluto binary to other network nodes
  $ ./pluto -storage                              # On node 'storage'
  $ ./pluto -worker worker-1                      # On node 'worker-1'
@@ -39,21 +43,15 @@ If you know what happens in background, these are the steps to take in order to 
 
 Now you should be able to access your IMAP server from the Internet under configured IP.
 
-These steps conceal the involved processes behind, if you are interested in them, read on.
 
-### Detailed Setup
+## User authentication
 
-### Configuration
+Currently, two schemes are available to authenticate users though provided `auth` package easily is extensible to fit specific authentication scenarios.
 
-You need to configure your pluto setup in a `config.toml` file. Please refer to the provided [config.toml.example](https://github.com/numbleroot/pluto/blob/master/config.toml.example) for an exemplary configuration that only needs adaptation to your requirements.
 
-**Important:** Please make sure, not to include `|` (pipe character) in names for your distributor, worker and storage nodes as this character is used in marshalled messages sent on internal network.
+### PostgreSQL
 
-#### User authentication
-
-##### PostgreSQL
-
-If you plan on using a PostgreSQL database for storing the user authorization information, you need to have a PostgreSQL running somewhere. If you need a new user that owns the database, you might use these commands on the PostgreSQL host:
+If you plan on using a PostgreSQL database to provide an user information table, you need to have a PostgreSQL running somewhere. If you need a new user that owns the database, you might use these commands on the PostgreSQL host:
 
 ```bash
 user@system $ sudo -i -u postgres
@@ -69,13 +67,43 @@ After that, you can create a new database `pluto` to hold the user information l
 user@system $ createdb -U pluto pluto
 ```
 
-##### File based (for testing purposes)
 
-#### Certificates
+### Plain text file
 
-There are multiple certificates needed in order to operate a pluto setup. Fortunately, you only have to provide one certificate that is valid for normal use in e.g. webservers. The other required certificates are used for internal communications among pluto's nodes and will be generated by a simple Makefile command.
+If you would like to easily test a configuration or you are developing locally, a plain text file holding user information might suffice. Simply put lines of user names and user passwords delimited by a reserved symbol (e.g. `;`) into a text file and configure your `config.toml` accordingly.
 
-So first, you need to provide a valid public TLS certificate that the distributor node can present to Internet-faced connections. It is recommended that you obtain a certificate signed by a Certificate Authority (CA) that is accepted by most clients by default, e.g. [Let's Encrypt](https://letsencrypt.org/). For testing though, you can use the provided `test-public` target with `make` to generate a self-signed certificate, i.e.:
+An authentication file called `local-dev-users.txt` might look like:
+
+```
+username1;secret1
+username2;secret2
+username3;secret3
+...
+```
+
+In your `config.toml` you set the distributor node to authenticate users based on this file, for example:
+
+```
+[Distributor]
+...
+AuthAdapter = "AuthFile"
+
+    ...
+
+    [Distributor.AuthFile]
+    File = "/path/to/your/setup/local-dev-users.txt"
+    Separator = ";"
+...
+```
+
+**Warning:** Please dot not use this scheme in any places **real** user data is involved. **It is not considered secure.**
+
+
+## Certificates
+
+There are multiple certificates needed in order to operate a pluto setup. Fortunately, you only have to provide one certificate that is valid for normal use in e.g. webservers. The other required certificates are used for internal communication among pluto nodes and will be generated by a simple Makefile command.
+
+So first, you need to provide a valid public TLS certificate that the distributor node can present to Internet-faced connections. It is recommended that you obtain a certificate signed by a Certificate Authority (CA) that is accepted by most clients per default, e.g. [Let's Encrypt](https://letsencrypt.org/). For testing though, you can use the provided `test-public` Makefile target and call it to generate a self-signed certificate:
 
 ```bash
 $ make test-public
@@ -94,9 +122,9 @@ $ go clean
 $ rm -f generate_cert.go
 ```
 
-Please keep in mind that the certificate generated via this command really only is to be used for testing, never in production mode. It is self-signed for localhost addresses and only of 1024 bits key length which should not be used in production anymore today.
+Please keep in mind that the certificate generated via this command really only is to be used for testing, never in production mode. It is self-signed for localhost addresses and only of 1024 bits key length which should not be used anywhere serious anymore.
 
-The remaining required certificates, the mentioned internal ones, can simply be generated by running:
+The remaining required certificates, mentioned internal ones, can simply be generated by running:
 
 ```bash
 $ make pki
@@ -104,6 +132,8 @@ $ make pki
 
 
 ## Acknowledgments
+
+I would like to thank my thesis supervisor [Tim Jungnickel](https://github.com/TimJuni) for coming up with this project's idea, providing feedback and ideas on current progress, and evaluation help. Furthermore, [Matthias Loibl](https://github.com/MetalMatze) routinely reviewed Go code I committed to pluto and thus helped to improve code quality and readibility. Thank you!
 
 
 ## License
