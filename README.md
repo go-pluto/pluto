@@ -131,6 +131,11 @@ $ make pki
 ```
 
 
+## Evaluation
+
+Evaluation scripts to benchmark pluto's response time performance against the de facto standard IMAP server [Dovecot](https://www.dovecot.org/) are provided in repository [pluto-evaluation](https://github.com/numbleroot/pluto-evaluation).
+
+
 ## Acknowledgments
 
 I would like to thank my thesis supervisor [Tim Jungnickel](https://github.com/TimJuni) for coming up with this project's idea, providing feedback and ideas on current progress, and evaluation help. Furthermore, [Matthias Loibl](https://github.com/MetalMatze) routinely reviewed Go code I committed to pluto and thus helped to improve code quality and readibility. Thank you!

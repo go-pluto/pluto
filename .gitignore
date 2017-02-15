@@ -31,6 +31,7 @@ test-config-aws.toml
 users.txt
 .env
 *.out
+*.log
 
 # Pluto specific includes
 !config/.env
