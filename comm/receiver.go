@@ -349,7 +349,7 @@ func (recv *Receiver) AcceptIncMsgs() error {
 func (recv *Receiver) TriggerMsgApplier() {
 
 	// Specify duration to wait between triggers.
-	triggerD := 2 * time.Second
+	triggerD := 5 * time.Second
 
 	// Create a timer that waits for one second
 	// to elapse and then fires.
@@ -598,7 +598,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 						// Wait for done signal from node.
 						<-recv.doneCRDTUpdChan
 					} else {
-						log.Printf("[comm.ApplyStoredMsgs] %s: message was a duplicate, already seen.", recv.name)
+						log.Printf("[comm.ApplyStoredMsgs] %s: message was a duplicate, already seen.\n", recv.name)
 					}
 
 					for node, value := range msg.VClock {
@@ -651,7 +651,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					}
 				} else {
 
-					log.Printf("[comm.ApplyStoredMsgs] Message was out of order. Next.")
+					log.Printf("[comm.ApplyStoredMsgs] Message was out of order. Next.\n")
 
 					// Set position of head to byte after just read message,
 					// effectively delaying execution of that message.
