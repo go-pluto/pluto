@@ -30,15 +30,7 @@ type User struct {
 	Password string
 }
 
-// UsersByName defines a list type of users to search efficiently.
-type UsersByName []User
-
 // Functions
-
-// Make list of users searchable efficiently.
-func (u UsersByName) Len() int           { return len(u) }
-func (u UsersByName) Swap(i, j int)      { u[i], u[j] = u[j], u[i] }
-func (u UsersByName) Less(i, j int) bool { return u[i].Name < u[j].Name }
 
 // NewFileAuthenticator takes in a file name and a separator,
 // reads in specified file and parses it line by line as
@@ -91,7 +83,9 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 	}
 
 	// Sort users list to search it efficiently later on.
-	sort.Sort(UsersByName(users))
+	sort.Slice(users, func(i, j int) bool {
+		return users[i].Name < users[j].Name
+	})
 
 	return &FileAuthenticator{
 		lock:      new(sync.RWMutex),
