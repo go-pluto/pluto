@@ -165,3 +165,121 @@ func TestParse(t *testing.T) {
 		t.Fatalf("[comm.TestParse] marshalled6: Expected value 'this is a long payload' as payload but found: '%v'\n", msg6.Payload)
 	}
 }
+
+// TestParseOp executes a black-box unit test
+// on implemented ParseOp() function of messages.
+func TestParseOp(t *testing.T) {
+
+	// Test message strings.
+	msg1 := "|"
+	msg2 := "operation|payload"
+	msg3 := "123op!|p$$$load|more|payload|v4lu3s"
+
+	op1, payload1, err := comm.ParseOp(msg1)
+	if err != nil {
+		t.Fatalf("[comm.TestParseOp] msg1: Expected nil error but received: '%v'", err)
+	}
+
+	if op1 != "" {
+		t.Fatalf("[comm.TestParseOp] msg1: Expected operation to be '' but found: '%s'", op1)
+	}
+
+	if payload1 != "" {
+		t.Fatalf("[comm.TestParseOp] msg1: Expected payload to be '' but found: '%s'", payload1)
+	}
+
+	op2, payload2, err := comm.ParseOp(msg2)
+	if err != nil {
+		t.Fatalf("[comm.TestParseOp] msg2: Expected nil error but received: '%v'", err)
+	}
+
+	if op2 != "operation" {
+		t.Fatalf("[comm.TestParseOp] msg2: Expected operation to be 'operation' but found: '%s'", op2)
+	}
+
+	if payload2 != "payload" {
+		t.Fatalf("[comm.TestParseOp] msg2: Expected payload to be 'payload' but found: '%s'", payload2)
+	}
+
+	op3, payload3, err := comm.ParseOp(msg3)
+	if err != nil {
+		t.Fatalf("[comm.TestParseOp] msg3: Expected nil error but received: '%v'", err)
+	}
+
+	if op3 != "123op!" {
+		t.Fatalf("[comm.TestParseOp] msg3: Expected operation to be '123op!' but found: '%s'", op3)
+	}
+
+	if payload3 != "p$$$load|more|payload|v4lu3s" {
+		t.Fatalf("[comm.TestParseOp] msg3: Expected payload to be 'p$$$load|more|payload|v4lu3s' but found: '%s'", payload3)
+	}
+}
+
+// TestParseCreate executes a black-box unit test
+// on implemented ParseCreate() function of messages.
+func TestParseCreate(t *testing.T) {
+
+	// user1, University.Thesis, University.Thesis, ae3daa63-4d50-4ea5-baa4-d5f780e05302, ""
+	create1 := "user1|VW5pdmVyc2l0eS5UaGVzaXM=|VW5pdmVyc2l0eS5UaGVzaXM=;ae3daa63-4d50-4ea5-baa4-d5f780e05302"
+
+	createParsed1, err := comm.ParseCreate(create1)
+	if err != nil {
+		t.Fatalf("[comm.TestParseCreate] create1: Expected nil error but received: '%v'", err)
+	}
+
+	if createParsed1.User != "user1" {
+		t.Fatalf("[comm.TestParseCreate] create1: Expected User to be 'user1' but found: '%v'", createParsed1.User)
+	}
+
+	if createParsed1.Mailbox != "University.Thesis" {
+		t.Fatalf("[comm.TestParseCreate] create1: Expected Mailbox to be 'University.Thesis' but found: '%v'", createParsed1.Mailbox)
+	}
+
+	if createParsed1.AddMailbox.Value != "University.Thesis" {
+		t.Fatalf("[comm.TestParseCreate] create1: Expected AddMailbox.Value to be 'University.Thesis' but found: '%v'", createParsed1.AddMailbox.Value)
+	}
+
+	if createParsed1.AddMailbox.Tag != "ae3daa63-4d50-4ea5-baa4-d5f780e05302" {
+		t.Fatalf("[comm.TestParseCreate] create1: Expected AddMailbox.Tag to be 'ae3daa63-4d50-4ea5-baa4-d5f780e05302' but found: '%v'", createParsed1.AddMailbox.Tag)
+	}
+
+	if createParsed1.AddMailbox.Contents != "" {
+		t.Fatalf("[comm.TestParseCreate] create1: Expected AddMailbox.Contents to be '' but found: '%v'", createParsed1.AddMailbox.Contents)
+	}
+}
+
+// TestParseDelete executes a black-box unit test
+// on implemented ParseDelete() function of messages.
+func TestParseDelete(t *testing.T) {
+
+	// user1, University.Thesis, University.Thesis, 76e18257-3687-41f3-8c94-9a7b4d1a9799, ""
+	delete1 := "user1|VW5pdmVyc2l0eS5UaGVzaXM=|VW5pdmVyc2l0eS5UaGVzaXM=;76e18257-3687-41f3-8c94-9a7b4d1a9799"
+
+	deleteParsed1, err := comm.ParseDelete(delete1)
+	if err != nil {
+		t.Fatalf("[comm.TestParseDelete] delete1: Expected nil error but received: '%v'", err)
+	}
+
+	if deleteParsed1.User != "user1" {
+		t.Fatalf("[comm.TestParseDelete] delete1: Expected User to be 'user1' but found: '%v'", deleteParsed1.User)
+	}
+
+	if deleteParsed1.Mailbox != "University.Thesis" {
+		t.Fatalf("[comm.TestParseDelete] delete1: Expected Mailbox to be 'University.Thesis' but found: '%v'", deleteParsed1.Mailbox)
+	}
+
+	for _, rmvMailbox := range deleteParsed1.RmvMailbox {
+
+		if rmvMailbox.Value != "University.Thesis" {
+			t.Fatalf("[comm.TestParseDelete] delete1: Expected RmvMailbox.Value to be 'University.Thesis' but found: '%v'", rmvMailbox.Value)
+		}
+
+		if rmvMailbox.Tag != "76e18257-3687-41f3-8c94-9a7b4d1a9799" {
+			t.Fatalf("[comm.TestParseDelete] delete1: Expected RmvMailbox.Tag to be '76e18257-3687-41f3-8c94-9a7b4d1a9799' but found: '%v'", rmvMailbox.Tag)
+		}
+
+		if rmvMailbox.Contents != "" {
+			t.Fatalf("[comm.TestParseDelete] delete1: Expected RmvMailbox.Contents to be '' but found: '%v'", rmvMailbox.Contents)
+		}
+	}
+}

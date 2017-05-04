@@ -21,7 +21,7 @@ func TestLoadConfig(t *testing.T) {
 	}
 
 	// Now load a valid config.
-	config, err := config.LoadConfig("../test-config.toml")
+	conf, err := config.LoadConfig("../test-config.toml")
 	if err != nil {
 		t.Fatalf("[config.TestLoadConfig] Expected success while loading 'test-config.toml' but received: '%s'\n", err.Error())
 	}
@@ -36,7 +36,7 @@ func TestLoadConfig(t *testing.T) {
 	absCertLoc := filepath.Join(absPlutoPath, "private/public-distributor-cert.pem")
 
 	// Check for test success.
-	if config.Distributor.PublicTLS.CertLoc != absCertLoc {
-		t.Fatalf("[config.TestLoadConfig] Expected '%s' but received '%s'\n", absCertLoc, config.Distributor.PublicTLS.CertLoc)
+	if conf.Distributor.PublicTLS.CertLoc != absCertLoc {
+		t.Fatalf("[config.TestLoadConfig] Expected '%s' but received '%s'\n", absCertLoc, conf.Distributor.PublicTLS.CertLoc)
 	}
 }
