@@ -67,11 +67,6 @@ var loginTests = []struct {
 
 // Functions
 
-// testAddr returns the addr to use in tests
-func testAddr() string {
-	return fmt.Sprintf("%s:%s", testEnv.Config.Distributor.PublicIP, testEnv.Config.Distributor.Port)
-}
-
 func TestMain(m *testing.M) {
 
 	var err error
@@ -100,7 +95,7 @@ func TestMain(m *testing.M) {
 func TestCapability(t *testing.T) {
 
 	// Connect to IMAP distributor.
-	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testEnv.Addr, testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestCapability] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 	}
@@ -164,7 +159,7 @@ func TestLogout(t *testing.T) {
 		var answer string
 
 		// Connect to IMAP distributor.
-		conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+		conn, err := tls.Dial("tcp", testEnv.Addr, testEnv.TLSConfig)
 		if err != nil {
 			t.Fatalf("[imap.TestLogout] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 		}
@@ -223,7 +218,7 @@ func TestLogout(t *testing.T) {
 func TestStartTLS(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testEnv.Addr, testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestStartTLS] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -268,7 +263,7 @@ func TestStartTLS(t *testing.T) {
 func TestLogin(t *testing.T) {
 
 	// Connect to IMAP distributor.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testEnv.Addr, testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestLogin] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 	}

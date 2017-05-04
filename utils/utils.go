@@ -1,10 +1,10 @@
 package utils
 
 import (
-	"crypto/tls"
-
-	"crypto/x509"
 	"fmt"
+
+	"crypto/tls"
+	"crypto/x509"
 	"io/ioutil"
 
 	"github.com/numbleroot/pluto/config"
@@ -18,6 +18,7 @@ import (
 type TestEnv struct {
 	Config      *config.Config
 	TLSConfig   *tls.Config
+	Addr        string
 	DownDistr   chan struct{}
 	DownWorker  chan struct{}
 	DownStorage chan struct{}
@@ -65,6 +66,7 @@ func CreateTestEnv(configFilePath string) (*TestEnv, error) {
 	return &TestEnv{
 		Config:      config,
 		TLSConfig:   tlsConfig,
+		Addr:        fmt.Sprintf("%s:%s", config.Distributor.PublicIP, config.Distributor.Port),
 		DownDistr:   make(chan struct{}),
 		DownWorker:  make(chan struct{}),
 		DownStorage: make(chan struct{}),
