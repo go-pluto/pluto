@@ -6,7 +6,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/numbleroot/pluto/config"
 )
@@ -17,7 +16,6 @@ import (
 // information including the in-memory map of username to
 // password mapping.
 type FileAuthenticator struct {
-	lock  *sync.RWMutex
 	Users []User
 }
 
@@ -37,24 +35,20 @@ type User struct {
 // and an in-memory map of username mapped to password.
 func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 
-	i := 1
-	var err error
-	var handle *os.File
-	var nextUser User
-
 	// Reserve space for the ordered users list in memory.
 	users := make([]User, 0, 50)
 
 	// Open file with authentication information.
-	handle, err = os.Open(file)
+	handle, err := os.Open(file)
 	if err != nil {
-		return nil, fmt.Errorf("[auth.NewFileAuthenticator] Could not open supplied authentication file: %s\n", err.Error())
+		return nil, fmt.Errorf("[auth.NewFileAuthenticator] Could not open supplied authentication file: %v", err)
 	}
 	defer handle.Close()
 
 	// Create a new scanner on top of file handle.
 	scanner := bufio.NewScanner(handle)
 
+	i := 1
 	// As long as there are lines left, scan them into memory.
 	for scanner.Scan() {
 
@@ -62,7 +56,7 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 		userData := strings.Split(scanner.Text(), sep)
 
 		// Create new user struct.
-		nextUser = User{
+		nextUser := User{
 			ID:       i,
 			Name:     userData[0],
 			Password: userData[1],
@@ -77,7 +71,7 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 
 	// If the scanner ended with an error, report it.
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("[auth.NewFileAuthenticator] Experienced error while scanning authentication file: %s\n", err.Error())
+		return nil, fmt.Errorf("[auth.NewFileAuthenticator] Experienced error while scanning authentication file: %v", err)
 	}
 
 	// Sort users list to search it efficiently later on.
@@ -86,7 +80,6 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 	})
 
 	return &FileAuthenticator{
-		lock:  new(sync.RWMutex),
 		Users: users,
 	}, nil
 }
@@ -113,11 +106,6 @@ func (f *FileAuthenticator) GetWorkerForUser(workers map[string]config.Worker, i
 // to find a matching entry the in-memory list taken from
 // the authentication file.
 func (f *FileAuthenticator) AuthenticatePlain(username string, password string, clientAddr string) (int, string, error) {
-
-	// This routine has to be safe for concurrent usage,
-	// therefore lock the struct on entry.
-	f.lock.RLock()
-	defer f.lock.RUnlock()
 
 	// Search in user list for user matching supplied name.
 	i := sort.Search(len(f.Users), func(i int) bool {
