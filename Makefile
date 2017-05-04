@@ -62,13 +62,13 @@ setup-test-env:
 	if [ ! -d "private/crdt-layers/worker-1" ]; then mkdir -p private/crdt-layers/worker-1; fi
 	@for i in `seq 0 ${NUM_USERS}`; do \
 		if [ ! -d "private/crdt-layers/worker-1/user$${i}" ]; then mkdir -p private/crdt-layers/worker-1/user$${i}; fi; \
-		if [ ! -f "private/crdt-layers/worker-1/user$${i}/mailbox-structure.log" ]; then touch private/crdt-layers/worker-1/user$${i}/mailbox-structure.log && echo -n "SU5CT1g=;aa$${i}cc488-7469-4984-8f88-27adc426ab6a" > private/crdt-layers/worker-1/user$${i}/mailbox-structure.log; fi; \
+		if [ ! -f "private/crdt-layers/worker-1/user$${i}/mailbox-structure.log" ]; then touch private/crdt-layers/worker-1/user$${i}/mailbox-structure.log && echo "SU5CT1g=;aa$${i}cc488-7469-4984-8f88-27adc426ab6a" > private/crdt-layers/worker-1/user$${i}/mailbox-structure.log; fi; \
 		if [ ! -f "private/crdt-layers/worker-1/user$${i}/INBOX.log" ]; then touch private/crdt-layers/worker-1/user$${i}/INBOX.log; fi; \
 	done
 	if [ ! -d "private/crdt-layers/storage" ]; then mkdir -p private/crdt-layers/storage; fi
 	@for i in `seq 0 ${NUM_USERS}`; do \
 		if [ ! -d "private/crdt-layers/storage/user$${i}" ]; then mkdir -p private/crdt-layers/storage/user$${i}; fi; \
-		if [ ! -f "private/crdt-layers/storage/user$${i}/mailbox-structure.log" ]; then touch private/crdt-layers/storage/user$${i}/mailbox-structure.log && echo -n "SU5CT1g=;bb$${i}cc488-7469-4984-8f88-27adc426ab6a" > private/crdt-layers/storage/user$${i}/mailbox-structure.log; fi; \
+		if [ ! -f "private/crdt-layers/storage/user$${i}/mailbox-structure.log" ]; then touch private/crdt-layers/storage/user$${i}/mailbox-structure.log && echo "SU5CT1g=;bb$${i}cc488-7469-4984-8f88-27adc426ab6a" > private/crdt-layers/storage/user$${i}/mailbox-structure.log; fi; \
 		if [ ! -f "private/crdt-layers/storage/user$${i}/INBOX.log" ]; then touch private/crdt-layers/storage/user$${i}/INBOX.log; fi; \
 	done
 
