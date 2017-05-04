@@ -1,4 +1,4 @@
-package imap
+package main
 
 import (
 	"log"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/numbleroot/pluto/config"
+	"github.com/numbleroot/pluto/imap"
 )
 
 // Functions
@@ -15,26 +16,26 @@ import (
 func TestInitWorker(t *testing.T) {
 
 	// Read configuration from file.
-	config, err := config.LoadConfig("../test-config.toml")
+	conf, err := config.LoadConfig("./test-config.toml")
 	if err != nil {
 		t.Fatalf("[imap.TestInitWorker] Expected loading of configuration file not to fail but: '%s'\n", err.Error())
 	}
 
-	workerConf := config.Workers["worker-1"]
+	workerConf := conf.Workers["worker-1"]
 
 	// Set different ports for this test to
 	// avoid conflicting binds.
-	config.Distributor.Port = "39933"
+	conf.Distributor.Port = "39933"
 	workerConf.MailPort = "40001"
 	workerConf.SyncPort = "50001"
-	config.Workers["worker-1"] = workerConf
-	config.Storage.MailPort = "41000"
-	config.Storage.SyncPort = "51000"
+	conf.Workers["worker-1"] = workerConf
+	conf.Storage.MailPort = "41000"
+	conf.Storage.SyncPort = "51000"
 
 	go func() {
 
 		// Correct storage initialization.
-		storage, err := InitStorage(config)
+		storage, err := imap.InitStorage(conf)
 		if err != nil {
 			t.Fatalf("[imap.TestInitWorker] Expected correct storage initialization but failed with: '%s'\n", err.Error())
 		}
@@ -53,7 +54,7 @@ func TestInitWorker(t *testing.T) {
 	time.Sleep(400 * time.Millisecond)
 
 	// Correct worker initialization.
-	worker, err := InitWorker(config, "worker-1")
+	worker, err := imap.InitWorker(conf, "worker-1")
 	if err != nil {
 		t.Fatalf("[imap.TestInitWorker] Expected correct worker-1 initialization but failed with: '%s'\n", err.Error())
 	}

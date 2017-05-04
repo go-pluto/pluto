@@ -1,4 +1,4 @@
-package imap_test
+package main
 
 import (
 	"bufio"
@@ -23,8 +23,6 @@ Content-Type: TEXT/PLAIN; CHARSET=US-ASCII
 
 Hello Joe, do you think we can meet at 3:30 tomorrow?
 `
-
-// Structs
 
 var selectTests = []struct {
 	in  string
@@ -309,7 +307,7 @@ var proxiedExpungeTests = []struct {
 func TestSelect(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestSelect] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -374,7 +372,7 @@ func TestSelect(t *testing.T) {
 func TestCreate(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestCreate] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -439,7 +437,7 @@ func TestCreate(t *testing.T) {
 func TestDelete(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestDelete] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -504,7 +502,7 @@ func TestDelete(t *testing.T) {
 func TestList(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestList] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -569,7 +567,7 @@ func TestList(t *testing.T) {
 func TestAppend(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestAppend] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -644,7 +642,7 @@ func TestAppend(t *testing.T) {
 func TestStore(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestStore] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -672,7 +670,7 @@ func TestStore(t *testing.T) {
 			// the used connection.
 			c.Terminate()
 
-			conn, err = tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+			conn, err = tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 			if err != nil {
 				t.Fatalf("[imap.TestStore] Error during connection attempt to IMAP server: %s\n", err.Error())
 			}
@@ -750,7 +748,7 @@ func TestStore(t *testing.T) {
 func TestExpunge(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestExpunge] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -825,7 +823,7 @@ func TestExpunge(t *testing.T) {
 func TestProxiedSelect(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedSelect] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -890,7 +888,7 @@ func TestProxiedSelect(t *testing.T) {
 func TestProxiedCreate(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedCreate] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -955,7 +953,7 @@ func TestProxiedCreate(t *testing.T) {
 func TestProxiedDelete(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedDelete] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -1020,7 +1018,7 @@ func TestProxiedDelete(t *testing.T) {
 func TestProxiedList(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedList] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -1085,7 +1083,7 @@ func TestProxiedList(t *testing.T) {
 func TestProxiedAppend(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedAppend] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -1160,7 +1158,7 @@ func TestProxiedAppend(t *testing.T) {
 func TestProxiedStore(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedStore] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -1188,7 +1186,7 @@ func TestProxiedStore(t *testing.T) {
 			// the used connection.
 			c.Terminate()
 
-			conn, err = tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+			conn, err = tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 			if err != nil {
 				t.Fatalf("[imap.TestProxiedStore] Error during connection attempt to IMAP server: %s\n", err.Error())
 			}
@@ -1266,7 +1264,7 @@ func TestProxiedStore(t *testing.T) {
 func TestProxiedExpunge(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestProxiedExpunge] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}

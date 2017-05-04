@@ -1,4 +1,4 @@
-package imap_test
+package main
 
 import (
 	"bufio"
@@ -67,24 +67,29 @@ var loginTests = []struct {
 
 // Functions
 
+// testAddr returns the addr to use in tests
+func testAddr() string {
+	return fmt.Sprintf("%s:%s", testEnv.Config.Distributor.PublicIP, testEnv.Config.Distributor.Port)
+}
+
 func TestMain(m *testing.M) {
 
 	var err error
 
 	// Create needed test environment.
-	testEnv, err = utils.CreateTestEnv("../test-config.toml")
+	testEnv, err = utils.CreateTestEnv("./test-config.toml")
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Run all nodes in background.
-	utils.RunAllNodes(testEnv, "worker-1")
+	RunAllNodes(testEnv, "worker-1")
 
 	// Run all tests of this package.
 	success := m.Run()
 
 	// Tear down test setup.
-	utils.TearDownNormalSetup(testEnv)
+	TearDownNormalSetup(testEnv)
 
 	// Return with test return value.
 	os.Exit(success)
@@ -95,7 +100,7 @@ func TestMain(m *testing.M) {
 func TestCapability(t *testing.T) {
 
 	// Connect to IMAP distributor.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testAddr(), testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestCapability] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 	}
