@@ -53,7 +53,7 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 	var nextUser User
 
 	// Reserve space for the ordered users list in memory.
-	Users := make([]User, 0, 50)
+	users := make([]User, 0, 50)
 
 	// Open file with authentication information.
 	handle, err = os.Open(file)
@@ -79,7 +79,7 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 		}
 
 		// Append new user element to slice.
-		Users = append(Users, nextUser)
+		users = append(users, nextUser)
 
 		// Increment original ID counter.
 		i++
@@ -91,13 +91,13 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 	}
 
 	// Sort users list to search it efficiently later on.
-	sort.Sort(UsersByName(Users))
+	sort.Sort(UsersByName(users))
 
 	return &FileAuthenticator{
 		lock:      new(sync.RWMutex),
 		File:      file,
 		Separator: sep,
-		Users:     Users,
+		Users:     users,
 	}, nil
 }
 
