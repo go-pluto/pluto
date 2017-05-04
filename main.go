@@ -6,11 +6,36 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/numbleroot/pluto/auth"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/imap"
 )
 
 // Functions
+
+// initAuthenticator of the correct implementation specified in the config
+// to be used in the imap.Distributor.
+func initAuthenticator(config *config.Config) (imap.PlainAuthenticator, error) {
+
+	switch config.Distributor.AuthAdapter {
+	case "AuthPostgres":
+		// Connect to PostgreSQL database.
+		return auth.NewPostgresAuthenticator(
+			config.Distributor.AuthPostgres.IP,
+			config.Distributor.AuthPostgres.Port,
+			config.Distributor.AuthPostgres.Database,
+			config.Distributor.AuthPostgres.User,
+			config.Distributor.AuthPostgres.Password,
+			config.Distributor.AuthPostgres.UseTLS,
+		)
+	default: // AuthFile
+		// Open authentication file and read user information.
+		return auth.NewFile(
+			config.Distributor.AuthFile.File,
+			config.Distributor.AuthFile.Separator,
+		)
+	}
+}
 
 func main() {
 
@@ -37,8 +62,13 @@ func main() {
 	// system based on passed command line flag.
 	if *distributorFlag {
 
+		authenticator, err := initAuthenticator(conf)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		// Initialize distributor.
-		distr, err := imap.InitDistributor(conf)
+		distr, err := imap.InitDistributor(conf, authenticator)
 		if err != nil {
 			log.Fatal(err)
 		}

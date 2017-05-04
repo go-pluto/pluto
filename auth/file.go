@@ -12,10 +12,10 @@ import (
 
 // Structs
 
-// FileAuthenticator contains file based authentication
+// File contains file based authentication
 // information including the in-memory map of username to
 // password mapping.
-type FileAuthenticator struct {
+type File struct {
 	Users []User
 }
 
@@ -28,12 +28,12 @@ type User struct {
 
 // Functions
 
-// NewFileAuthenticator takes in a file name and a separator,
+// NewFile takes in a file name and a separator,
 // reads in specified file and parses it line by line as
 // username - password elements separated by the separator.
 // At the end, the returned struct contains the information
 // and an in-memory map of username mapped to password.
-func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
+func NewFile(file string, sep string) (*File, error) {
 
 	// Reserve space for the ordered users list in memory.
 	users := make([]User, 0, 50)
@@ -41,7 +41,7 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 	// Open file with authentication information.
 	handle, err := os.Open(file)
 	if err != nil {
-		return nil, fmt.Errorf("[auth.NewFileAuthenticator] Could not open supplied authentication file: %v", err)
+		return nil, fmt.Errorf("[auth.NewFile] Could not open supplied authentication file: %v", err)
 	}
 	defer handle.Close()
 
@@ -71,7 +71,7 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 
 	// If the scanner ended with an error, report it.
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("[auth.NewFileAuthenticator] Experienced error while scanning authentication file: %v", err)
+		return nil, fmt.Errorf("[auth.NewFile] Experienced error while scanning authentication file: %v", err)
 	}
 
 	// Sort users list to search it efficiently later on.
@@ -79,14 +79,14 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 		return users[i].Name < users[j].Name
 	})
 
-	return &FileAuthenticator{
+	return &File{
 		Users: users,
 	}, nil
 }
 
 // GetWorkerForUser returns the name of the worker node
 // that is responsible for handling the user's mailbox.
-func (f *FileAuthenticator) GetWorkerForUser(workers map[string]config.Worker, id int) (string, error) {
+func (f *File) GetWorkerForUser(workers map[string]config.Worker, id int) (string, error) {
 
 	for name, worker := range workers {
 
@@ -105,7 +105,7 @@ func (f *FileAuthenticator) GetWorkerForUser(workers map[string]config.Worker, i
 // process by taking supplied credentials and attempting
 // to find a matching entry the in-memory list taken from
 // the authentication file.
-func (f *FileAuthenticator) AuthenticatePlain(username string, password string, clientAddr string) (int, string, error) {
+func (f *File) AuthenticatePlain(username string, password string, clientAddr string) (int, string, error) {
 
 	// Search in user list for user matching supplied name.
 	i := sort.Search(len(f.Users), func(i int) bool {
