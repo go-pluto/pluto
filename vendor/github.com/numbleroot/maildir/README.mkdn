@@ -1,0 +1,9 @@
+The maildir package provides an interface to mailboxes in the Maildir format.
+
+Documentation can be found online here:
+https://godoc.org/github.com/luksen/maildir
+
+This is what I used as a reference:
+- https://en.wikipedia.org/wiki/Maildir
+- http://www.qmail.org/qmail-manual-html/man5/maildir.html
+- http://cr.yp.to/proto/maildir.html

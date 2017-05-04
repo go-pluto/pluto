@@ -1,0 +1,31 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "pPH/BoINXxzYDObljpsGZbysMrw=",
+			"path": "github.com/BurntSushi/toml",
+			"revision": "b26d9c308763d68093482582cea63d69be07a0f0",
+			"revisionTime": "2017-03-28T06:15:53Z"
+		},
+		{
+			"checksumSHA1": "NDbu9dZSMuLO5wyzxB3pwBdkXFI=",
+			"path": "github.com/numbleroot/maildir",
+			"revision": "7bf535650e6445eb2694caea027720e6650c423b",
+			"revisionTime": "2016-12-14T17:26:39Z"
+		},
+		{
+			"checksumSHA1": "zmC8/3V4ls53DJlNTKDZwPSC/dA=",
+			"path": "github.com/satori/go.uuid",
+			"revision": "5bf94b69c6b68ee1b541973bb8e1144db23a194b",
+			"revisionTime": "2017-03-21T23:07:31Z"
+		},
+		{
+			"checksumSHA1": "IsbvvctcA3vAKR5netcAwqcSlt0=",
+			"path": "gopkg.in/jackc/pgx.v2",
+			"revision": "97c01fb52451c10e686fb847ad390338bf1799ae",
+			"revisionTime": "2017-03-17T13:06:00Z"
+		}
+	],
+	"rootPath": "github.com/numbleroot/pluto"
+}

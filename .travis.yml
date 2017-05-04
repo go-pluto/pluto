@@ -4,7 +4,6 @@ go:
   - tip
 
 before_install:
-  - make deps
   - make test-pki
   - make test-public
 
