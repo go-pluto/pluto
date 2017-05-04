@@ -17,10 +17,8 @@ import (
 // information including the in-memory map of username to
 // password mapping.
 type FileAuthenticator struct {
-	lock      *sync.RWMutex
-	File      string
-	Separator string
-	Users     []User
+	lock  *sync.RWMutex
+	Users []User
 }
 
 // User holds name and password from one line from users file.
@@ -88,10 +86,8 @@ func NewFileAuthenticator(file string, sep string) (*FileAuthenticator, error) {
 	})
 
 	return &FileAuthenticator{
-		lock:      new(sync.RWMutex),
-		File:      file,
-		Separator: sep,
-		Users:     users,
+		lock:  new(sync.RWMutex),
+		Users: users,
 	}, nil
 }
 
