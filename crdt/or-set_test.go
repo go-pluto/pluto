@@ -12,44 +12,28 @@ import (
 
 // Variables
 
-var k1 string
-var k2 string
-var k3 string
-var k4 string
-var k5 string
-var k6 string
-
-var v1 string
-var v2 string
-var v3 string
-var v4 string
-var v5 string
-var v6 string
-var v7 string
-var v8 string
-
-// Functions
-
-func init() {
+var (
 
 	// Keys to use in tests below.
-	k1 = "1"
-	k2 = "🕤🕤🕤🙉🙉🚀🚀🚀🚶🚶🆒™"
-	k3 = "☕"
-	k4 = "4"
-	k5 = "5"
-	k6 = "6"
+	k1 string = "1"
+	k2 string = "🕤🕤🕤🙉🙉🚀🚀🚀🚶🚶🆒™"
+	k3 string = "☕"
+	k4 string = "4"
+	k5 string = "5"
+	k6 string = "6"
 
 	// Values to use in tests below.
-	v1 = "true"
-	v2 = "Hey there, I am a test."
-	v3 = "Sending ✉ around the 🌐: ✔"
-	v4 = "666"
-	v5 = "12.34"
-	v6 = fmt.Sprintf("%g", math.MaxFloat64)
-	v7 = fmt.Sprintf("%g", (123456 + 200i))
-	v8 = fmt.Sprintf("%g", (math.MaxFloat32 * 2i))
-}
+	v1 string = "true"
+	v2 string = "Hey there, I am a test."
+	v3 string = "Sending ✉ around the 🌐: ✔"
+	v4 string = "666"
+	v5 string = "12.34"
+	v6 string = fmt.Sprintf("%g", math.MaxFloat64)
+	v7 string = fmt.Sprintf("%g", (123456 + 200i))
+	v8 string = fmt.Sprintf("%g", (math.MaxFloat32 * 2i))
+)
+
+// Functions
 
 // TODO: Add missing tests for functions.
 

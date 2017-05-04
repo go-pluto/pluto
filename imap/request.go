@@ -12,7 +12,19 @@ import (
 // SupportedCommands is a quick access map
 // for checking if a supplied IMAP command
 // is supported by pluto.
-var SupportedCommands map[string]bool
+var SupportedCommands = map[string]bool{
+	"CAPABILITY": true,
+	"LOGOUT":     true,
+	"STARTTLS":   true,
+	"LOGIN":      true,
+	"SELECT":     true,
+	"CREATE":     true,
+	"DELETE":     true,
+	"LIST":       true,
+	"APPEND":     true,
+	"EXPUNGE":    true,
+	"STORE":      true,
+}
 
 // Structs
 
@@ -26,25 +38,6 @@ type Request struct {
 }
 
 // Functions
-
-func init() {
-
-	// Set supported IMAP commands to true in
-	// a map to have quick access.
-	SupportedCommands = make(map[string]bool)
-
-	SupportedCommands["CAPABILITY"] = true
-	SupportedCommands["LOGOUT"] = true
-	SupportedCommands["STARTTLS"] = true
-	SupportedCommands["LOGIN"] = true
-	SupportedCommands["SELECT"] = true
-	SupportedCommands["CREATE"] = true
-	SupportedCommands["DELETE"] = true
-	SupportedCommands["LIST"] = true
-	SupportedCommands["APPEND"] = true
-	SupportedCommands["EXPUNGE"] = true
-	SupportedCommands["STORE"] = true
-}
 
 // ParseRequest takes in a raw string representing
 // a received IMAP request and parses it into the

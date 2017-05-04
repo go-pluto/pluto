@@ -35,3 +35,4 @@ users.txt
 
 # Pluto specific includes
 !config/.env
+time-tracking.md
