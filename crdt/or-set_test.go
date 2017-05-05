@@ -29,8 +29,8 @@ var (
 	v4 string = "666"
 	v5 string = "12.34"
 	v6 string = fmt.Sprintf("%g", math.MaxFloat64)
-	v7 string = fmt.Sprintf("%g", (123456 + 200i))
-	v8 string = fmt.Sprintf("%g", (math.MaxFloat32 * 2i))
+	v7 string = fmt.Sprintf("%g", 123456+200i)
+	v8 string = fmt.Sprintf("%g", math.MaxFloat32*2i)
 )
 
 // Functions
