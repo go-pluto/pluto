@@ -331,6 +331,32 @@ func TestLookup(t *testing.T) {
 	}
 }
 
+func benchmarkLookup(b *testing.B, e string) {
+	s := InitORSet()
+
+	s.elements["10000000-a071-4227-9e63-a4b0ee84688f"] = v1
+	s.elements["20000000-a071-4227-9e63-a4b0ee84688f"] = v2
+	s.elements["30000000-a071-4227-9e63-a4b0ee84688f"] = v3
+	s.elements["40000000-a071-4227-9e63-a4b0ee84688f"] = v4
+	s.elements["50000000-a071-4227-9e63-a4b0ee84688f"] = v5
+	s.elements["60000000-a071-4227-9e63-a4b0ee84688f"] = v6
+	s.elements["70000000-a071-4227-9e63-a4b0ee84688f"] = v7
+	s.elements["80000000-a071-4227-9e63-a4b0ee84688f"] = v8
+
+	for i := 0; i < b.N; i++ {
+		s.Lookup(e, true)
+	}
+}
+
+func BenchmarkLookup1(b *testing.B) { benchmarkLookup(b, v1) }
+func BenchmarkLookup2(b *testing.B) { benchmarkLookup(b, v2) }
+func BenchmarkLookup3(b *testing.B) { benchmarkLookup(b, v3) }
+func BenchmarkLookup4(b *testing.B) { benchmarkLookup(b, v4) }
+func BenchmarkLookup5(b *testing.B) { benchmarkLookup(b, v5) }
+func BenchmarkLookup6(b *testing.B) { benchmarkLookup(b, v6) }
+func BenchmarkLookup7(b *testing.B) { benchmarkLookup(b, v7) }
+func BenchmarkLookup8(b *testing.B) { benchmarkLookup(b, v8) }
+
 // TestAddEffect executes a white-box unit test
 // on implemented AddEffect() function.
 func TestAddEffect(t *testing.T) {
