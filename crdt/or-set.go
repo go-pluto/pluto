@@ -16,7 +16,7 @@ import (
 // Structs
 
 // ORSet conforms to the specification of an observed-
-// removed set defined by Shapiro, Preguiça, Baquero
+// removed set defined by Shapiro, Preguiça, Baquero,
 // and Zawirski. It consists of unique IDs and data items.
 type ORSet struct {
 	lock     *sync.RWMutex
@@ -36,7 +36,7 @@ type sendFunc func(string)
 func InitORSet() *ORSet {
 
 	return &ORSet{
-		lock:     new(sync.RWMutex),
+		lock:     &sync.RWMutex{},
 		elements: make(map[string]string),
 	}
 }
@@ -46,28 +46,25 @@ func InitORSet() *ORSet {
 // designated log file.
 func InitORSetWithFile(fileName string) (*ORSet, error) {
 
-	// Init an empty ORSet.
-	s := InitORSet()
-
 	// Attempt to create a new CRDT file.
 	f, err := os.Create(fileName)
 	if err != nil {
-		return nil, fmt.Errorf("opening CRDT file '%s' failed with: %s\n", fileName, err.Error())
+		return nil, fmt.Errorf("opening CRDT file '%s' failed with: %v", fileName, err)
 	}
 
 	// Change permissions.
 	err = f.Chmod(0600)
 	if err != nil {
-		return nil, fmt.Errorf("changing permissions of CRDT file '%s' failed with: %s\n", fileName, err.Error())
+		return nil, fmt.Errorf("changing permissions of CRDT file '%s' failed with: %v", fileName, err)
 	}
 
-	// Assign it to ORSet.
+	// Init an empty ORSet.
+	s := InitORSet()
 	s.file = f
 
 	// Write newly created CRDT file to stable storage.
-	err = s.WriteORSetToFile(false)
-	if err != nil {
-		return nil, fmt.Errorf("error during CRDT file write-back: %s\n", err.Error())
+	if err = s.WriteORSetToFile(false); err != nil {
+		return nil, fmt.Errorf("error during CRDT file write-back: %v", err)
 	}
 
 	return s, nil
@@ -78,20 +75,20 @@ func InitORSetWithFile(fileName string) (*ORSet, error) {
 // elements saved in file.
 func InitORSetFromFile(fileName string) (*ORSet, error) {
 
-	// Init an empty ORSet.
-	s := InitORSet()
-
 	// Attempt to open CRDT file and assign to set afterwards.
 	f, err := os.OpenFile(fileName, os.O_RDWR, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("opening CRDT file '%s' failed with: %s\n", fileName, err.Error())
+		return nil, fmt.Errorf("opening CRDT file '%s' failed with: %v", fileName, err)
 	}
+
+	// Init an empty ORSet.
+	s := InitORSet()
 	s.file = f
 
 	// Parse contained CRDT state from file.
 	contentsRaw, err := ioutil.ReadAll(s.file)
 	if err != nil {
-		return nil, fmt.Errorf("reading all contents from CRDT file '%s' failed with: %s\n", fileName, err.Error())
+		return nil, fmt.Errorf("reading all contents from CRDT file '%s' failed with: %v", fileName, err)
 	}
 	contents := string(contentsRaw)
 
@@ -105,7 +102,7 @@ func InitORSetFromFile(fileName string) (*ORSet, error) {
 
 	// Check even number of elements.
 	if (len(parts) % 2) != 0 {
-		return nil, fmt.Errorf("odd number of elements in CRDT file '%s'\n", fileName)
+		return nil, fmt.Errorf("odd number of elements in CRDT file '%s'", fileName)
 	}
 
 	// Range over all value-tag-pairs.
@@ -116,7 +113,7 @@ func InitORSetFromFile(fileName string) (*ORSet, error) {
 		// Decode string from base64.
 		decValue, err := base64.StdEncoding.DecodeString(parts[value])
 		if err != nil {
-			return nil, fmt.Errorf("decoding base64 string in CRDT file '%s' failed: %s\n", fileName, err.Error())
+			return nil, fmt.Errorf("decoding base64 string in CRDT file '%s' failed: %v", fileName, err)
 		}
 
 		// Assign decoded value to corresponding
@@ -157,25 +154,23 @@ func (s *ORSet) WriteORSetToFile(needsLocking bool) error {
 	// Reset position in file to beginning.
 	_, err := s.file.Seek(0, os.SEEK_SET)
 	if err != nil {
-		return fmt.Errorf("error while setting head back to beginning in CRDT file '%s': %s\n", s.file.Name(), err.Error())
+		return fmt.Errorf("error while setting head back to beginning in CRDT file '%s': %v", s.file.Name(), err)
 	}
 
 	// Write marshalled set to file.
 	newNumOfBytes, err := s.file.WriteString(marshalled)
 	if err != nil {
-		return fmt.Errorf("failed to write ORSet contents to file '%s': %s\n", s.file.Name(), err.Error())
+		return fmt.Errorf("failed to write ORSet contents to file '%s': %v", s.file.Name(), err)
 	}
 
 	// Adjust file size to just written length of string.
-	err = s.file.Truncate(int64(newNumOfBytes))
-	if err != nil {
-		return fmt.Errorf("error while truncating CRDT file '%s' to new size: %s\n", s.file.Name(), err.Error())
+	if err := s.file.Truncate(int64(newNumOfBytes)); err != nil {
+		return fmt.Errorf("error while truncating CRDT file '%s' to new size: %v", s.file.Name(), err)
 	}
 
 	// Save to stable storage.
-	err = s.file.Sync()
-	if err != nil {
-		return fmt.Errorf("could not synchronise CRDT file '%s' contents to stable storage: %s\n", s.file.Name(), err.Error())
+	if err := s.file.Sync(); err != nil {
+		return fmt.Errorf("could not synchronise CRDT file '%s' contents to stable storage: %v", s.file.Name(), err)
 	}
 
 	return nil
@@ -184,6 +179,10 @@ func (s *ORSet) WriteORSetToFile(needsLocking bool) error {
 // GetAllValues returns all distinct values
 // of a supplied ORSet.
 func (s *ORSet) GetAllValues() []string {
+
+	// Read-lock set and unlock on exit.
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
 	// Make a slice of initial size 0.
 	allValues := make([]string, 0)
@@ -214,9 +213,6 @@ func (s *ORSet) GetAllValues() []string {
 // false otherwise.
 func (s *ORSet) Lookup(e string, needsLocking bool) bool {
 
-	// Fallback return value is false.
-	found := false
-
 	if needsLocking {
 		// Read-lock set and unlock on exit.
 		s.lock.RLock()
@@ -226,15 +222,14 @@ func (s *ORSet) Lookup(e string, needsLocking bool) bool {
 	for _, value := range s.elements {
 
 		// When we find the value while iterating
-		// through set, we set return value to true
-		// and end loop execution at this point.
+		// through set, we return true and end loop
+		// execution at this point.
 		if e == value {
-			found = true
-			break
+			return true
 		}
 	}
 
-	return found
+	return false
 }
 
 // AddEffect is the effect part of an update add operation
@@ -252,23 +247,24 @@ func (s *ORSet) AddEffect(e string, tag string, needsLocking bool, needsWriteBac
 	// Insert data element e at key tag.
 	s.elements[tag] = e
 
-	if needsWriteBack {
+	if !needsWriteBack {
+		return nil
+	}
 
-		// Instructed to write changes back to file.
-		err := s.WriteORSetToFile(false)
-		if err != nil {
+	// Instructed to write changes back to file.
+	err := s.WriteORSetToFile(false)
+	if err != nil {
 
-			// Error during write-back to stable storage.
+		// Error during write-back to stable storage.
 
-			// Prepare remove set consistent of just added element.
-			rSet := make(map[string]string)
-			rSet[tag] = e
+		// Prepare remove set consistent of just added element.
+		rSet := make(map[string]string)
+		rSet[tag] = e
 
-			// Revert just made changes.
-			s.RemoveEffect(rSet, false, false)
+		// Revert just made changes.
+		s.RemoveEffect(rSet, false, false)
 
-			return fmt.Errorf("error during writing CRDT file back: %s\n", err.Error())
-		}
+		return fmt.Errorf("error during writing CRDT file back: %v", err)
 	}
 
 	return nil
@@ -324,21 +320,22 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool, needsWri
 		}
 	}
 
-	if needsWriteBack {
+	if !needsWriteBack {
+		return nil
+	}
 
-		// Instructed to write changes back to file.
-		err := s.WriteORSetToFile(false)
-		if err != nil {
+	// Instructed to write changes back to file.
+	err := s.WriteORSetToFile(false)
+	if err != nil {
 
-			// Error during write-back to stable storage.
+		// Error during write-back to stable storage.
 
-			// Revert just made changes.
-			for tag, value := range rSet {
-				s.AddEffect(value, tag, false, false)
-			}
-
-			return fmt.Errorf("error during writing CRDT file back: %s\n", err.Error())
+		// Revert just made changes.
+		for tag, value := range rSet {
+			s.AddEffect(value, tag, false, false)
 		}
+
+		return fmt.Errorf("error during writing CRDT file back: %v", err)
 	}
 
 	return nil
@@ -352,12 +349,6 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool, needsWri
 // sends out the remove message to all other replicas.
 func (s *ORSet) Remove(e string, send sendFunc) error {
 
-	// Initialize string to send out.
-	var msg string
-
-	// Initialize set of elements to remove.
-	rmElements := make(map[string]string)
-
 	// Write-lock set and unlock on exit.
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -366,6 +357,12 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 	if s.Lookup(e, false) != true {
 		return fmt.Errorf("element to be removed not found in set")
 	}
+
+	// Initialize string to send out.
+	var msg string
+
+	// Initialize set of elements to remove.
+	rmElements := make(map[string]string)
 
 	// Otherwise range over set elements.
 	for tag, value := range s.elements {
@@ -389,8 +386,7 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 	// Execute the effect part of the update remove but do
 	// not lock the set structure as we already maintain a lock.
 	// Also, write changes back to stable storage.
-	err := s.RemoveEffect(rmElements, false, true)
-	if err != nil {
+	if err := s.RemoveEffect(rmElements, false, true); err != nil {
 		return err
 	}
 
