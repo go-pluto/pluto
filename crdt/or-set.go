@@ -16,7 +16,7 @@ import (
 // Structs
 
 // ORSet conforms to the specification of an observed-
-// removed set defined by Shapiro, Preguiça, Baquero
+// removed set defined by Shapiro, Preguiça, Baquero,
 // and Zawirski. It consists of unique IDs and data items.
 type ORSet struct {
 	lock     *sync.RWMutex
@@ -49,24 +49,22 @@ func InitORSetWithFile(fileName string) (*ORSet, error) {
 	// Attempt to create a new CRDT file.
 	f, err := os.Create(fileName)
 	if err != nil {
-		return nil, fmt.Errorf("opening CRDT file '%s' failed with: %s\n", fileName, err.Error())
+		return nil, fmt.Errorf("opening CRDT file '%s' failed with: %v", fileName, err)
 	}
 
 	// Change permissions.
 	err = f.Chmod(0600)
 	if err != nil {
-		return nil, fmt.Errorf("changing permissions of CRDT file '%s' failed with: %s\n", fileName, err.Error())
+		return nil, fmt.Errorf("changing permissions of CRDT file '%s' failed with: %v", fileName, err)
 	}
 
 	// Init an empty ORSet.
 	s := InitORSet()
-
-	// Assign it to ORSet.
 	s.file = f
 
 	// Write newly created CRDT file to stable storage.
 	if err = s.WriteORSetToFile(false); err != nil {
-		return nil, fmt.Errorf("error during CRDT file write-back: %s\n", err.Error())
+		return nil, fmt.Errorf("error during CRDT file write-back: %v", err)
 	}
 
 	return s, nil
@@ -80,18 +78,17 @@ func InitORSetFromFile(fileName string) (*ORSet, error) {
 	// Attempt to open CRDT file and assign to set afterwards.
 	f, err := os.OpenFile(fileName, os.O_RDWR, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("opening CRDT file '%s' failed with: %s\n", fileName, err.Error())
+		return nil, fmt.Errorf("opening CRDT file '%s' failed with: %v", fileName, err)
 	}
 
 	// Init an empty ORSet.
 	s := InitORSet()
-
 	s.file = f
 
 	// Parse contained CRDT state from file.
 	contentsRaw, err := ioutil.ReadAll(s.file)
 	if err != nil {
-		return nil, fmt.Errorf("reading all contents from CRDT file '%s' failed with: %s\n", fileName, err.Error())
+		return nil, fmt.Errorf("reading all contents from CRDT file '%s' failed with: %v", fileName, err)
 	}
 	contents := string(contentsRaw)
 
@@ -105,7 +102,7 @@ func InitORSetFromFile(fileName string) (*ORSet, error) {
 
 	// Check even number of elements.
 	if (len(parts) % 2) != 0 {
-		return nil, fmt.Errorf("odd number of elements in CRDT file '%s'\n", fileName)
+		return nil, fmt.Errorf("odd number of elements in CRDT file '%s'", fileName)
 	}
 
 	// Range over all value-tag-pairs.
@@ -116,7 +113,7 @@ func InitORSetFromFile(fileName string) (*ORSet, error) {
 		// Decode string from base64.
 		decValue, err := base64.StdEncoding.DecodeString(parts[value])
 		if err != nil {
-			return nil, fmt.Errorf("decoding base64 string in CRDT file '%s' failed: %s\n", fileName, err.Error())
+			return nil, fmt.Errorf("decoding base64 string in CRDT file '%s' failed: %v", fileName, err)
 		}
 
 		// Assign decoded value to corresponding
@@ -157,23 +154,23 @@ func (s *ORSet) WriteORSetToFile(needsLocking bool) error {
 	// Reset position in file to beginning.
 	_, err := s.file.Seek(0, os.SEEK_SET)
 	if err != nil {
-		return fmt.Errorf("error while setting head back to beginning in CRDT file '%s': %s\n", s.file.Name(), err.Error())
+		return fmt.Errorf("error while setting head back to beginning in CRDT file '%s': %v", s.file.Name(), err)
 	}
 
 	// Write marshalled set to file.
 	newNumOfBytes, err := s.file.WriteString(marshalled)
 	if err != nil {
-		return fmt.Errorf("failed to write ORSet contents to file '%s': %s\n", s.file.Name(), err.Error())
+		return fmt.Errorf("failed to write ORSet contents to file '%s': %v", s.file.Name(), err)
 	}
 
 	// Adjust file size to just written length of string.
-	if err = s.file.Truncate(int64(newNumOfBytes)); err != nil {
-		return fmt.Errorf("error while truncating CRDT file '%s' to new size: %s\n", s.file.Name(), err.Error())
+	if err := s.file.Truncate(int64(newNumOfBytes)); err != nil {
+		return fmt.Errorf("error while truncating CRDT file '%s' to new size: %v", s.file.Name(), err)
 	}
 
 	// Save to stable storage.
 	if err := s.file.Sync(); err != nil {
-		return fmt.Errorf("could not synchronise CRDT file '%s' contents to stable storage: %s\n", s.file.Name(), err.Error())
+		return fmt.Errorf("could not synchronise CRDT file '%s' contents to stable storage: %v", s.file.Name(), err)
 	}
 
 	return nil
@@ -257,6 +254,7 @@ func (s *ORSet) AddEffect(e string, tag string, needsLocking bool, needsWriteBac
 	// Instructed to write changes back to file.
 	err := s.WriteORSetToFile(false)
 	if err != nil {
+
 		// Error during write-back to stable storage.
 
 		// Prepare remove set consistent of just added element.
@@ -266,7 +264,7 @@ func (s *ORSet) AddEffect(e string, tag string, needsLocking bool, needsWriteBac
 		// Revert just made changes.
 		s.RemoveEffect(rSet, false, false)
 
-		return fmt.Errorf("error during writing CRDT file back: %s\n", err.Error())
+		return fmt.Errorf("error during writing CRDT file back: %v", err)
 	}
 
 	return nil
@@ -337,7 +335,7 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool, needsWri
 			s.AddEffect(value, tag, false, false)
 		}
 
-		return fmt.Errorf("error during writing CRDT file back: %s\n", err.Error())
+		return fmt.Errorf("error during writing CRDT file back: %v", err)
 	}
 
 	return nil

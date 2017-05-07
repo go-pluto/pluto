@@ -29,8 +29,8 @@ var (
 	v4 string = "666"
 	v5 string = "12.34"
 	v6 string = fmt.Sprintf("%g", math.MaxFloat64)
-	v7 string = fmt.Sprintf("%g", 123456+200i)
-	v8 string = fmt.Sprintf("%g", math.MaxFloat32*2i)
+	v7 string = fmt.Sprintf("%g", (123456 + 200i))
+	v8 string = fmt.Sprintf("%g", (math.MaxFloat32 * 2i))
 )
 
 // Functions
@@ -135,7 +135,6 @@ func TestInitORSetFromFile(t *testing.T) {
 // on implemented WriteORSetToFile() function.
 func TestWriteORSetToFile(t *testing.T) {
 
-	// Create a new ORSet.
 	s := InitORSet()
 
 	// Assign a corresponding file.
@@ -332,6 +331,7 @@ func TestLookup(t *testing.T) {
 }
 
 func benchmarkLookup(b *testing.B, e string) {
+
 	s := InitORSet()
 
 	s.elements["10000000-a071-4227-9e63-a4b0ee84688f"] = v1
@@ -348,20 +348,34 @@ func benchmarkLookup(b *testing.B, e string) {
 	}
 }
 
+// Benchmark lookup() with value 1.
 func BenchmarkLookup1(b *testing.B) { benchmarkLookup(b, v1) }
+
+// Benchmark lookup() with value 2.
 func BenchmarkLookup2(b *testing.B) { benchmarkLookup(b, v2) }
+
+// Benchmark lookup() with value 3.
 func BenchmarkLookup3(b *testing.B) { benchmarkLookup(b, v3) }
+
+// Benchmark lookup() with value 4.
 func BenchmarkLookup4(b *testing.B) { benchmarkLookup(b, v4) }
+
+// Benchmark lookup() with value 5.
 func BenchmarkLookup5(b *testing.B) { benchmarkLookup(b, v5) }
+
+// Benchmark lookup() with value 6.
 func BenchmarkLookup6(b *testing.B) { benchmarkLookup(b, v6) }
+
+// Benchmark lookup() with value 7.
 func BenchmarkLookup7(b *testing.B) { benchmarkLookup(b, v7) }
+
+// Benchmark lookup() with value 8.
 func BenchmarkLookup8(b *testing.B) { benchmarkLookup(b, v8) }
 
 // TestAddEffect executes a white-box unit test
 // on implemented AddEffect() function.
 func TestAddEffect(t *testing.T) {
 
-	// Create new ORSet.
 	s := InitORSet()
 
 	// Set and test keys.
@@ -523,7 +537,6 @@ func TestAdd(t *testing.T) {
 // on implemented RemoveEffect() function.
 func TestRemoveEffect(t *testing.T) {
 
-	// Create new ORSet.
 	s := InitORSet()
 
 	// Create an empty remove set.
