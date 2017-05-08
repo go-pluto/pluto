@@ -77,14 +77,21 @@ func main() {
 		// Initialize distributor.
 		distr, err := imap.InitDistributor(logger, conf, authenticator)
 		if err != nil {
-			stdlog.Fatal(err)
+			level.Error(logger).Log(
+				"msg", "failed to initialize imap distributor",
+				"err", err,
+			)
+			os.Exit(2)
 		}
 		defer distr.Socket.Close()
 
 		// Loop on incoming requests.
-		err = distr.Run()
-		if err != nil {
-			stdlog.Fatal(err)
+		if err = distr.Run(); err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to initialize imap distributor",
+				"err", err,
+			)
+			os.Exit(3)
 		}
 
 	} else if *workerFlag != "" {
@@ -106,7 +113,7 @@ func main() {
 		} else {
 
 			// Initialize a normally operating worker.
-			worker, err := imap.InitWorker(conf, *workerFlag)
+			worker, err := imap.InitWorker(logger, conf, *workerFlag)
 			if err != nil {
 				stdlog.Fatal(err)
 			}
@@ -148,9 +155,12 @@ func main() {
 
 func initLogger(loglevel string) log.Logger {
 	logger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stdout))
+	logger = log.With(logger,
+		"ts", log.DefaultTimestampUTC,
+		"caller", log.DefaultCaller,
+	)
 
 	switch strings.ToLower(loglevel) {
-
 	case "info":
 		level.NewFilter(logger, level.AllowInfo())
 	case "warn":

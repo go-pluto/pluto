@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
+	stdlog "log"
 	"net"
 	"os"
 	"strconv"
@@ -14,6 +14,7 @@ import (
 	"crypto/tls"
 	"path/filepath"
 
+	"github.com/go-kit/kit/log"
 	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crdt"
@@ -26,6 +27,7 @@ type Worker struct {
 	*IMAPNode
 	Name         string
 	SyncSendChan chan string
+	logger       log.Logger
 }
 
 // FailoverWorker represents a reduced IMAPNode
@@ -46,7 +48,7 @@ type FailoverWorker struct {
 // opened up on supplied IP address and port as well as connects
 // to involved storage node. It returns those information bundeled
 // in above Worker struct.
-func InitWorker(config *config.Config, workerName string) (*Worker, error) {
+func InitWorker(logger log.Logger, config *config.Config, workerName string) (*Worker, error) {
 
 	var err error
 
@@ -54,6 +56,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 	worker := &Worker{
 		IMAPNode: &IMAPNode{
 			lock:             new(sync.RWMutex),
+			logger:           logger,
 			Connections:      make(map[string]*tls.Conn),
 			MailboxStructure: make(map[string]map[string]*crdt.ORSet),
 			MailboxContents:  make(map[string]map[string][]string),
@@ -148,7 +151,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal sync TLS connections failed with: %s\n", err.Error())
 	}
 
-	log.Printf("[imap.InitWorker] Listening for incoming sync requests on %s.\n", worker.SyncSocket.Addr())
+	stdlog.Printf("[imap.InitWorker] Listening for incoming sync requests on %s.\n", worker.SyncSocket.Addr())
 
 	// Start to listen for incoming internal connections on defined IP and mail port.
 	worker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].ListenIP, config.Workers[worker.Name].MailPort), internalTLSConfig)
@@ -156,7 +159,7 @@ func InitWorker(config *config.Config, workerName string) (*Worker, error) {
 		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
 	}
 
-	log.Printf("[imap.InitWorker] Listening for incoming IMAP requests on %s.\n", worker.MailSocket.Addr())
+	stdlog.Printf("[imap.InitWorker] Listening for incoming IMAP requests on %s.\n", worker.MailSocket.Addr())
 
 	// Initialize channels for this node.
 	applyCRDTUpdChan := make(chan string)
@@ -232,7 +235,7 @@ func InitFailoverWorker(config *config.Config, workerName string) (*FailoverWork
 		return nil, fmt.Errorf("[imap.InitFailoverWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
 	}
 
-	log.Printf("[imap.InitFailoverWorker] Listening for incoming IMAP requests on %s.\n", failWorker.MailSocket.Addr())
+	stdlog.Printf("[imap.InitFailoverWorker] Listening for incoming IMAP requests on %s.\n", failWorker.MailSocket.Addr())
 
 	return failWorker, nil
 }
@@ -262,7 +265,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 	// Assert we are talking via a TLS connection.
 	tlsConn, ok := conn.(*tls.Conn)
 	if ok != true {
-		log.Printf("[imap.HandleConnection] Worker %s could not convert connection into TLS connection.\n", worker.Name)
+		stdlog.Printf("[imap.HandleConnection] Worker %s could not convert connection into TLS connection.\n", worker.Name)
 		return
 	}
 
@@ -436,7 +439,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 	// Terminate connection after logout.
 	err = c.Terminate()
 	if err != nil {
-		log.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
+		stdlog.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
 	}
 
 	// Set IMAP state to logged out.
@@ -470,7 +473,7 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 	// Assert we are talking via a TLS connection.
 	tlsConn, ok := conn.(*tls.Conn)
 	if ok != true {
-		log.Printf("[imap.HandleFailover] Failover %s could not convert connection into TLS connection.\n", failWorker.Name)
+		stdlog.Printf("[imap.HandleFailover] Failover %s could not convert connection into TLS connection.\n", failWorker.Name)
 		return
 	}
 
@@ -667,6 +670,6 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 	// Terminate connection after logout.
 	err = c.Terminate()
 	if err != nil {
-		log.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
+		stdlog.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
 	}
 }
