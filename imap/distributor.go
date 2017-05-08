@@ -3,12 +3,13 @@ package imap
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 
 	"crypto/tls"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crypto"
 )
@@ -36,6 +37,7 @@ type PlainAuthenticator interface {
 // operation of a distributor node.
 type Distributor struct {
 	lock          *sync.RWMutex
+	logger        log.Logger
 	Socket        net.Listener
 	IntlTLSConfig *tls.Config
 	AuthAdapter   PlainAuthenticator
@@ -49,13 +51,15 @@ type Distributor struct {
 // opened up on supplied IP address and port as well as initializes
 // connections to involved worker nodes. It returns those
 // information bundeled in above Distributor struct.
-func InitDistributor(config *config.Config, auth PlainAuthenticator) (*Distributor, error) {
+
+func InitDistributor(logger log.Logger, config *config.Config, auth PlainAuthenticator) (*Distributor, error) {
 
 	var err error
 
 	// Initialize and set fields.
 	distr := &Distributor{
 		lock:        new(sync.RWMutex),
+		logger:      logger,
 		AuthAdapter: auth,
 		Connections: make(map[string]*tls.Conn),
 		Config:      config,
@@ -79,7 +83,10 @@ func InitDistributor(config *config.Config, auth PlainAuthenticator) (*Distribut
 		return nil, fmt.Errorf("[imap.InitDistributor] Listening for public TLS connections failed with: %s\n", err.Error())
 	}
 
-	log.Printf("[imap.InitDistributor] Listening for incoming IMAP requests on %s.\n", distr.Socket.Addr())
+	level.Info(logger).Log(
+		"msg", "listening for incoming IMAP requests",
+		"addr", distr.Socket.Addr().String(),
+	)
 
 	return distr, nil
 }
@@ -111,7 +118,7 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 	// Assert we are talking via a TLS connection.
 	tlsConn, ok := conn.(*tls.Conn)
 	if ok != true {
-		log.Printf("[imap.HandleConnection] Distributor could not convert connection into TLS connection.\n")
+		level.Warn(distr.logger).Log("msg", "distributor could not convert connection into TLS connection")
 		return
 	}
 
@@ -211,8 +218,10 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 	}
 
 	// Terminate connection after logout.
-	err = c.Terminate()
-	if err != nil {
-		log.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
+	if err := c.Terminate(); err != nil {
+		level.Warn(distr.logger).Log(
+			"msg", "failed to terminate connection",
+			"err", err,
+		)
 	}
 }
