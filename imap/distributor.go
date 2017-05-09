@@ -9,10 +9,28 @@ import (
 
 	"crypto/tls"
 
-	"github.com/numbleroot/pluto/auth"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crypto"
 )
+
+// Interfaces
+
+// PlainAuthenticator defines the methods required to
+// perform an IMAP AUTH=PLAIN authentication in order
+// to reach authenticated state (also LOGIN).
+type PlainAuthenticator interface {
+
+	// GetWorkerForUser allows us to route an IMAP request to the
+	// worker node responsible for a specific user.
+	GetWorkerForUser(workers map[string]config.Worker, id int) (string, error)
+
+	// AuthenticatePlain will be implemented by each of the
+	// authentication methods of type PLAIN to perform the
+	// actual part of checking supplied credentials.
+	AuthenticatePlain(username string, password string, clientAddr string) (int, string, error)
+}
+
+// Structs
 
 // Distributor struct bundles information needed in
 // operation of a distributor node.
@@ -20,7 +38,7 @@ type Distributor struct {
 	lock          *sync.RWMutex
 	Socket        net.Listener
 	IntlTLSConfig *tls.Config
-	AuthAdapter   auth.PlainAuthenticator
+	AuthAdapter   PlainAuthenticator
 	Connections   map[string]*tls.Conn
 	Config        *config.Config
 }
@@ -31,32 +49,16 @@ type Distributor struct {
 // opened up on supplied IP address and port as well as initializes
 // connections to involved worker nodes. It returns those
 // information bundeled in above Distributor struct.
-func InitDistributor(config *config.Config) (*Distributor, error) {
+func InitDistributor(config *config.Config, auth PlainAuthenticator) (*Distributor, error) {
 
 	var err error
 
 	// Initialize and set fields.
 	distr := &Distributor{
 		lock:        new(sync.RWMutex),
+		AuthAdapter: auth,
 		Connections: make(map[string]*tls.Conn),
 		Config:      config,
-	}
-
-	// As the distributor is responsible for the authentication
-	// of incoming requests, connect to provided auth mechanism.
-	if config.Distributor.AuthAdapter == "AuthFile" {
-
-		// Open authentication file and read user information.
-		distr.AuthAdapter, err = auth.NewFileAuthenticator(config.Distributor.AuthFile.File, config.Distributor.AuthFile.Separator)
-
-	} else if config.Distributor.AuthAdapter == "AuthPostgres" {
-
-		// Connect to PostgreSQL database.
-		distr.AuthAdapter, err = auth.NewPostgresAuthenticator(config.Distributor.AuthPostgres.IP, config.Distributor.AuthPostgres.Port, config.Distributor.AuthPostgres.Database, config.Distributor.AuthPostgres.User, config.Distributor.AuthPostgres.Password, config.Distributor.AuthPostgres.UseTLS)
-
-	}
-	if err != nil {
-		return nil, err
 	}
 
 	// Load internal TLS config.

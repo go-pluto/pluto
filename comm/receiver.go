@@ -507,8 +507,10 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// Calculate size of needed buffer.
 				bufferSize := logSize - curOffset
 
-				// Account for case when offset reached end of log file.
-				if logSize == curOffset {
+				// Account for case when offset reached end of log file
+				// or accidentally the current offset is bigger than the
+				// log file's size.
+				if logSize <= curOffset {
 
 					// Reset position to beginning of file.
 					_, err = recv.updLog.Seek(0, os.SEEK_SET)
@@ -562,7 +564,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// If not, set indicator to false.
 				if (msg.VClock[msg.Sender] != recv.vclock[msg.Sender]) &&
 					(msg.VClock[msg.Sender] != (recv.vclock[msg.Sender] + 1)) {
-					log.Printf("[comm.ApplyStoredMsgs] %s: not applying message because leap in causality and messages missing.\n", recv.name)
 					applyMsg = false
 				}
 
@@ -574,7 +575,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 						// and check if they do not exceed the locally stored
 						// values for these nodes.
 						if value > recv.vclock[node] {
-							log.Printf("[comm.ApplyStoredMsgs] %s: not applying message because other elements exceeded.\n", recv.name)
 							applyMsg = false
 							break
 						}
@@ -597,8 +597,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 
 						// Wait for done signal from node.
 						<-recv.doneCRDTUpdChan
-					} else {
-						log.Printf("[comm.ApplyStoredMsgs] %s: message was a duplicate, already seen.\n", recv.name)
 					}
 
 					for node, value := range msg.VClock {

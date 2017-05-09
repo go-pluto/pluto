@@ -1,10 +1,9 @@
-package imap_test
+package main
 
 import (
 	"bufio"
 	"fmt"
 	"log"
-	"os"
 	"testing"
 
 	"crypto/tls"
@@ -67,35 +66,12 @@ var loginTests = []struct {
 
 // Functions
 
-func TestMain(m *testing.M) {
-
-	var err error
-
-	// Create needed test environment.
-	testEnv, err = utils.CreateTestEnv("../test-config.toml")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Run all nodes in background.
-	utils.RunAllNodes(testEnv, "worker-1")
-
-	// Run all tests of this package.
-	success := m.Run()
-
-	// Tear down test setup.
-	utils.TearDownNormalSetup(testEnv)
-
-	// Return with test return value.
-	os.Exit(success)
-}
-
 // TestCapability executes a black-box table test on the
 // implemented Capability() function.
 func TestCapability(t *testing.T) {
 
 	// Connect to IMAP distributor.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testEnv.Addr, testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestCapability] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 	}
@@ -159,7 +135,7 @@ func TestLogout(t *testing.T) {
 		var answer string
 
 		// Connect to IMAP distributor.
-		conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+		conn, err := tls.Dial("tcp", testEnv.Addr, testEnv.TLSConfig)
 		if err != nil {
 			t.Fatalf("[imap.TestLogout] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 		}
@@ -218,7 +194,7 @@ func TestLogout(t *testing.T) {
 func TestStartTLS(t *testing.T) {
 
 	// Connect to IMAP server.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testEnv.Addr, testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestStartTLS] Error during connection attempt to IMAP server: %s\n", err.Error())
 	}
@@ -263,7 +239,7 @@ func TestStartTLS(t *testing.T) {
 func TestLogin(t *testing.T) {
 
 	// Connect to IMAP distributor.
-	conn, err := tls.Dial("tcp", (testEnv.Config.Distributor.PublicIP + ":" + testEnv.Config.Distributor.Port), testEnv.TLSConfig)
+	conn, err := tls.Dial("tcp", testEnv.Addr, testEnv.TLSConfig)
 	if err != nil {
 		t.Fatalf("[imap.TestLogin] Error during connection attempt to IMAP distributor: %s\n", err.Error())
 	}
