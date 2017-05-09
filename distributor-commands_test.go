@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"log"
-	"os"
 	"testing"
 
 	"crypto/tls"
@@ -66,29 +65,6 @@ var loginTests = []struct {
 }
 
 // Functions
-
-func TestMain(m *testing.M) {
-
-	var err error
-
-	// Create needed test environment.
-	testEnv, err = utils.CreateTestEnv("./test-config.toml")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Run all nodes in background.
-	RunAllNodes(testEnv, "worker-1")
-
-	// Run all tests of this package.
-	success := m.Run()
-
-	// Tear down test setup.
-	TearDownNormalSetup(testEnv)
-
-	// Return with test return value.
-	os.Exit(success)
-}
 
 // TestCapability executes a black-box table test on the
 // implemented Capability() function.

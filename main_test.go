@@ -2,13 +2,44 @@ package main
 
 import (
 	"log"
+	"os"
+	"testing"
 	"time"
 
 	"github.com/numbleroot/pluto/imap"
 	"github.com/numbleroot/pluto/utils"
 )
 
-// Structs
+// Functions
+
+// TestMain executes initilization and teardown
+// code needed for all tests in package main.
+func TestMain(m *testing.M) {
+
+	var err error
+
+	// Create needed test environment.
+	testEnv, err = utils.CreateTestEnv("./test-config.toml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Run all nodes in background.
+	RunAllNodes(testEnv, "worker-1")
+
+	// Run all tests of this package.
+	success := m.Run()
+
+	// Give background synchronization enough
+	// time to finish communication.
+	time.Sleep(15 * time.Second)
+
+	// Tear down test setup.
+	TearDownNormalSetup(testEnv)
+
+	// Return with test return value.
+	os.Exit(success)
+}
 
 // RunAllNodes runs all needed nodes for a proper multi-node
 // test setup in background. It also handles shutdown of these
