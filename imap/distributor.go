@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/go-kit/kit/metrics"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crypto"
 )
@@ -33,6 +34,10 @@ type PlainAuthenticator interface {
 
 // Structs
 
+type DistributorMetrics struct {
+	Commands metrics.Counter
+}
+
 // Distributor struct bundles information needed in
 // operation of a distributor node.
 type Distributor struct {
@@ -43,6 +48,7 @@ type Distributor struct {
 	AuthAdapter   PlainAuthenticator
 	Connections   map[string]*tls.Conn
 	Config        *config.Config
+	Metrics       DistributorMetrics
 }
 
 // Functions
@@ -51,7 +57,7 @@ type Distributor struct {
 // opened up on supplied IP address and port as well as initializes
 // connections to involved worker nodes. It returns those
 // information bundled in above Distributor struct.
-func InitDistributor(logger log.Logger, config *config.Config, auth PlainAuthenticator) (*Distributor, error) {
+func InitDistributor(logger log.Logger, metrics DistributorMetrics, config *config.Config, auth PlainAuthenticator) (*Distributor, error) {
 
 	var err error
 
@@ -62,6 +68,7 @@ func InitDistributor(logger log.Logger, config *config.Config, auth PlainAuthent
 		AuthAdapter: auth,
 		Connections: make(map[string]*tls.Conn),
 		Config:      config,
+		Metrics:     metrics,
 	}
 
 	// Load internal TLS config.
@@ -190,24 +197,29 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 
 		case req.Command == "CAPABILITY":
 			distr.Capability(c, req)
+			distr.Metrics.Commands.With("capability").Add(1)
 
 		case req.Command == "LOGOUT":
 			if ok := distr.Logout(c, req); ok {
 				// A LOGOUT marks connection termination.
 				recvUntil = "LOGOUT"
+				distr.Metrics.Commands.With("logout").Add(1)
 			}
 
 		case req.Command == "STARTTLS":
 			distr.StartTLS(c, req)
+			distr.Metrics.Commands.With("starttls").Add(1)
 
 		case req.Command == "LOGIN":
 			distr.Login(c, req)
+			distr.Metrics.Commands.With("login").Add(1)
 
 		case c.OutConn != nil:
 			distr.Proxy(c, rawReq)
 
 		default:
 			// Client sent inappropriate command. Signal tagged error.
+			distr.Metrics.Commands.With("error").Add(1)
 			err := c.Send(true, fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
 			if err != nil {
 				c.Error("Encountered send error", err)

@@ -6,11 +6,14 @@ import (
 	"runtime"
 	"strings"
 
+	"net/http"
+
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/numbleroot/pluto/auth"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/imap"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Functions
@@ -90,6 +93,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	metrics := NewPrometheusMetrics()
+
+	// Start prometheus in a goroutine running concurrently in the background
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		http.ListenAndServe(":8081", nil) //TODO: Variable port number for metrics
+	}()
+
 	// Initialize and run a node of the pluto
 	// system based on passed command line flag.
 	if *distributorFlag {
@@ -104,7 +115,7 @@ func main() {
 		}
 
 		// Initialize distributor.
-		distr, err := imap.InitDistributor(logger, conf, authenticator)
+		distr, err := imap.InitDistributor(logger, metrics.Distributor, conf, authenticator)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to initialize imap distributor",
