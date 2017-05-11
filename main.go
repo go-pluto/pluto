@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	stdlog "log"
 	"os"
 	"runtime"
 	"strings"
@@ -40,6 +39,30 @@ func initAuthenticator(config *config.Config) (imap.PlainAuthenticator, error) {
 	}
 }
 
+// initLogger initializes a JSON gokit-logger set
+// to the according log level supplied via cli flag.
+func initLogger(loglevel string) log.Logger {
+
+	logger := log.NewJSONLogger(log.NewSyncWriter(os.Stdout))
+	logger = log.With(logger,
+		"ts", log.DefaultTimestampUTC,
+		"caller", log.DefaultCaller,
+	)
+
+	switch strings.ToLower(loglevel) {
+	case "info":
+		logger = level.NewFilter(logger, level.AllowInfo())
+	case "warn":
+		logger = level.NewFilter(logger, level.AllowWarn())
+	case "error":
+		logger = level.NewFilter(logger, level.AllowError())
+	default:
+		logger = level.NewFilter(logger, level.AllowDebug())
+	}
+
+	return logger
+}
+
 func main() {
 
 	var err error
@@ -61,7 +84,9 @@ func main() {
 	// Read configuration from file.
 	conf, err := config.LoadConfig(*configFlag)
 	if err != nil {
-		level.Error(logger).Log("msg", "failed to load the config", "err", err)
+		level.Error(logger).Log(
+			"msg", "failed to load the config", "err", err,
+		)
 		os.Exit(1)
 	}
 
@@ -71,7 +96,11 @@ func main() {
 
 		authenticator, err := initAuthenticator(conf)
 		if err != nil {
-			stdlog.Fatal(err)
+			level.Error(logger).Log(
+				"msg", "failed to initialize an authenticator",
+				"err", err,
+			)
+			os.Exit(2)
 		}
 
 		// Initialize distributor.
@@ -81,7 +110,7 @@ func main() {
 				"msg", "failed to initialize imap distributor",
 				"err", err,
 			)
-			os.Exit(2)
+			os.Exit(3)
 		}
 		defer distr.Socket.Close()
 
@@ -91,9 +120,8 @@ func main() {
 				"msg", "failed to initialize imap distributor",
 				"err", err,
 			)
-			os.Exit(3)
+			os.Exit(4)
 		}
-
 	} else if *workerFlag != "" {
 
 		if *failoverFlag {
@@ -101,21 +129,33 @@ func main() {
 			// Initialize a failover worker node.
 			failWorker, err := imap.InitFailoverWorker(conf, *workerFlag)
 			if err != nil {
-				stdlog.Fatal(err)
+				level.Error(logger).Log(
+					"msg", "failed to initialize failover imap worker",
+					"err", err,
+				)
+				os.Exit(5)
 			}
 			defer failWorker.MailSocket.Close()
 
 			// Loop on incoming requests to pass on.
 			err = failWorker.RunFailover()
 			if err != nil {
-				stdlog.Fatal(err)
+				level.Error(logger).Log(
+					"msg", "failed to start the initialized failover worker node",
+					"err", err,
+				)
+				os.Exit(6)
 			}
 		} else {
 
 			// Initialize a normally operating worker.
 			worker, err := imap.InitWorker(logger, conf, *workerFlag)
 			if err != nil {
-				stdlog.Fatal(err)
+				level.Error(logger).Log(
+					"msg", "failed to initialize imap worker",
+					"err", err,
+				)
+				os.Exit(7)
 			}
 			defer worker.MailSocket.Close()
 			defer worker.SyncSocket.Close()
@@ -123,16 +163,23 @@ func main() {
 			// Loop on incoming requests.
 			err = worker.Run()
 			if err != nil {
-				stdlog.Fatal(err)
+				level.Error(logger).Log(
+					"msg", "failed to start the initialized worker node",
+					"err", err,
+				)
+				os.Exit(8)
 			}
 		}
-
 	} else if *storageFlag {
 
 		// Initialize storage.
 		storage, err := imap.InitStorage(conf)
 		if err != nil {
-			stdlog.Fatal(err)
+			level.Error(logger).Log(
+				"msg", "failed to initialize imap storage node",
+				"err", err,
+			)
+			os.Exit(9)
 		}
 		defer storage.MailSocket.Close()
 		defer storage.SyncSocket.Close()
@@ -140,36 +187,16 @@ func main() {
 		// Loop on incoming requests.
 		err = storage.Run()
 		if err != nil {
-			stdlog.Fatal(err)
+			level.Error(logger).Log(
+				"msg", "failed to start the initialized storage node",
+				"err", err,
+			)
+			os.Exit(10)
 		}
-
 	} else {
-
 		// If no flags were specified, print usage
 		// and return with failure value.
 		flag.Usage()
-		os.Exit(1)
-
+		os.Exit(11)
 	}
-}
-
-func initLogger(loglevel string) log.Logger {
-	logger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stdout))
-	logger = log.With(logger,
-		"ts", log.DefaultTimestampUTC,
-		"caller", log.DefaultCaller,
-	)
-
-	switch strings.ToLower(loglevel) {
-	case "info":
-		level.NewFilter(logger, level.AllowInfo())
-	case "warn":
-		level.NewFilter(logger, level.AllowWarn())
-	case "error":
-		level.NewFilter(logger, level.AllowError())
-	default:
-		level.NewFilter(logger, level.AllowDebug())
-	}
-
-	return logger
 }
