@@ -1,11 +1,12 @@
 package main
 
 import (
-	"log"
+	stdlog "log"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/go-kit/kit/log"
 	"github.com/numbleroot/pluto/imap"
 	"github.com/numbleroot/pluto/utils"
 )
@@ -21,7 +22,7 @@ func TestMain(m *testing.M) {
 	// Create needed test environment.
 	testEnv, err = utils.CreateTestEnv("./test-config.toml")
 	if err != nil {
-		log.Fatal(err)
+		stdlog.Fatal(err)
 	}
 
 	// Run all nodes in background.
@@ -51,7 +52,7 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 		// Initialize storage node.
 		storage, err := imap.InitStorage(testEnv.Config)
 		if err != nil {
-			log.Fatal(err)
+			stdlog.Fatal(err)
 		}
 
 		go func() {
@@ -59,7 +60,7 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			// Wait for shutdown signal on channel.
 			<-testEnv.DownStorage
 
-			log.Printf("[utils.RunAllNodes] Closing storage socket.\n")
+			stdlog.Printf("[utils.RunAllNodes] Closing storage socket.\n")
 
 			// Shut down storage node.
 			storage.MailSocket.Close()
@@ -79,9 +80,9 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 	go func() {
 
 		// Initialize workerName worker node.
-		worker, err := imap.InitWorker(testEnv.Config, workerName)
+		worker, err := imap.InitWorker(log.NewNopLogger(), testEnv.Config, workerName)
 		if err != nil {
-			log.Fatal(err)
+			stdlog.Fatal(err)
 		}
 
 		go func() {
@@ -89,7 +90,7 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			// Wait for shutdown signal on channel.
 			<-testEnv.DownWorker
 
-			log.Printf("[utils.RunAllNodes] Closing '%s' socket.\n", workerName)
+			stdlog.Printf("[utils.RunAllNodes] Closing '%s' socket.\n", workerName)
 
 			// Shut down worker node.
 			worker.MailSocket.Close()
@@ -110,13 +111,13 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
 		authenticator, err := initAuthenticator(testEnv.Config)
 		if err != nil {
-			log.Fatal(err)
+			stdlog.Fatal(err)
 		}
 
 		// Initialize distributor node.
-		distr, err := imap.InitDistributor(testEnv.Config, authenticator)
+		distr, err := imap.InitDistributor(log.NewNopLogger(), testEnv.Config, authenticator)
 		if err != nil {
-			log.Fatal(err)
+			stdlog.Fatal(err)
 		}
 
 		go func() {
@@ -124,7 +125,7 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			// Wait for shutdown signal on channel.
 			<-testEnv.DownDistr
 
-			log.Printf("[utils.RunAllNodes] Closing distributor socket.\n")
+			stdlog.Printf("[utils.RunAllNodes] Closing distributor socket.\n")
 
 			// Shut down distributor node.
 			distr.Socket.Close()
