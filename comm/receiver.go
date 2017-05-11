@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
+	stdlog "log"
 	"net"
 	"os"
 	"strconv"
@@ -222,7 +222,7 @@ func (recv *Receiver) Shutdown(downRecv chan struct{}) {
 	// Wait for signal.
 	<-downRecv
 
-	log.Printf("[comm.Shutdown] Receiver: shutting down...\n")
+	stdlog.Printf("[comm.Shutdown] Receiver: shutting down...\n")
 
 	// Instruct other goroutines to shutdown.
 	recv.shutdown <- struct{}{}
@@ -243,7 +243,7 @@ func (recv *Receiver) Shutdown(downRecv chan struct{}) {
 	recv.socket.Close()
 	recv.lock.Unlock()
 
-	log.Printf("[comm.Shutdown] Receiver: done!\n")
+	stdlog.Printf("[comm.Shutdown] Receiver: done!\n")
 }
 
 // IncVClockEntry waits for an incoming name of a node on
@@ -291,7 +291,7 @@ func (recv *Receiver) IncVClockEntry() {
 					// Save updated vector clock to log file.
 					err := recv.SaveVClockEntries()
 					if err != nil {
-						log.Fatalf("[comm.IncVClockEntry] Saving updated vector clock to file failed: %s\n", err.Error())
+						stdlog.Fatalf("[comm.IncVClockEntry] Saving updated vector clock to file failed: %s\n", err.Error())
 					}
 
 					// Send back the updated vector clock on other
@@ -401,11 +401,11 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn) {
 		if err != nil {
 
 			if err.Error() == "EOF" {
-				log.Printf("[comm.StoreIncMsgs] Reading from closed connection. Ignoring.\n")
+				stdlog.Printf("[comm.StoreIncMsgs] Reading from closed connection. Ignoring.\n")
 				return
 			}
 
-			log.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
+			stdlog.Fatalf("[comm.StoreIncMsgs] Error while reading sync message: %s\n", err.Error())
 		}
 
 		// Remove trailing characters denoting line end.
@@ -418,20 +418,20 @@ func (recv *Receiver) StoreIncMsgs(conn net.Conn) {
 	// Write it to message log file.
 	_, err = recv.writeLog.WriteString(msgRaw)
 	if err != nil {
-		log.Fatalf("[comm.StoreIncMsgs] Writing to CRDT log file failed with: %s\n", err.Error())
+		stdlog.Fatalf("[comm.StoreIncMsgs] Writing to CRDT log file failed with: %s\n", err.Error())
 	}
 
 	// Append a newline symbol to just written line.
 	newline := []byte("\n")
 	_, err = recv.writeLog.Write(newline)
 	if err != nil {
-		log.Fatalf("[comm.StoreIncMsgs] Appending a newline symbol to CRDT log file failed with: %s\n", err.Error())
+		stdlog.Fatalf("[comm.StoreIncMsgs] Appending a newline symbol to CRDT log file failed with: %s\n", err.Error())
 	}
 
 	// Save to stable storage.
 	err = recv.writeLog.Sync()
 	if err != nil {
-		log.Fatalf("[comm.StoreIncMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
+		stdlog.Fatalf("[comm.StoreIncMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
 	}
 
 	// Unlock mutex.
@@ -485,7 +485,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// http://stackoverflow.com/a/30948278
 				info, err := recv.updLog.Stat()
 				if err != nil {
-					log.Fatalf("[comm.ApplyStoredMsgs] Could not get CRDT log file information: %s\n", err.Error())
+					stdlog.Fatalf("[comm.ApplyStoredMsgs] Could not get CRDT log file information: %s\n", err.Error())
 				}
 
 				// Store accessed file size for multiple use.
@@ -501,7 +501,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// Save current position of head for later use.
 				curOffset, err := recv.updLog.Seek(0, os.SEEK_CUR)
 				if err != nil {
-					log.Fatalf("[comm.ApplyStoredMsgs] Error while retrieving current head position in CRDT log file: %s\n", err.Error())
+					stdlog.Fatalf("[comm.ApplyStoredMsgs] Error while retrieving current head position in CRDT log file: %s\n", err.Error())
 				}
 
 				// Calculate size of needed buffer.
@@ -515,7 +515,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					// Reset position to beginning of file.
 					_, err = recv.updLog.Seek(0, os.SEEK_SET)
 					if err != nil {
-						log.Fatalf("[comm.ApplyStoredMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
+						stdlog.Fatalf("[comm.ApplyStoredMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
 					}
 
 					// Unlock log file mutex.
@@ -537,13 +537,13 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// Copy contents of log file to prepared buffer.
 				_, err = io.Copy(buf, recv.updLog)
 				if err != nil {
-					log.Fatalf("[comm.ApplyStoredMsgs] Could not copy CRDT log file contents to buffer: %s\n", err.Error())
+					stdlog.Fatalf("[comm.ApplyStoredMsgs] Could not copy CRDT log file contents to buffer: %s\n", err.Error())
 				}
 
 				// Read current message at head position from log file.
 				msgRaw, err := buf.ReadString('\n')
 				if (err != nil) && (err != io.EOF) {
-					log.Fatalf("[comm.ApplyStoredMsgs] Error during extraction of first line in CRDT log file: %s\n", err.Error())
+					stdlog.Fatalf("[comm.ApplyStoredMsgs] Error during extraction of first line in CRDT log file: %s\n", err.Error())
 				}
 
 				// Save length of just read message for later use.
@@ -552,7 +552,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// Parse sync message.
 				msg, err := Parse(msgRaw)
 				if err != nil {
-					log.Fatalf("[comm.ApplyStoredMsgs] Error while parsing sync message: %s\n", err.Error())
+					stdlog.Fatalf("[comm.ApplyStoredMsgs] Error while parsing sync message: %s\n", err.Error())
 				}
 
 				// Initially, set apply indicator to true. This means,
@@ -611,33 +611,33 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					// Save updated vector clock to log file.
 					err := recv.SaveVClockEntries()
 					if err != nil {
-						log.Fatalf("[comm.ApplyStoredMsgs] Saving updated vector clock to file failed: %s\n", err.Error())
+						stdlog.Fatalf("[comm.ApplyStoredMsgs] Saving updated vector clock to file failed: %s\n", err.Error())
 					}
 
 					// Reset head position to curOffset saved at beginning of loop.
 					_, err = recv.updLog.Seek(curOffset, os.SEEK_SET)
 					if err != nil {
-						log.Fatal(err)
+						stdlog.Fatal(err)
 					}
 
 					// Copy reduced buffer contents back to current position
 					// of CRDT log file, effectively deleting the read line.
 					newNumOfBytes, err := io.Copy(recv.updLog, buf)
 					if err != nil {
-						log.Fatalf("[comm.ApplyStoredMsgs] Error during copying buffer contents back to CRDT log file: %s\n", err.Error())
+						stdlog.Fatalf("[comm.ApplyStoredMsgs] Error during copying buffer contents back to CRDT log file: %s\n", err.Error())
 					}
 
 					// Now, truncate log file size to (curOffset + newNumOfBytes),
 					// reducing the file size by length of handled message.
 					err = recv.updLog.Truncate((curOffset + newNumOfBytes))
 					if err != nil {
-						log.Fatalf("[comm.ApplyStoredMsgs] Could not truncate CRDT log file: %s\n", err.Error())
+						stdlog.Fatalf("[comm.ApplyStoredMsgs] Could not truncate CRDT log file: %s\n", err.Error())
 					}
 
 					// Sync changes to stable storage.
 					err = recv.updLog.Sync()
 					if err != nil {
-						log.Fatalf("[comm.ApplyStoredMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
+						stdlog.Fatalf("[comm.ApplyStoredMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
 					}
 
 					// Reset position to beginning of file because the
@@ -645,17 +645,17 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					// of CRDT message log file.
 					_, err = recv.updLog.Seek(0, os.SEEK_SET)
 					if err != nil {
-						log.Fatalf("[comm.ApplyStoredMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
+						stdlog.Fatalf("[comm.ApplyStoredMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
 					}
 				} else {
 
-					log.Printf("[comm.ApplyStoredMsgs] Message was out of order. Next.\n")
+					stdlog.Printf("[comm.ApplyStoredMsgs] Message was out of order. Next.\n")
 
 					// Set position of head to byte after just read message,
 					// effectively delaying execution of that message.
 					_, err = recv.updLog.Seek((curOffset + msgRawLength), os.SEEK_SET)
 					if err != nil {
-						log.Fatalf("[comm.ApplyStoredMsgs] Error while moving position in CRDT log file to next line: %s\n", err.Error())
+						stdlog.Fatalf("[comm.ApplyStoredMsgs] Error while moving position in CRDT log file to next line: %s\n", err.Error())
 					}
 				}
 

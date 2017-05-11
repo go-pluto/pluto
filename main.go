@@ -2,10 +2,13 @@ package main
 
 import (
 	"flag"
-	"log"
+	stdlog "log"
 	"os"
 	"runtime"
+	"strings"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/numbleroot/pluto/auth"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/imap"
@@ -50,12 +53,16 @@ func main() {
 	workerFlag := flag.String("worker", "", "If this process is intended to run as one of the IMAP worker nodes, specify which of the ones defined in your config file this should be.")
 	failoverFlag := flag.Bool("failover", false, "Add this flag to a worker node in order to operate this node as a passthrough-failover node for specified crashed worker node.")
 	storageFlag := flag.Bool("storage", false, "Append this flag to indicate that this process should take the role of the storage node.")
+	loglevelFlag := flag.String("loglevel", "debug", "This flag sets the default logging level.")
 	flag.Parse()
+
+	logger := initLogger(*loglevelFlag)
 
 	// Read configuration from file.
 	conf, err := config.LoadConfig(*configFlag)
 	if err != nil {
-		log.Fatal(err)
+		level.Error(logger).Log("msg", "failed to load the config", "err", err)
+		os.Exit(1)
 	}
 
 	// Initialize and run a node of the pluto
@@ -64,20 +71,27 @@ func main() {
 
 		authenticator, err := initAuthenticator(conf)
 		if err != nil {
-			log.Fatal(err)
+			stdlog.Fatal(err)
 		}
 
 		// Initialize distributor.
-		distr, err := imap.InitDistributor(conf, authenticator)
+		distr, err := imap.InitDistributor(logger, conf, authenticator)
 		if err != nil {
-			log.Fatal(err)
+			level.Error(logger).Log(
+				"msg", "failed to initialize imap distributor",
+				"err", err,
+			)
+			os.Exit(2)
 		}
 		defer distr.Socket.Close()
 
 		// Loop on incoming requests.
-		err = distr.Run()
-		if err != nil {
-			log.Fatal(err)
+		if err = distr.Run(); err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to initialize imap distributor",
+				"err", err,
+			)
+			os.Exit(3)
 		}
 
 	} else if *workerFlag != "" {
@@ -87,21 +101,21 @@ func main() {
 			// Initialize a failover worker node.
 			failWorker, err := imap.InitFailoverWorker(conf, *workerFlag)
 			if err != nil {
-				log.Fatal(err)
+				stdlog.Fatal(err)
 			}
 			defer failWorker.MailSocket.Close()
 
 			// Loop on incoming requests to pass on.
 			err = failWorker.RunFailover()
 			if err != nil {
-				log.Fatal(err)
+				stdlog.Fatal(err)
 			}
 		} else {
 
 			// Initialize a normally operating worker.
-			worker, err := imap.InitWorker(conf, *workerFlag)
+			worker, err := imap.InitWorker(logger, conf, *workerFlag)
 			if err != nil {
-				log.Fatal(err)
+				stdlog.Fatal(err)
 			}
 			defer worker.MailSocket.Close()
 			defer worker.SyncSocket.Close()
@@ -109,7 +123,7 @@ func main() {
 			// Loop on incoming requests.
 			err = worker.Run()
 			if err != nil {
-				log.Fatal(err)
+				stdlog.Fatal(err)
 			}
 		}
 
@@ -118,7 +132,7 @@ func main() {
 		// Initialize storage.
 		storage, err := imap.InitStorage(conf)
 		if err != nil {
-			log.Fatal(err)
+			stdlog.Fatal(err)
 		}
 		defer storage.MailSocket.Close()
 		defer storage.SyncSocket.Close()
@@ -126,7 +140,7 @@ func main() {
 		// Loop on incoming requests.
 		err = storage.Run()
 		if err != nil {
-			log.Fatal(err)
+			stdlog.Fatal(err)
 		}
 
 	} else {
@@ -137,4 +151,25 @@ func main() {
 		os.Exit(1)
 
 	}
+}
+
+func initLogger(loglevel string) log.Logger {
+	logger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stdout))
+	logger = log.With(logger,
+		"ts", log.DefaultTimestampUTC,
+		"caller", log.DefaultCaller,
+	)
+
+	switch strings.ToLower(loglevel) {
+	case "info":
+		level.NewFilter(logger, level.AllowInfo())
+	case "warn":
+		level.NewFilter(logger, level.AllowWarn())
+	case "error":
+		level.NewFilter(logger, level.AllowError())
+	default:
+		level.NewFilter(logger, level.AllowDebug())
+	}
+
+	return logger
 }

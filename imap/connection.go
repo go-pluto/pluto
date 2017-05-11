@@ -3,7 +3,7 @@ package imap
 import (
 	"bufio"
 	"fmt"
-	"log"
+	stdlog "log"
 	"strings"
 
 	"crypto/tls"
@@ -106,7 +106,7 @@ func (c *Connection) InternalSend(inc bool, text string) error {
 	_, err = fmt.Fprintf(conn, "%s\r\n", text)
 	for err != nil {
 
-		log.Printf("[imap.InternalSend] Sending to node '%s' failed, trying to recover...\n", conn.RemoteAddr())
+		stdlog.Printf("[imap.InternalSend] Sending to node '%s' failed, trying to recover...\n", conn.RemoteAddr())
 
 		// Define what IP and port of remote node look like.
 		remoteAddr := conn.RemoteAddr().String()
@@ -137,7 +137,7 @@ func (c *Connection) InternalSend(inc bool, text string) error {
 				}
 			}
 
-			log.Printf("[imap.InternalSend] Reconnected to '%s'.\n", remoteAddr)
+			stdlog.Printf("[imap.InternalSend] Reconnected to '%s'.\n", remoteAddr)
 
 			// Resend message to remote node.
 			_, err = fmt.Fprintf(conn, "%s\r\n", text)
@@ -177,7 +177,7 @@ func (c *Connection) Receive(inc bool) (string, error) {
 		if err != nil {
 
 			if err.Error() == "EOF" {
-				log.Printf("[imap.Receive] Node at '%s' disconnected.\n", conn.RemoteAddr().String())
+				stdlog.Printf("[imap.Receive] Node at '%s' disconnected.\n", conn.RemoteAddr().String())
 			}
 
 			break
@@ -320,12 +320,12 @@ func (c *Connection) Terminate() error {
 func (c *Connection) Error(msg string, err error) {
 
 	// Log error.
-	log.Printf("%s: %s. Terminating connection to %s.\n", msg, err.Error(), c.IncConn.RemoteAddr().String())
+	stdlog.Printf("%s: %s. Terminating connection to %s.\n", msg, err.Error(), c.IncConn.RemoteAddr().String())
 
 	// Terminate connection.
 	err = c.Terminate()
 	if err != nil {
-		log.Fatal(err)
+		stdlog.Fatal(err)
 	}
 }
 

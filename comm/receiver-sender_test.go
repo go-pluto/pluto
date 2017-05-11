@@ -2,7 +2,7 @@ package comm_test
 
 import (
 	"fmt"
-	"log"
+	stdlog "log"
 	"testing"
 	"time"
 
@@ -79,7 +79,7 @@ func TestSenderReceiver(t *testing.T) {
 			updMsg := <-n1ApplyCRDTUpdChan
 
 			// Log message.
-			log.Printf("[comm_test.TestSenderReceiver] %s: Would apply update from message here: %s\n", n1, updMsg)
+			stdlog.Printf("[comm_test.TestSenderReceiver] %s: Would apply update from message here: %s\n", n1, updMsg)
 
 			// Signal success.
 			n1DoneCRDTUpdChan <- struct{}{}
@@ -102,7 +102,7 @@ func TestSenderReceiver(t *testing.T) {
 			updMsg := <-n2ApplyCRDTUpdChan
 
 			// Log message.
-			log.Printf("[comm_test.TestSenderReceiver] %s: Would apply update from message here: %s\n", n2, updMsg)
+			stdlog.Printf("[comm_test.TestSenderReceiver] %s: Would apply update from message here: %s\n", n2, updMsg)
 
 			// Signal success.
 			n2DoneCRDTUpdChan <- struct{}{}

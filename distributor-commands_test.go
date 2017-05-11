@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
+	stdlog "log"
 	"testing"
 
 	"crypto/tls"
@@ -184,7 +184,7 @@ func TestLogout(t *testing.T) {
 		// At the end of each test, terminate connection.
 		err = c.Terminate()
 		if err != nil {
-			log.Fatal(err)
+			stdlog.Fatal(err)
 		}
 	}
 }
