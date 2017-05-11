@@ -68,7 +68,7 @@ func BootstrapCertTempl(nBef time.Time, nAft time.Time) (*x509.Certificate, erro
 // the root certificate.
 func CreateNodeCert(pathPrefix string, fileName string, rsaBits int, nBef time.Time, nAft time.Time, ipAdresses []string, rootCert *x509.Certificate, rootKey *rsa.PrivateKey) error {
 
-	stdlog.Printf("[crypto.GeneratePKI] === Generating for %s ===\n", fileName)
+	stdlog.Printf("[crypto.GeneratePKI] === Generating for %s ===", fileName)
 
 	// Generate this node's key pair.
 	key, err := rsa.GenerateKey(rand.Reader, rsaBits)
@@ -113,7 +113,7 @@ func CreateNodeCert(pathPrefix string, fileName string, rsaBits int, nBef time.T
 	}
 	certFile.Sync()
 
-	stdlog.Printf("[crypto.GeneratePKI] Saved %s-cert.pem to disk.\n", fileName)
+	stdlog.Printf("[crypto.GeneratePKI] Saved %s-cert.pem to disk.", fileName)
 
 	// Additionally, open file handle for node key.
 	keyFile, err := os.OpenFile(fmt.Sprintf("%sprivate/%s-key.pem", pathPrefix, fileName), (os.O_WRONLY | os.O_CREATE | os.O_TRUNC), 0600)
@@ -128,8 +128,8 @@ func CreateNodeCert(pathPrefix string, fileName string, rsaBits int, nBef time.T
 	}
 	keyFile.Sync()
 
-	stdlog.Printf("[crypto.GeneratePKI] Saved %s-key.pem to disk.\n", fileName)
-	stdlog.Printf("[crypto.GeneratePKI] === Done generating for %s ===\n\n", fileName)
+	stdlog.Printf("[crypto.GeneratePKI] Saved %s-key.pem to disk.", fileName)
+	stdlog.Printf("[crypto.GeneratePKI] === Done generating for %s ===", fileName)
 
 	return nil
 }
@@ -143,7 +143,7 @@ func main() {
 	// Parse supplied command-line flags.
 	flag.Parse()
 
-	stdlog.Println("[crypto.GeneratePKI] Building pluto's internal PKI.\n")
+	stdlog.Println("[crypto.GeneratePKI] Building pluto's internal PKI.")
 
 	if len(*validFrom) == 0 {
 
@@ -154,7 +154,7 @@ func main() {
 		// If start date supplied, try to parse.
 		notBefore, err = time.Parse("Jan 2 15:04:05 2006", *validFrom)
 		if err != nil {
-			stdlog.Fatalf("[crypto.GeneratePKI] Failed to parse creation date of certificates: %s\n", err.Error())
+			stdlog.Fatalf("[crypto.GeneratePKI] Failed to parse creation date of certificates: %s", err.Error())
 		}
 	}
 
@@ -172,7 +172,7 @@ func main() {
 	// Generate root key pair.
 	rootKey, err := rsa.GenerateKey(rand.Reader, *rsaBits)
 	if err != nil {
-		stdlog.Fatalf("[crypto.GeneratePKI] Failed to generate root key: %s\n", err.Error())
+		stdlog.Fatalf("[crypto.GeneratePKI] Failed to generate root key: %s", err.Error())
 	}
 
 	// Prepare to create the root certificate which will
@@ -190,26 +190,26 @@ func main() {
 	// Create the actual root certificate.
 	rootCertDER, err := x509.CreateCertificate(rand.Reader, rootTemplate, rootTemplate, &rootKey.PublicKey, rootKey)
 	if err != nil {
-		stdlog.Fatalf("[crypto.GeneratePKI] Failed to create DER byte representation of root certificate: %s\n", err.Error())
+		stdlog.Fatalf("[crypto.GeneratePKI] Failed to create DER byte representation of root certificate: %s", err.Error())
 	}
 
 	// Parse root certificate again so that we can sign with it.
 	rootCert, err := x509.ParseCertificate(rootCertDER)
 	if err != nil {
-		stdlog.Fatalf("[crypto.GeneratePKI] Failed to parse DER root certificate to x509 certificate: %s\n", err.Error())
+		stdlog.Fatalf("[crypto.GeneratePKI] Failed to parse DER root certificate to x509 certificate: %s", err.Error())
 	}
 
 	// Open file handle to store root certificate at.
 	rootCertFile, err := os.Create(fmt.Sprintf("%sprivate/root-cert.pem", *pathPrefix))
 	if err != nil {
-		stdlog.Fatalf("[crypto.GeneratePKI] Failed to open file for root certificate: %s\n", err.Error())
+		stdlog.Fatalf("[crypto.GeneratePKI] Failed to open file for root certificate: %s", err.Error())
 	}
 	defer rootCertFile.Close()
 
 	// Encode it in PEM format and save to disk.
 	err = pem.Encode(rootCertFile, &pem.Block{Type: "CERTIFICATE", Bytes: rootCertDER})
 	if err != nil {
-		stdlog.Fatalf("[crypto.GeneratePKI] Failed to write root certificate in PEM format to disk: %s\n", err.Error())
+		stdlog.Fatalf("[crypto.GeneratePKI] Failed to write root certificate in PEM format to disk: %s", err.Error())
 	}
 	rootCertFile.Sync()
 
@@ -218,18 +218,18 @@ func main() {
 	// Additionally, open file handle for root key.
 	rootKeyFile, err := os.OpenFile(fmt.Sprintf("%sprivate/root-key.pem", *pathPrefix), (os.O_WRONLY | os.O_CREATE | os.O_TRUNC), 0600)
 	if err != nil {
-		stdlog.Fatalf("[crypto.GeneratePKI] Failed to open file for root key: %s\n", err.Error())
+		stdlog.Fatalf("[crypto.GeneratePKI] Failed to open file for root key: %s", err.Error())
 	}
 
 	// Encode it in PEM format and save to disk.
 	err = pem.Encode(rootKeyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(rootKey)})
 	if err != nil {
-		stdlog.Fatalf("[crypto.GeneratePKI] Failed to write root key in PEM format to disk: %s\n", err.Error())
+		stdlog.Fatalf("[crypto.GeneratePKI] Failed to write root key in PEM format to disk: %s", err.Error())
 	}
 	rootKeyFile.Sync()
 
 	stdlog.Println("[crypto.GeneratePKI] Saved root-key.pem to disk.")
-	stdlog.Println("[crypto.GeneratePKI] === Done generating root certificate ===\n")
+	stdlog.Println("[crypto.GeneratePKI] === Done generating root certificate ===")
 
 	// Generate distributor's internal key and signed certificate.
 	err = CreateNodeCert(*pathPrefix, "internal-distributor", *rsaBits, notBefore, notAfter, []string{config.Distributor.PublicIP}, rootCert, rootKey)
