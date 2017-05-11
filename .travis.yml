@@ -20,7 +20,7 @@ after_success:
   - bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
 
 before_deploy:
-  - docker build -t numbleroot/pluto:${TRAVIS_TAG}
+  - docker build -t numbleroot/pluto:${TRAVIS_TAG} .
 
 deploy:
   provider: releases
