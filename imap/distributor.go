@@ -50,8 +50,7 @@ type Distributor struct {
 // InitDistributor listens for TLS connections on a TCP socket
 // opened up on supplied IP address and port as well as initializes
 // connections to involved worker nodes. It returns those
-// information bundeled in above Distributor struct.
-
+// information bundled in above Distributor struct.
 func InitDistributor(logger log.Logger, config *config.Config, auth PlainAuthenticator) (*Distributor, error) {
 
 	var err error
