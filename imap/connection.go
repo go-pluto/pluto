@@ -5,11 +5,10 @@ import (
 	"fmt"
 	stdlog "log"
 	"strings"
+	"time"
 
 	"crypto/tls"
 	"path/filepath"
-
-	"github.com/numbleroot/pluto/comm"
 )
 
 // Constants
@@ -42,7 +41,6 @@ type Connection struct {
 	OutReader     *bufio.Reader
 	IntlTLSConfig *tls.Config
 	IntlConnRetry int
-	OutAddr       string
 	ClientID      string
 	UserName      string
 }
@@ -59,6 +57,63 @@ type IMAPConnection struct {
 }
 
 // Functions
+
+// InternalConnect is used internally in the pluto system
+// to connect to other nodes. If the calling node is the
+// distributor and the connection attempt fails enough times,
+// we enter failover mode and connect to storage node directly.
+func InternalConnect(remoteAddr string, tlsConfig *tls.Config, retry int, isDistributor bool, storageAddr string) (*tls.Conn, error) {
+
+	var err error
+	var c *tls.Conn
+
+	// Define how errors look like we can deal with.
+	okErrorDefault := fmt.Sprintf("dial tcp %s: getsockopt: connection refused", remoteAddr)
+	okErrorStorage := fmt.Sprintf("dial tcp %s: getsockopt: connection refused", storageAddr)
+
+	// Initially, set error string to one we can deal with.
+	err = fmt.Errorf(okErrorDefault)
+
+	// After 5 failed reconnection attempts to a worker
+	// node, the distributor will connect to the storage
+	// node of the deployment.
+	doFailoverAfter := 5
+	curFailedAttempts := 0
+
+	for err != nil {
+
+		if isDistributor && (curFailedAttempts >= doFailoverAfter) {
+
+			// We reached the number of failed connection attempts
+			// to a worker at which the distributor will instead
+			// connect to the provided storage node address directly.
+			// We call this behaviour failover mode.
+			c, err = tls.Dial("tcp", storageAddr, tlsConfig)
+		} else {
+
+			// Attempt to connect to worker node.
+			c, err = tls.Dial("tcp", remoteAddr, tlsConfig)
+		}
+
+		if err != nil {
+
+			curFailedAttempts += 1
+
+			if (err.Error() == okErrorDefault) || (err.Error() == okErrorStorage) {
+				time.Sleep(time.Duration(retry) * time.Millisecond)
+			} else {
+
+				if isDistributor {
+					return nil, fmt.Errorf("failover mode: could not connect to port of storage node %s because of: %v", storageAddr, err)
+				} else {
+					return nil, fmt.Errorf("could not connect to port of node %s because of: %v", remoteAddr, err)
+				}
+			}
+		}
+	}
+
+	return c, nil
+}
 
 // Send takes in an answer text from a node as a
 // string and writes it to the connection to the client.
@@ -87,7 +142,12 @@ func (c *Connection) Send(inc bool, text string) error {
 // successfully transmit a message to another node or fail
 // definitely if no reconnection is possible. This prevents
 // further handler advancement in case a link failed.
-func (c *Connection) InternalSend(inc bool, text string) error {
+func (c *Connection) InternalSend(inc bool, text string, isDistributor bool, storageAddr string) error {
+
+	// TODO: We still need to implement the recovery mode,
+	//       i.e. the replacement of the failed-over connection
+	//       from distributor to storage back to the real
+	//       worker node (if it is up again).
 
 	// Check which attached connection should be used.
 	conn := c.IncConn
@@ -98,27 +158,53 @@ func (c *Connection) InternalSend(inc bool, text string) error {
 	// Test if connection is still healthy.
 	_, err := conn.Write([]byte("> ping <\r\n"))
 	if err != nil {
-		return fmt.Errorf("sending ping to node '%s' failed: %v", conn.RemoteAddr().String(), err)
+		return fmt.Errorf("sending ping to node %s failed: %v", conn.RemoteAddr().String(), err)
 	}
+
+	// After 5 failed reconnection attempts to a worker
+	// node, the distributor will connect to the storage
+	// node of the deployment.
+	doFailoverAfter := 5
+	curFailedAttempts := 0
 
 	// Write message to TLS connections.
 	_, err = fmt.Fprintf(conn, "%s\r\n", text)
 	for err != nil {
 
-		stdlog.Printf("[imap.InternalSend] Sending to node '%s' failed, trying to recover...", conn.RemoteAddr())
+		curFailedAttempts += 1
 
 		// Define what IP and port of remote node look like.
 		remoteAddr := conn.RemoteAddr().String()
 
-		// Define an error we can deal with.
-		okError := fmt.Sprintf("write tcp %s->%s: write: broken pipe", conn.LocalAddr().String(), remoteAddr)
+		stdlog.Printf("[imap.InternalSend] Sending to node %s failed, trying to recover...", remoteAddr)
 
-		if err.Error() == okError {
+		// Define possible errors we can deal with.
+		okErrorDefault := fmt.Sprintf("write tcp %s->%s: write: broken pipe", conn.LocalAddr().String(), remoteAddr)
+		okErrorStorage := fmt.Sprintf("write tcp %s->%s: write: broken pipe", conn.LocalAddr().String(), storageAddr)
 
-			// Reestablish TLS connection to remote node.
-			conn, err = comm.ReliableConnect(remoteAddr, c.IntlTLSConfig, c.IntlConnRetry)
-			if err != nil {
-				return fmt.Errorf("failed to reestablish connection with '%s': %v", remoteAddr, err)
+		if (err.Error() == okErrorDefault) || (err.Error() == okErrorStorage) {
+
+			if isDistributor && (curFailedAttempts >= doFailoverAfter) {
+
+				// We reached the number of failed connection attempts
+				// to a worker at which the distributor will instead
+				// connect to the provided storage node address directly.
+				// We call this behaviour failover mode.
+				conn, err = InternalConnect(storageAddr, c.IntlTLSConfig, c.IntlConnRetry, false, "")
+				if err != nil {
+					return fmt.Errorf("failover mode: failed to connect to storage at %s: %v", storageAddr, err)
+				}
+
+				stdlog.Printf("[imap.InternalSend] Failover mode: connected to storage at %s.", storageAddr)
+			} else {
+
+				// Reestablish TLS connection to remote node.
+				conn, err = InternalConnect(remoteAddr, c.IntlTLSConfig, c.IntlConnRetry, false, "")
+				if err != nil {
+					return fmt.Errorf("failed to reestablish connection with %s: %v", remoteAddr, err)
+				}
+
+				stdlog.Printf("[imap.InternalSend] Reconnected to %s.", remoteAddr)
 			}
 
 			// Save context to connection.
@@ -130,18 +216,16 @@ func (c *Connection) InternalSend(inc bool, text string) error {
 				c.OutReader = bufio.NewReader(conn)
 
 				// Inform remote node about which session was active.
-				err = c.SignalSessionStart(false)
+				err = c.SignalSessionStart(false, isDistributor, storageAddr)
 				if err != nil {
 					return fmt.Errorf("signalling session to remote node failed with: %v", err)
 				}
 			}
 
-			stdlog.Printf("[imap.InternalSend] Reconnected to '%s'.", remoteAddr)
-
 			// Resend message to remote node.
 			_, err = fmt.Fprintf(conn, "%s\r\n", text)
 		} else {
-			return fmt.Errorf("failed to send message to remote node '%s': %v", remoteAddr, err)
+			return fmt.Errorf("failed to send message to remote node %s: %v", remoteAddr, err)
 		}
 	}
 
@@ -226,29 +310,13 @@ func (c *Connection) InternalReceive(inc bool) (string, error) {
 
 // SignalSessionStart is used by the distributor node to signal
 // an involved worker node context about future requests.
-func (c *Connection) SignalSessionStart(inc bool) error {
+func (c *Connection) SignalSessionStart(inc bool, isDistributor bool, storageAddr string) error {
 
 	// Text to send.
 	msg := fmt.Sprintf("> id: %s <", c.ClientID)
 
 	// Send session information internally.
-	err := c.InternalSend(inc, msg)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// SignalSessionStartFailover is used by a failover worker node
-// to signal the storage node context about future requests.
-func (c *Connection) SignalSessionStartFailover(inc bool, recvClientID string, origWorker string) error {
-
-	// Text to send.
-	msg := strings.Replace(recvClientID, " <", fmt.Sprintf(" %s <", origWorker), -1)
-
-	// Send session information internally.
-	err := c.InternalSend(inc, msg)
+	err := c.InternalSend(inc, msg, isDistributor, storageAddr)
 	if err != nil {
 		return err
 	}
@@ -262,7 +330,7 @@ func (c *Connection) SignalSessionStartFailover(inc bool, recvClientID string, o
 func (c *Connection) SignalSessionDone(inc bool) error {
 
 	// Send done signal.
-	err := c.InternalSend(inc, "> done <")
+	err := c.InternalSend(inc, "> done <", false, "")
 	if err != nil {
 		return err
 	}
@@ -280,7 +348,7 @@ func (c *Connection) SignalAwaitingLiteral(inc bool, awaiting int) error {
 	msg := fmt.Sprintf("> literal: %d <", awaiting)
 
 	// Indicate how many bytes of literal data are awaited.
-	err := c.InternalSend(inc, msg)
+	err := c.InternalSend(inc, msg, false, "")
 	if err != nil {
 		return err
 	}
