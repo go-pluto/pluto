@@ -7,7 +7,6 @@ services:
 
 go:
   - 1.8
-  - tip
 
 before_install:
   - make test-pki
@@ -19,10 +18,9 @@ script:
 
 after_success:
   - bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
-  - if [ "${TRAVIS_BRANCH}" == "master" ]; then
-      docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}";
-      docker push numbleroot/pluto;
-    fi
+
+before_deploy:
+  - docker build -t numbleroot/pluto:${TRAVIS_TAG}
 
 deploy:
   provider: releases
@@ -33,8 +31,9 @@ deploy:
   on:
     tags: true
 
-docker:
-  - docker build -t numbleroot/pluto .
+after_deploy:
+  - docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}";
+  - docker push numbleroot/pluto:${TRAVIS_TAG};
 
 notifications:
   email:
