@@ -53,12 +53,12 @@ func CreateTestEnv(configFilePath string) (*TestEnv, error) {
 	// specified in pluto's main config file into memory.
 	rootCert, err := ioutil.ReadFile(config.Distributor.PublicTLS.CertLoc)
 	if err != nil {
-		return nil, fmt.Errorf("[utils.CreateTestEnv] Reading distributor's public certificate into memory failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[utils.CreateTestEnv] Reading distributor's public certificate into memory failed with: %v", err)
 	}
 
 	// Append certificate to test client's root CA pool.
 	if ok := tlsConfig.RootCAs.AppendCertsFromPEM(rootCert); !ok {
-		return nil, fmt.Errorf("[utils.CreateTestEnv] Failed to append certificate to pool: %s\n", err.Error())
+		return nil, fmt.Errorf("[utils.CreateTestEnv] Failed to append certificate to pool: %v", err)
 	}
 
 	// Return properly initilized and complete struct

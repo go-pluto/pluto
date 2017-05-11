@@ -99,14 +99,14 @@ func (c *Connection) InternalSend(inc bool, text string) error {
 	// Test if connection is still healthy.
 	_, err := conn.Write([]byte("> ping <\r\n"))
 	if err != nil {
-		return fmt.Errorf("sending ping to node '%s' failed: %s", conn.RemoteAddr().String(), err.Error())
+		return fmt.Errorf("sending ping to node '%s' failed: %v", conn.RemoteAddr().String(), err)
 	}
 
 	// Write message to TLS connections.
 	_, err = fmt.Fprintf(conn, "%s\r\n", text)
 	for err != nil {
 
-		stdlog.Printf("[imap.InternalSend] Sending to node '%s' failed, trying to recover...\n", conn.RemoteAddr())
+		stdlog.Printf("[imap.InternalSend] Sending to node '%s' failed, trying to recover...", conn.RemoteAddr())
 
 		// Define what IP and port of remote node look like.
 		remoteAddr := conn.RemoteAddr().String()
@@ -119,7 +119,7 @@ func (c *Connection) InternalSend(inc bool, text string) error {
 			// Reestablish TLS connection to remote node.
 			conn, err = comm.ReliableConnect(remoteAddr, c.IntlTLSConfig, c.IntlConnRetry)
 			if err != nil {
-				return fmt.Errorf("failed to reestablish connection with '%s': %s", remoteAddr, err.Error())
+				return fmt.Errorf("failed to reestablish connection with '%s': %v", remoteAddr, err)
 			}
 
 			// Save context to connection.
@@ -133,16 +133,16 @@ func (c *Connection) InternalSend(inc bool, text string) error {
 				// Inform remote node about which session was active.
 				err = c.SignalSessionStart(false)
 				if err != nil {
-					return fmt.Errorf("signalling session to remote node failed with: %s", err.Error())
+					return fmt.Errorf("signalling session to remote node failed with: %v", err)
 				}
 			}
 
-			stdlog.Printf("[imap.InternalSend] Reconnected to '%s'.\n", remoteAddr)
+			stdlog.Printf("[imap.InternalSend] Reconnected to '%s'.", remoteAddr)
 
 			// Resend message to remote node.
 			_, err = fmt.Fprintf(conn, "%s\r\n", text)
 		} else {
-			return fmt.Errorf("failed to send message to remote node '%s': %s", remoteAddr, err.Error())
+			return fmt.Errorf("failed to send message to remote node '%s': %v", remoteAddr, err)
 		}
 	}
 
@@ -177,7 +177,7 @@ func (c *Connection) Receive(inc bool) (string, error) {
 		if err != nil {
 
 			if err.Error() == "EOF" {
-				stdlog.Printf("[imap.Receive] Node at '%s' disconnected.\n", conn.RemoteAddr().String())
+				stdlog.Printf("[imap.Receive] Node at '%s' disconnected.", conn.RemoteAddr().String())
 			}
 
 			break
@@ -320,7 +320,7 @@ func (c *Connection) Terminate() error {
 func (c *Connection) Error(msg string, err error) {
 
 	// Log error.
-	stdlog.Printf("%s: %s. Terminating connection to %s.\n", msg, err.Error(), c.IncConn.RemoteAddr().String())
+	stdlog.Printf("%s: %v. Terminating connection to %s.", msg, err, c.IncConn.RemoteAddr().String())
 
 	// Terminate connection.
 	err = c.Terminate()

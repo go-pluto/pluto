@@ -79,7 +79,7 @@ func InitDistributor(logger log.Logger, config *config.Config, auth PlainAuthent
 	// Start to listen for incoming public connections on defined IP and port.
 	distr.Socket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Distributor.ListenIP, config.Distributor.Port), publicTLSConfig)
 	if err != nil {
-		return nil, fmt.Errorf("[imap.InitDistributor] Listening for public TLS connections failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[imap.InitDistributor] Listening for public TLS connections failed with: %v", err)
 	}
 
 	level.Info(logger).Log(
@@ -100,7 +100,7 @@ func (distr *Distributor) Run() error {
 		// Accept request or fail on error.
 		conn, err := distr.Socket.Accept()
 		if err != nil {
-			return fmt.Errorf("[imap.Run] Accepting incoming request at distributor failed with: %s\n", err.Error())
+			return fmt.Errorf("[imap.Run] Accepting incoming request at distributor failed with: %v", err)
 		}
 
 		// Dispatch into own goroutine.
