@@ -2,7 +2,7 @@ package comm
 
 import (
 	"fmt"
-	"log"
+	stdlog "log"
 	"time"
 
 	"crypto/tls"
@@ -70,7 +70,7 @@ func ReliableSend(conn *tls.Conn, text string, remoteAddr string, tlsConfig *tls
 	_, err = fmt.Fprintf(conn, "%s\r\n", text)
 	for err != nil {
 
-		log.Printf("[comm.ReliableSend] Sending to node '%s' failed, trying to recover...\n", remoteAddr)
+		stdlog.Printf("[comm.ReliableSend] Sending to node '%s' failed, trying to recover...\n", remoteAddr)
 
 		// Define an error we can deal with.
 		okError := fmt.Sprintf("write tcp %s->%s: write: broken pipe", conn.LocalAddr().String(), remoteAddr)
@@ -83,7 +83,7 @@ func ReliableSend(conn *tls.Conn, text string, remoteAddr string, tlsConfig *tls
 				return fmt.Errorf("could not reestablish connection with '%s': %s", remoteAddr, err.Error())
 			}
 
-			log.Printf("[comm.ReliableSend] Reconnected to '%s'.\n", remoteAddr)
+			stdlog.Printf("[comm.ReliableSend] Reconnected to '%s'.\n", remoteAddr)
 
 			// Resend message.
 			_, err = fmt.Fprintf(conn, "%s\r\n", text)

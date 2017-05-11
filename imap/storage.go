@@ -3,7 +3,7 @@ package imap
 import (
 	"bufio"
 	"fmt"
-	"log"
+	stdlog "log"
 	"net"
 	"os"
 	"sync"
@@ -115,7 +115,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal sync TLS connections failed with: %s\n", err.Error())
 	}
 
-	log.Printf("[imap.InitStorage] Listening for incoming sync requests on %s.\n", storage.SyncSocket.Addr())
+	stdlog.Printf("[imap.InitStorage] Listening for incoming sync requests on %s.\n", storage.SyncSocket.Addr())
 
 	// Start to listen for incoming internal connections on defined IP and mail port.
 	storage.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.ListenIP, config.Storage.MailPort), internalTLSConfig)
@@ -123,7 +123,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
 	}
 
-	log.Printf("[imap.InitStorage] Listening for incoming IMAP requests on %s.\n", storage.MailSocket.Addr())
+	stdlog.Printf("[imap.InitStorage] Listening for incoming IMAP requests on %s.\n", storage.MailSocket.Addr())
 
 	for workerName, workerNode := range config.Workers {
 
@@ -188,7 +188,7 @@ func (storage *Storage) HandleConnection(conn net.Conn) {
 	// Assert we are talking via a TLS connection.
 	tlsConn, ok := conn.(*tls.Conn)
 	if ok != true {
-		log.Printf("[imap.HandleConnection] Storage could not convert connection into TLS connection.\n")
+		stdlog.Printf("[imap.HandleConnection] Storage could not convert connection into TLS connection.\n")
 		return
 	}
 
@@ -256,7 +256,7 @@ func (storage *Storage) HandleConnection(conn net.Conn) {
 
 		storage.lock.RUnlock()
 
-		log.Printf("[imap.HandleConnection] Storage: working on failover request from %s: '%s'\n", origWorker, rawReq)
+		stdlog.Printf("[imap.HandleConnection] Storage: working on failover request from %s: '%s'\n", origWorker, rawReq)
 
 		switch {
 
@@ -363,7 +363,7 @@ func (storage *Storage) HandleConnection(conn net.Conn) {
 	// Terminate connection after logout.
 	err = c.Terminate()
 	if err != nil {
-		log.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
+		stdlog.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
 	}
 
 	// Set IMAP state to logged out.
