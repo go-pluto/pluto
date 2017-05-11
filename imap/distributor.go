@@ -197,29 +197,29 @@ func (distr *Distributor) HandleConnection(conn net.Conn) {
 
 		case req.Command == "CAPABILITY":
 			distr.Capability(c, req)
-			distr.Metrics.Commands.With("capability").Add(1)
+			distr.Metrics.Commands.With("command", "capability").Add(1)
 
 		case req.Command == "LOGOUT":
 			if ok := distr.Logout(c, req); ok {
 				// A LOGOUT marks connection termination.
 				recvUntil = "LOGOUT"
-				distr.Metrics.Commands.With("logout").Add(1)
+				distr.Metrics.Commands.With("command", "logout").Add(1)
 			}
 
 		case req.Command == "STARTTLS":
 			distr.StartTLS(c, req)
-			distr.Metrics.Commands.With("starttls").Add(1)
+			distr.Metrics.Commands.With("command", "starttls").Add(1)
 
 		case req.Command == "LOGIN":
 			distr.Login(c, req)
-			distr.Metrics.Commands.With("login").Add(1)
+			distr.Metrics.Commands.With("command", "login").Add(1)
 
 		case c.OutConn != nil:
 			distr.Proxy(c, rawReq)
 
 		default:
 			// Client sent inappropriate command. Signal tagged error.
-			distr.Metrics.Commands.With("error").Add(1)
+			distr.Metrics.Commands.With("command", "bad").Add(1)
 			err := c.Send(true, fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
 			if err != nil {
 				c.Error("Encountered send error", err)
