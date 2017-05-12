@@ -18,6 +18,9 @@ script:
 
 after_success:
   - bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
+  - docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}";
+  - docker build -t numbleroot/pluto:latest .
+  - docker push numbleroot/pluto:latest
 
 before_deploy:
   - docker build -t numbleroot/pluto:${TRAVIS_TAG} .
@@ -32,7 +35,6 @@ deploy:
     tags: true
 
 after_deploy:
-  - docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}";
   - docker push numbleroot/pluto:${TRAVIS_TAG};
 
 notifications:
