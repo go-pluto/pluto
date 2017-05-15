@@ -582,7 +582,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 // the client and still return true.
 func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
-	if (c.IMAPState != AUTHENTICATED) && (c.IMAPState != MAILBOX) {
+	if (c.State != Authenticated) && (c.State != Mailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -653,8 +653,8 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan stri
 	}
 
 	// Set selected mailbox in connection to supplied one
-	// and advance IMAP state of connection to MAILBOX.
-	c.IMAPState = MAILBOX
+	// and advance IMAP state of connection to Mailbox.
+	c.State = Mailbox
 	c.SelectedMailbox = mailboxes[0]
 
 	node.lock.RLock()
@@ -678,7 +678,7 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// Check if \Seen flag is present.
 		if strings.ContainsRune(mailFlags, 'S') != true {
-			recentMails += 1
+			recentMails++
 		}
 	}
 
@@ -698,7 +698,7 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan stri
 // taken from payload of request.
 func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
-	if (c.IMAPState != AUTHENTICATED) && (c.IMAPState != MAILBOX) {
+	if (c.State != Authenticated) && (c.State != Mailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -862,7 +862,7 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 // all included content in CRDT as well as file system.
 func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
-	if (c.IMAPState != AUTHENTICATED) && (c.IMAPState != MAILBOX) {
+	if (c.State != Authenticated) && (c.State != Mailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -989,7 +989,7 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 // available and also returns the hierarchy delimiter.
 func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
-	if (c.IMAPState != AUTHENTICATED) && (c.IMAPState != MAILBOX) {
+	if (c.State != Authenticated) && (c.State != Mailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -1091,7 +1091,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 	var dateTimeRaw string
 	var numBytesRaw string
 
-	if (c.IMAPState != AUTHENTICATED) && (c.IMAPState != MAILBOX) {
+	if (c.State != Authenticated) && (c.State != Mailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -1333,7 +1333,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 // prior to calling this function.
 func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
-	if c.IMAPState != MAILBOX {
+	if c.State != Mailbox {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -1483,7 +1483,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 	// initially to false.
 	silent := false
 
-	if c.IMAPState != MAILBOX {
+	if c.State != Mailbox {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.

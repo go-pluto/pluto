@@ -107,14 +107,14 @@ func LoadConfig(configFile string) (*Config, error) {
 
 	// Parse values from TOML file into struct.
 	if _, err := toml.DecodeFile(configFile, conf); err != nil {
-		return nil, fmt.Errorf("[config.LoadConfig] Failed to read in TOML config file at '%s' with: %s\n", configFile, err.Error())
+		return nil, fmt.Errorf("[config.LoadConfig] Failed to read in TOML config file at '%s' with: %v", configFile, err)
 	}
 
 	// Retrieve absolute path of pluto directory.
 	// Start with current directory.
 	absPlutoPath, err := filepath.Abs("./")
 	if err != nil {
-		return nil, fmt.Errorf("[config.LoadConfig] Could not get absolute path of current directory: %s\n", err.Error())
+		return nil, fmt.Errorf("[config.LoadConfig] Could not get absolute path of current directory: %v", err)
 	}
 
 	// Check if path ends in 'pluto'.
@@ -123,7 +123,7 @@ func LoadConfig(configFile string) (*Config, error) {
 		// If not, use the directory one level above.
 		absPlutoPath, err = filepath.Abs("../")
 		if err != nil {
-			return nil, fmt.Errorf("[config.LoadConfig] Could not get absolute path of pluto directory: %s\n", err.Error())
+			return nil, fmt.Errorf("[config.LoadConfig] Could not get absolute path of pluto directory: %v", err)
 		}
 	}
 

@@ -113,7 +113,7 @@ func CreateNodeCert(pathPrefix string, fileName string, rsaBits int, nBef time.T
 	}
 	certFile.Sync()
 
-	stdlog.Printf("[crypto.GeneratePKI] Saved %s-cert.pem to disk.", fileName)
+	stdlog.Printf("[crypto.GeneratePKI] Saved %s-cert.pem to disk", fileName)
 
 	// Additionally, open file handle for node key.
 	keyFile, err := os.OpenFile(fmt.Sprintf("%sprivate/%s-key.pem", pathPrefix, fileName), (os.O_WRONLY | os.O_CREATE | os.O_TRUNC), 0600)
@@ -128,7 +128,7 @@ func CreateNodeCert(pathPrefix string, fileName string, rsaBits int, nBef time.T
 	}
 	keyFile.Sync()
 
-	stdlog.Printf("[crypto.GeneratePKI] Saved %s-key.pem to disk.", fileName)
+	stdlog.Printf("[crypto.GeneratePKI] Saved %s-key.pem to disk", fileName)
 	stdlog.Printf("[crypto.GeneratePKI] === Done generating for %s ===", fileName)
 
 	return nil
@@ -143,7 +143,7 @@ func main() {
 	// Parse supplied command-line flags.
 	flag.Parse()
 
-	stdlog.Println("[crypto.GeneratePKI] Building pluto's internal PKI.")
+	stdlog.Println("[crypto.GeneratePKI] Building pluto's internal PKI")
 
 	if len(*validFrom) == 0 {
 
@@ -213,7 +213,7 @@ func main() {
 	}
 	rootCertFile.Sync()
 
-	stdlog.Println("[crypto.GeneratePKI] Saved root-cert.pem to disk.")
+	stdlog.Println("[crypto.GeneratePKI] Saved root-cert.pem to disk")
 
 	// Additionally, open file handle for root key.
 	rootKeyFile, err := os.OpenFile(fmt.Sprintf("%sprivate/root-key.pem", *pathPrefix), (os.O_WRONLY | os.O_CREATE | os.O_TRUNC), 0600)
@@ -228,7 +228,7 @@ func main() {
 	}
 	rootKeyFile.Sync()
 
-	stdlog.Println("[crypto.GeneratePKI] Saved root-key.pem to disk.")
+	stdlog.Println("[crypto.GeneratePKI] Saved root-key.pem to disk")
 	stdlog.Println("[crypto.GeneratePKI] === Done generating root certificate ===")
 
 	// Generate distributor's internal key and signed certificate.
@@ -254,5 +254,5 @@ func main() {
 		stdlog.Fatal(err)
 	}
 
-	stdlog.Println("[crypto.GeneratePKI] Done building pluto's internal PKI. Goodbye.")
+	stdlog.Println("[crypto.GeneratePKI] Done building pluto's internal PKI components, goodbye")
 }

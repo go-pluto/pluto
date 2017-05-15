@@ -76,7 +76,7 @@ func InitWorker(logger log.Logger, config *config.Config, workerName string) (*W
 			break
 		}
 
-		return nil, fmt.Errorf("[imap.InitWorker] Specified worker ID does not exist in config file. Please provide a valid one, for example '%s'.\n", workerID)
+		return nil, fmt.Errorf("[imap.InitWorker] Specified worker ID does not exist in config file. Please provide a valid one, for example '%s'", workerID)
 	}
 
 	// We checked for name existence, now set correct paths.
@@ -86,7 +86,7 @@ func InitWorker(logger log.Logger, config *config.Config, workerName string) (*W
 	// Find all files below this node's CRDT root layer.
 	userFolders, err := filepath.Glob(filepath.Join(worker.CRDTLayerRoot, "*"))
 	if err != nil {
-		return nil, fmt.Errorf("[imap.InitWorker] Globbing for CRDT folders of users failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[imap.InitWorker] Globbing for CRDT folders of users failed with: %v", err)
 	}
 
 	for _, folder := range userFolders {
@@ -94,7 +94,7 @@ func InitWorker(logger log.Logger, config *config.Config, workerName string) (*W
 		// Retrieve information about accessed file.
 		folderInfo, err := os.Stat(folder)
 		if err != nil {
-			return nil, fmt.Errorf("[imap.InitWorker] Error during stat'ing possible user CRDT folder: %s\n", err.Error())
+			return nil, fmt.Errorf("[imap.InitWorker] Error during stat'ing possible user CRDT folder: %v", err)
 		}
 
 		// Only consider folders for building up CRDT map.
@@ -106,7 +106,7 @@ func InitWorker(logger log.Logger, config *config.Config, workerName string) (*W
 			// Read in mailbox structure CRDT from file.
 			userMainCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, "mailbox-structure.log"))
 			if err != nil {
-				return nil, fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %s\n", err.Error())
+				return nil, fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %v", err)
 			}
 
 			// Store main CRDT in designated map for user name.
@@ -125,7 +125,7 @@ func InitWorker(logger log.Logger, config *config.Config, workerName string) (*W
 				// Read in each mailbox CRDT from file.
 				userMailboxCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, fmt.Sprintf("%s.log", userMailbox)))
 				if err != nil {
-					return nil, fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %s\n", err.Error())
+					return nil, fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %v", err)
 				}
 
 				// Store each read-in CRDT in map under the respective
@@ -148,7 +148,7 @@ func InitWorker(logger log.Logger, config *config.Config, workerName string) (*W
 	// Start to listen for incoming internal connections on defined IP and sync port.
 	worker.SyncSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].ListenIP, config.Workers[worker.Name].SyncPort), internalTLSConfig)
 	if err != nil {
-		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal sync TLS connections failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal sync TLS connections failed with: %v", err)
 	}
 
 	stdlog.Printf("[imap.InitWorker] Listening for incoming sync requests on %s.\n", worker.SyncSocket.Addr())
@@ -156,7 +156,7 @@ func InitWorker(logger log.Logger, config *config.Config, workerName string) (*W
 	// Start to listen for incoming internal connections on defined IP and mail port.
 	worker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].ListenIP, config.Workers[worker.Name].MailPort), internalTLSConfig)
 	if err != nil {
-		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[imap.InitWorker] Listening for internal IMAP TLS connections failed with: %v", err)
 	}
 
 	stdlog.Printf("[imap.InitWorker] Listening for incoming IMAP requests on %s.\n", worker.MailSocket.Addr())
@@ -220,7 +220,7 @@ func InitFailoverWorker(config *config.Config, workerName string) (*FailoverWork
 			break
 		}
 
-		return nil, fmt.Errorf("[imap.InitFailoverWorker] Specified worker ID does not exist in config file. Please provide a valid one, for example '%s'.\n", workerID)
+		return nil, fmt.Errorf("[imap.InitFailoverWorker] Specified worker ID does not exist in config file. Please provide a valid one, for example '%s'", workerID)
 	}
 
 	// Load internal TLS config.
@@ -232,7 +232,7 @@ func InitFailoverWorker(config *config.Config, workerName string) (*FailoverWork
 	// Start to listen for incoming internal connections on defined IP and mail port.
 	failWorker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[failWorker.Name].ListenIP, config.Workers[failWorker.Name].MailPort), failWorker.IntlTLSConfig)
 	if err != nil {
-		return nil, fmt.Errorf("[imap.InitFailoverWorker] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[imap.InitFailoverWorker] Listening for internal IMAP TLS connections failed with: %v", err)
 	}
 
 	stdlog.Printf("[imap.InitFailoverWorker] Listening for incoming IMAP requests on %s.\n", failWorker.MailSocket.Addr())
@@ -250,7 +250,7 @@ func (worker *Worker) Run() error {
 		// Accept request or fail on error.
 		conn, err := worker.MailSocket.Accept()
 		if err != nil {
-			return fmt.Errorf("[imap.Run] Accepting incoming request at %s failed with: %s\n", worker.Name, err.Error())
+			return fmt.Errorf("[imap.Run] Accepting incoming request at %s failed with: %v", worker.Name, err)
 		}
 
 		// Dispatch into own goroutine.
@@ -265,7 +265,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 	// Assert we are talking via a TLS connection.
 	tlsConn, ok := conn.(*tls.Conn)
 	if ok != true {
-		stdlog.Printf("[imap.HandleConnection] Worker %s could not convert connection into TLS connection.\n", worker.Name)
+		stdlog.Printf("[imap.HandleConnection] Worker %s could not convert connection into TLS connection", worker.Name)
 		return
 	}
 
@@ -275,7 +275,7 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 			IncConn:   tlsConn,
 			IncReader: bufio.NewReader(tlsConn),
 		},
-		IMAPState: AUTHENTICATED,
+		State: Authenticated,
 	}
 
 	// Receive opening information.
@@ -439,11 +439,11 @@ func (worker *Worker) HandleConnection(conn net.Conn) {
 	// Terminate connection after logout.
 	err = c.Terminate()
 	if err != nil {
-		stdlog.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
+		stdlog.Fatalf("[imap.HandleConnection] Failed to terminate connection: %v", err)
 	}
 
 	// Set IMAP state to logged out.
-	c.IMAPState = LOGOUT
+	c.State = Logout
 }
 
 // RunFailover is the main method called when starting a
@@ -456,7 +456,7 @@ func (failWorker *FailoverWorker) RunFailover() error {
 		// Accept request or fail on error.
 		conn, err := failWorker.MailSocket.Accept()
 		if err != nil {
-			return fmt.Errorf("[imap.Run] Accepting incoming request at failover %s failed with: %s\n", failWorker.Name, err.Error())
+			return fmt.Errorf("[imap.Run] Accepting incoming request at failover %s failed with: %v", failWorker.Name, err)
 		}
 
 		// Dispatch into own goroutine.
@@ -670,6 +670,6 @@ func (failWorker *FailoverWorker) HandleFailover(conn net.Conn) {
 	// Terminate connection after logout.
 	err = c.Terminate()
 	if err != nil {
-		stdlog.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
+		stdlog.Fatalf("[imap.HandleConnection] Failed to terminate connection: %v", err)
 	}
 }

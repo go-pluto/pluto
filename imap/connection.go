@@ -16,19 +16,18 @@ import (
 
 // Integer counter for IMAP states.
 const (
-	ANY IMAPState = iota
-	NOT_AUTHENTICATED
-	AUTHENTICATED
-	MAILBOX
-	LOGOUT
+	Any State = iota
+	NotAuthenticated
+	Authenticated
+	Mailbox
+	Logout
 )
 
 // Structs
 
-// IMAPState represents the integer value associated
-// with one of the implemented IMAP states a connection
-// can be in.
-type IMAPState int
+// State represents the integer value associated with one
+// of the implemented IMAP states a connection can be in.
+type State int
 
 // Structs
 
@@ -53,7 +52,7 @@ type Connection struct {
 // authenticated client.
 type IMAPConnection struct {
 	*Connection
-	IMAPState       IMAPState
+	State           State
 	UserCRDTPath    string
 	UserMaildirPath string
 	SelectedMailbox string

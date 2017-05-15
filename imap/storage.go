@@ -50,7 +50,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 	// Find all files below this node's CRDT root layer.
 	userFolders, err := filepath.Glob(filepath.Join(storage.CRDTLayerRoot, "*"))
 	if err != nil {
-		return nil, fmt.Errorf("[imap.InitStorage] Globbing for CRDT folders of users failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[imap.InitStorage] Globbing for CRDT folders of users failed with: %v", err)
 	}
 
 	for _, folder := range userFolders {
@@ -58,7 +58,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 		// Retrieve information about accessed file.
 		folderInfo, err := os.Stat(folder)
 		if err != nil {
-			return nil, fmt.Errorf("[imap.InitStorage] Error during stat'ing possible user CRDT folder: %s\n", err.Error())
+			return nil, fmt.Errorf("[imap.InitStorage] Error during stat'ing possible user CRDT folder: %v", err)
 		}
 
 		// Only consider folders for building up CRDT map.
@@ -70,7 +70,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 			// Read in mailbox structure CRDT from file.
 			userMainCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, "mailbox-structure.log"))
 			if err != nil {
-				return nil, fmt.Errorf("[imap.InitStorage] Reading CRDT failed: %s\n", err.Error())
+				return nil, fmt.Errorf("[imap.InitStorage] Reading CRDT failed: %v", err)
 			}
 
 			// Store main CRDT in designated map for user name.
@@ -89,7 +89,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 				// Read in each mailbox CRDT from file.
 				userMailboxCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, fmt.Sprintf("%s.log", userMailbox)))
 				if err != nil {
-					return nil, fmt.Errorf("[imap.InitStorage] Reading CRDT failed: %s\n", err.Error())
+					return nil, fmt.Errorf("[imap.InitStorage] Reading CRDT failed: %v", err)
 				}
 
 				// Store each read-in CRDT in map under the respective
@@ -112,7 +112,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 	// Start to listen for incoming internal connections on defined IP and sync port.
 	storage.SyncSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.ListenIP, config.Storage.SyncPort), internalTLSConfig)
 	if err != nil {
-		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal sync TLS connections failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal sync TLS connections failed with: %v", err)
 	}
 
 	stdlog.Printf("[imap.InitStorage] Listening for incoming sync requests on %s.\n", storage.SyncSocket.Addr())
@@ -120,7 +120,7 @@ func InitStorage(config *config.Config) (*Storage, error) {
 	// Start to listen for incoming internal connections on defined IP and mail port.
 	storage.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Storage.ListenIP, config.Storage.MailPort), internalTLSConfig)
 	if err != nil {
-		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal IMAP TLS connections failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[imap.InitStorage] Listening for internal IMAP TLS connections failed with: %v", err)
 	}
 
 	stdlog.Printf("[imap.InitStorage] Listening for incoming IMAP requests on %s.\n", storage.MailSocket.Addr())
@@ -173,7 +173,7 @@ func (storage *Storage) Run() error {
 		// Accept request or fail on error.
 		conn, err := storage.MailSocket.Accept()
 		if err != nil {
-			return fmt.Errorf("[imap.Run] Accepting incoming request at storage failed with: %s\n", err.Error())
+			return fmt.Errorf("[imap.Run] Accepting incoming request at storage failed with: %v", err)
 		}
 
 		// Dispatch into own goroutine.
@@ -198,7 +198,7 @@ func (storage *Storage) HandleConnection(conn net.Conn) {
 			IncConn:   tlsConn,
 			IncReader: bufio.NewReader(tlsConn),
 		},
-		IMAPState: AUTHENTICATED,
+		State: Authenticated,
 	}
 
 	// Receive opening information.
@@ -363,9 +363,9 @@ func (storage *Storage) HandleConnection(conn net.Conn) {
 	// Terminate connection after logout.
 	err = c.Terminate()
 	if err != nil {
-		stdlog.Fatalf("[imap.HandleConnection] Failed to terminate connection: %s\n", err.Error())
+		stdlog.Fatalf("[imap.HandleConnection] Failed to terminate connection: %v", err)
 	}
 
 	// Set IMAP state to logged out.
-	c.IMAPState = LOGOUT
+	c.State = Logout
 }

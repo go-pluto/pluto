@@ -13,7 +13,7 @@ import (
 
 // Variables
 
-var msg1 string = `Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)
+var msg1 = `Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)
 From: Fred Foobar <foobar@Blurdybloop.COM>
 Subject: afternoon meeting
 To: mooch@owatagu.siam.edu
