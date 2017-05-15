@@ -2,12 +2,14 @@
 
 [![GoDoc](https://godoc.org/github.com/numbleroot/pluto?status.svg)](https://godoc.org/github.com/numbleroot/pluto) [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](https://github.com/numbleroot/pluto/blob/master/LICENSE) [![Build Status](https://travis-ci.org/numbleroot/pluto.svg?branch=master)](https://travis-ci.org/numbleroot/pluto) [![Go Report Card](https://goreportcard.com/badge/github.com/numbleroot/pluto)](https://goreportcard.com/report/github.com/numbleroot/pluto) [![Issue Count](https://codeclimate.com/github/numbleroot/pluto/badges/issue_count.svg)](https://codeclimate.com/github/numbleroot/pluto) [![codecov](https://codecov.io/gh/numbleroot/pluto/branch/master/graph/badge.svg)](https://codecov.io/gh/numbleroot/pluto)
 
-Pluto is a distributed IMAP server that implements a subset of the [IMAPv4 standard](https://tools.ietf.org/html/rfc3501). It makes use of [Conflict-free Replicated Data Types](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) defined by Shapiro et al. to replicate application state into traditionally stateless tiers (worker nodes) and still achieve system-wide convergence of user data. By this, pluto attempts to offer a solution towards the challenges arising from Brewer's [CAP theorem](https://en.wikipedia.org/wiki/CAP_theorem): in case of failures in the system, choose to stay available by accepting reduced consistency in form of the CRDT's [strong eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency#Strong_eventual_consistency). Pluto is written in Go and provided under copyleft license [GPLv3](https://github.com/numbleroot/pluto/blob/master/LICENSE).
+Pluto is a distributed IMAP server that implements a subset of the [IMAPv4 standard](https://tools.ietf.org/html/rfc3501). It makes use of [Conflict-free Replicated Data Types](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) (operation-based style) defined by Shapiro et al. to replicate application state into traditionally stateless tiers (worker nodes) and still achieve system-wide convergence of user data. By this, pluto attempts to offer a solution towards the challenges arising from Brewer's [CAP theorem](https://en.wikipedia.org/wiki/CAP_theorem): in case of failures in the system, choose to stay available by accepting reduced consistency in form of the CRDTs' [strong eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency#Strong_eventual_consistency). We described our system architecture, the modelled IMAP operations based on OR-Set CmRDTs, and a response time evaluation of this prototype compared to Dovecot in our paper called ["pluto: The CRDT-Driven IMAP Server"](https://dl.acm.org/citation.cfm?id=3064891), presented at [PaPoC 2017](http://software.imdea.org/Conferences/PAPOC17/).
+
+Pluto is written in Go and provided under copyleft license [GPLv3](https://github.com/numbleroot/pluto/blob/master/LICENSE).
 
 
 ## Status
 
-**Use with caution and not in production:** this is a prototypical implementation of the system architecture and presented concepts discussed in my Bachelor Thesis.
+**Use with caution and not in production:** this is a prototypical implementation of the system architecture and presented concepts discussed in my Bachelor Thesis and continued in our project work during summer term 2017. Pluto's code is generally in flux due to ongoing development and inclusion of new ideas and concepts.
 
 
 ## Installation
@@ -138,7 +140,8 @@ Evaluation scripts to benchmark pluto's response time performance against the de
 
 ## Acknowledgments
 
-I would like to thank my thesis supervisor [Tim Jungnickel](https://github.com/TimJuni) for coming up with this project's idea, providing feedback and ideas on current progress, and evaluation help. Furthermore, [Matthias Loibl](https://github.com/MetalMatze) routinely reviewed Go code I committed to pluto and thus helped to improve code quality and readability. Thank you!
+* [Tim Jungnickel](https://github.com/TimJuni): initial project idea, feedback and ideas, thesis supervision, paper. Since summer term 2017 also actively involved in verification and evaluation part.
+* [Matthias Loibl](https://github.com/MetalMatze): routinely reviewed and improved my Go code during thesis. Since summer term 2017 active contributor in the areas engineering and evaluation.
 
 
 ## License
