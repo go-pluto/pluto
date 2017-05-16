@@ -3,10 +3,10 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "pPH/BoINXxzYDObljpsGZbysMrw=",
+			"checksumSHA1": "hqDDDpue/5363luidNMBS8z8eJU=",
 			"path": "github.com/BurntSushi/toml",
-			"revision": "b26d9c308763d68093482582cea63d69be07a0f0",
-			"revisionTime": "2017-03-28T06:15:53Z"
+			"revision": "99064174e013895bbd9b025c31100bd1d9b590ca",
+			"revisionTime": "2016-07-17T15:07:09Z"
 		},
 		{
 			"checksumSHA1": "Y1zpEnbSvlhLozUt6U63CvC3PNw=",
@@ -33,22 +33,22 @@
 			"revisionTime": "2016-05-14T03:44:11Z"
 		},
 		{
-			"checksumSHA1": "NDbu9dZSMuLO5wyzxB3pwBdkXFI=",
+			"checksumSHA1": "6x22ZJAsMpzHOatrVSoTf7NtD2s=",
 			"path": "github.com/numbleroot/maildir",
-			"revision": "7bf535650e6445eb2694caea027720e6650c423b",
-			"revisionTime": "2016-12-14T17:26:39Z"
+			"revision": "7c13ca37771042775818e2a384098f0844575b32",
+			"revisionTime": "2017-05-16T20:54:17Z"
 		},
 		{
 			"checksumSHA1": "zmC8/3V4ls53DJlNTKDZwPSC/dA=",
 			"path": "github.com/satori/go.uuid",
-			"revision": "5bf94b69c6b68ee1b541973bb8e1144db23a194b",
-			"revisionTime": "2017-03-21T23:07:31Z"
+			"revision": "b061729afc07e77a8aa4fad0a2fd840958f1942a",
+			"revisionTime": "2016-09-27T10:08:44Z"
 		},
 		{
-			"checksumSHA1": "IsbvvctcA3vAKR5netcAwqcSlt0=",
+			"checksumSHA1": "IbtK+qVBj+748DSuh/GvTYZeNLA=",
 			"path": "gopkg.in/jackc/pgx.v2",
-			"revision": "97c01fb52451c10e686fb847ad390338bf1799ae",
-			"revisionTime": "2017-03-17T13:06:00Z"
+			"revision": "2508faa9ced29f4bbb3a39483e4b5ac2627a7c48",
+			"revisionTime": "2016-08-26T12:39:15Z"
 		}
 	],
 	"rootPath": "github.com/numbleroot/pluto"

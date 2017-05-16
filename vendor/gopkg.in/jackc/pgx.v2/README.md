@@ -15,7 +15,7 @@ Pgx supports many additional features beyond what is available through database/
 * Transaction isolation level control
 * Full TLS connection control
 * Binary format support for custom types (can be much faster)
-* Copy from protocol support for faster bulk data loads
+* Copy protocol support for faster bulk data loads
 * Logging support
 * Configurable connection pool with after connect hooks to do arbitrary connection setup
 * PostgreSQL array to Go slice mapping for integers, floats, and strings
@@ -25,7 +25,6 @@ Pgx supports many additional features beyond what is available through database/
 * Large object support
 * Null mapping to Null* struct or pointer to pointer.
 * Supports database/sql.Scanner and database/sql/driver.Valuer interfaces for custom types
-* Logical replication connections, including receiving WAL and sending standby status updates
 
 ## Performance
 
@@ -67,9 +66,7 @@ To setup the normal test environment, first install these dependencies:
 Then run the following SQL:
 
     create user pgx_md5 password 'secret';
-    create user " tricky, ' } "" \ test user " password 'secret';
     create database pgx_test;
-    create user pgx_replication with replication password 'secret';
 
 Connect to database pgx_test and run:
 
@@ -102,22 +99,10 @@ If you are developing on Windows with TCP connections:
     host  pgx_test  pgx_pw    127.0.0.1/32 password
     host  pgx_test  pgx_md5   127.0.0.1/32 md5
 
-### Replication Test Environment
-
-Add a replication user:
-
-    create user pgx_replication with replication password 'secret';
-
-Add a replication line to your pg_hba.conf:
-
-    host replication pgx_replication 127.0.0.1/32 md5
-
-Change the following settings in your postgresql.conf:
-
-    wal_level=logical
-    max_wal_senders=5
-    max_replication_slots=5
-
 ## Version Policy
 
-pgx follows semantic versioning for the documented public API on stable releases. Branch `v2` is the latest stable release. `master` can contain new features or behavior that will change or be removed before being merged to the stable `v2` branch (in practice, this occurs very rarely).
+pgx follows semantic versioning for the documented public API on stable releases. Branch ```v2``` is the latest stable release. ```master``` can contain new features or behavior that will change or be removed before being merged to the stable ```v2``` branch (in practice, this occurs very rarely).
+
+Consider using a vendoring
+tool such as [godep](https://github.com/tools/godep) or importing pgx via ```import
+"gopkg.in/jackc/pgx.v2"``` to lock to the ```v2``` branch.

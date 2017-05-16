@@ -264,11 +264,6 @@ func (rows *Rows) Scan(dest ...interface{}) (err error) {
 			if err != nil {
 				rows.Fatal(scanArgError{col: i, err: err})
 			}
-		} else if s, ok := d.(PgxScanner); ok {
-			err = s.ScanPgx(vr)
-			if err != nil {
-				rows.Fatal(scanArgError{col: i, err: err})
-			}
 		} else if s, ok := d.(sql.Scanner); ok {
 			var val interface{}
 			if 0 <= vr.Len() {
@@ -303,17 +298,13 @@ func (rows *Rows) Scan(dest ...interface{}) (err error) {
 			if err != nil {
 				rows.Fatal(scanArgError{col: i, err: err})
 			}
-		} else if vr.Type().DataType == JsonOid {
+		} else if vr.Type().DataType == JsonOid || vr.Type().DataType == JsonbOid {
 			// Because the argument passed to decodeJSON will escape the heap.
 			// This allows d to be stack allocated and only copied to the heap when
 			// we actually are decoding JSON. This saves one memory allocation per
 			// row.
 			d2 := d
 			decodeJSON(vr, &d2)
-		} else if vr.Type().DataType == JsonbOid {
-			// Same trick as above for getting stack allocation
-			d2 := d
-			decodeJSONB(vr, &d2)
 		} else {
 			if err := Decode(vr, d); err != nil {
 				rows.Fatal(scanArgError{col: i, err: err})
@@ -402,7 +393,7 @@ func (rows *Rows) Values() ([]interface{}, error) {
 				values = append(values, d)
 			case JsonbOid:
 				var d interface{}
-				decodeJSONB(vr, &d)
+				decodeJSON(vr, &d)
 				values = append(values, d)
 			default:
 				rows.Fatal(errors.New("Values cannot handle binary format non-intrinsic types"))
