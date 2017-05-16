@@ -23,8 +23,15 @@ func (node *IMAPNode) ApplyCreate(opPayload string) {
 	}
 
 	// Build up paths before entering critical section.
-	posMaildir := maildir.Dir(filepath.Join(node.MaildirRoot, createUpd.User, createUpd.Mailbox))
+	posMaildir := filepath.Join(node.MaildirRoot, createUpd.User, createUpd.Mailbox)
 	posMailboxCRDTPath := filepath.Join(node.CRDTLayerRoot, createUpd.User, fmt.Sprintf("%s.log", createUpd.Mailbox))
+
+	// We need to track existence state of various
+	// file system objects in case we need to revert.
+	maildirExisted := true
+	crdtFileExisted := true
+	structureExisted := true
+	contentsExisted := true
 
 	// Lock node exclusively.
 	node.lock.Lock()
@@ -34,38 +41,67 @@ func (node *IMAPNode) ApplyCreate(opPayload string) {
 	// conveniently use it hereafter.
 	userMainCRDT := node.MailboxStructure[createUpd.User]["Structure"]
 
-	// Create a new Maildir on stable storage.
-	err = posMaildir.Create()
-	if err != nil {
-		stdlog.Fatalf("[imap.ApplyCreate] Maildir for new mailbox could not be created: %v", err)
-	}
+	// Only attempt to create the corresponding
+	// Maildir if it does not already exist.
+	_, err = os.Stat(posMaildir)
+	if os.IsNotExist(err) {
 
-	// Initialize new ORSet for new mailbox.
-	posMailboxCRDT, err := crdt.InitORSetWithFile(posMailboxCRDTPath)
-	if err != nil {
+		maildirExisted = false
 
-		// Perform clean up.
-		stdlog.Printf("[imap.ApplyCreate] CREATE fail: %v", err)
-		stdlog.Printf("[imap.ApplyCreate] Removing just created Maildir completely...")
-
-		// Attempt to remove Maildir.
-		err = posMaildir.Remove()
+		// Create a new Maildir on stable storage.
+		err = maildir.Dir(posMaildir).Create()
 		if err != nil {
-			stdlog.Printf("[imap.ApplyCreate] ... failed to remove Maildir: %v", err)
-			stdlog.Printf("[imap.ApplyCreate] Exiting")
-		} else {
-			stdlog.Printf("[imap.ApplyCreate] ... done - exiting")
+			stdlog.Fatalf("[imap.ApplyCreate] Maildir for new mailbox could not be created: %v", err)
 		}
-
-		os.Exit(1)
 	}
 
-	// Place newly created CRDT in mailbox structure.
-	node.MailboxStructure[createUpd.User][createUpd.Mailbox] = posMailboxCRDT
+	var posMailboxCRDT *crdt.ORSet
 
-	// Initialize contents slice for new mailbox to track
-	// message sequence numbers in it.
-	node.MailboxContents[createUpd.User][createUpd.Mailbox] = make([]string, 0, 6)
+	// Only attempt to initialize a new OR-Set
+	// if the corresponding file does not already
+	// exist in file system.
+	_, err = os.Stat(posMailboxCRDTPath)
+	if os.IsNotExist(err) {
+
+		crdtFileExisted = false
+
+		// Initialize new ORSet for new mailbox.
+		posMailboxCRDT, err = crdt.InitORSetWithFile(posMailboxCRDTPath)
+		if err != nil {
+
+			// Perform clean up.
+			stdlog.Printf("[imap.ApplyCreate] Downstream CREATE fail: %v", err)
+
+			if !maildirExisted {
+
+				stdlog.Printf("[imap.ApplyCreate] Maildir did not exist, removing...")
+
+				// Only remove created Maildir if it did
+				// not exist prior to this function's entrance.
+				err = maildir.Dir(posMaildir).Remove()
+				if err != nil {
+					stdlog.Printf("[imap.ApplyCreate] ... failed: %v", err)
+				}
+			}
+
+			os.Exit(1)
+		}
+	}
+
+	// If the CRDT is not yet present in mailbox
+	// structure, place newly created one there.
+	if _, found := node.MailboxStructure[createUpd.User][createUpd.Mailbox]; !found {
+		structureExisted = false
+		node.MailboxStructure[createUpd.User][createUpd.Mailbox] = posMailboxCRDT
+	}
+
+	// If no slice was found in contents structure,
+	// initialize one for new mailbox to track message
+	// sequence numbers in it.
+	if _, found := node.MailboxContents[createUpd.User][createUpd.Mailbox]; !found {
+		contentsExisted = false
+		node.MailboxContents[createUpd.User][createUpd.Mailbox] = make([]string, 0, 6)
+	}
 
 	// If succeeded, add a new folder in user's main CRDT.
 	err = userMainCRDT.AddEffect(createUpd.AddMailbox.Value, createUpd.AddMailbox.Tag, true)
@@ -73,22 +109,43 @@ func (node *IMAPNode) ApplyCreate(opPayload string) {
 
 		// Perform clean up.
 		stdlog.Printf("[imap.ApplyCreate] CREATE fail: %v", err)
-		stdlog.Printf("[imap.Create] Removing added CRDT from mailbox structure and contents slice...")
 
-		// Remove just added CRDT of new maildir from mailbox structure
-		// and corresponding contents slice.
-		delete(node.MailboxStructure[createUpd.User], createUpd.Mailbox)
-		delete(node.MailboxContents[createUpd.User], createUpd.Mailbox)
+		// If it did not exist, remove the just
+		// added CRDT from structure map.
+		if !structureExisted {
+			stdlog.Printf("[imap.ApplyCreate] CRDT did not exist in structure map, removing...")
+			delete(node.MailboxStructure[createUpd.User], createUpd.Mailbox)
+		}
 
-		stdlog.Printf("[imap.Create] ... done. Removing just created Maildir completely...")
+		// If it did not exist, remove the just
+		// added slice from contents map.
+		if !contentsExisted {
+			stdlog.Printf("[imap.ApplyCreate] Slice did not exist in contents map, removing...")
+			delete(node.MailboxContents[createUpd.User], createUpd.Mailbox)
+		}
 
-		// Attempt to remove Maildir.
-		err = posMaildir.Remove()
-		if err != nil {
-			stdlog.Printf("[imap.ApplyCreate] ... failed to remove Maildir: %v", err)
-			stdlog.Printf("[imap.ApplyCreate] Exiting")
-		} else {
-			stdlog.Printf("[imap.ApplyCreate] ... done - exiting")
+		// If it did not exist, attempt to remove
+		// the created Maildir.
+		if !maildirExisted {
+
+			stdlog.Printf("[imap.ApplyCreate] Maildir did not exist, removing...")
+
+			err = maildir.Dir(posMaildir).Remove()
+			if err != nil {
+				stdlog.Printf("[imap.ApplyCreate] ... failed: %v", err)
+			}
+		}
+
+		// If it did not exist, attempt to remove
+		// the created CRDT file.
+		if !crdtFileExisted {
+
+			stdlog.Printf("[imap.ApplyCreate] CRDT file did not exist, removing...")
+
+			err = os.Remove(posMailboxCRDTPath)
+			if err != nil {
+				stdlog.Fatalf("[imap.ApplyCreate] CRDT file of mailbox could not be deleted: %v", err)
+			}
 		}
 
 		os.Exit(1)
@@ -107,7 +164,7 @@ func (node *IMAPNode) ApplyDelete(opPayload string) {
 
 	// Build up paths before entering critical section.
 	delMailboxCRDTPath := filepath.Join(node.CRDTLayerRoot, deleteUpd.User, fmt.Sprintf("%s.log", deleteUpd.Mailbox))
-	delMaildir := maildir.Dir(filepath.Join(node.MaildirRoot, deleteUpd.User, deleteUpd.Mailbox))
+	delMaildir := filepath.Join(node.MaildirRoot, deleteUpd.User, deleteUpd.Mailbox)
 
 	// Construct remove set from received values.
 	rmElements := make(map[string]string)
@@ -129,22 +186,36 @@ func (node *IMAPNode) ApplyDelete(opPayload string) {
 		stdlog.Fatalf("[imap.ApplyDelete] Failed to remove elements from user's main CRDT: %v", err)
 	}
 
-	// Remove CRDT from mailbox structure and corresponding
-	// mail contents slice.
-	delete(node.MailboxStructure[deleteUpd.User], deleteUpd.Mailbox)
-	delete(node.MailboxContents[deleteUpd.User], deleteUpd.Mailbox)
+	// Remove CRDT from structure map if present.
+	if _, found := node.MailboxStructure[deleteUpd.User][deleteUpd.Mailbox]; found {
+		delete(node.MailboxStructure[deleteUpd.User], deleteUpd.Mailbox)
+	}
 
-	// Remove CRDT file of mailbox.
-	err = os.Remove(delMailboxCRDTPath)
-	if err != nil {
-		stdlog.Fatalf("[imap.ApplyDelete] CRDT file of mailbox could not be deleted: %v", err)
+	// Remove slice from contents map if present.
+	if _, found := node.MailboxContents[deleteUpd.User][deleteUpd.Mailbox]; found {
+		delete(node.MailboxContents[deleteUpd.User], deleteUpd.Mailbox)
+	}
+
+	// If it exists in file system,
+	// remove CRDT file of mailbox.
+	_, err = os.Stat(delMailboxCRDTPath)
+	if err == nil {
+
+		err = os.Remove(delMailboxCRDTPath)
+		if err != nil {
+			stdlog.Fatalf("[imap.ApplyDelete] CRDT file of mailbox could not be deleted: %v", err)
+		}
 	}
 
 	// Remove files associated with deleted mailbox
-	// from stable storage.
-	err = delMaildir.Remove()
-	if err != nil {
-		stdlog.Fatalf("[imap.ApplyDelete] Maildir could not be deleted: %v", err)
+	// from stable storage, if present.
+	_, err = os.Stat(delMaildir)
+	if err == nil {
+
+		err = maildir.Dir(delMaildir).Remove()
+		if err != nil {
+			stdlog.Fatalf("[imap.ApplyDelete] Maildir could not be deleted: %v", err)
+		}
 	}
 }
 
@@ -184,7 +255,7 @@ func (node *IMAPNode) ApplyAppend(opPayload string) {
 		// Check if mail is not yet present on this node.
 		if userMailboxCRDT.Lookup(appendUpd.AddMail.Value) != true {
 
-			// If so, place file contents at correct location.
+			// If so, place file content at correct location.
 			appendFile, err := os.Create(appendFileName)
 			if err != nil {
 				stdlog.Fatalf("[imap.ApplyAppend] Failed to create file for mail to append: %v", err)
@@ -201,15 +272,12 @@ func (node *IMAPNode) ApplyAppend(opPayload string) {
 				err = os.Remove(appendFileName)
 				if err != nil {
 					stdlog.Printf("[imap.ApplyAppend] ... failed: %v", err)
-					stdlog.Printf("[imap.ApplyAppend] Exiting")
-				} else {
-					stdlog.Printf("[imap.ApplyAppend] ... done - exiting")
 				}
 
 				os.Exit(1)
 			}
 
-			// Sync contents to stable storage.
+			// Sync content to stable storage.
 			err = appendFile.Sync()
 			if err != nil {
 
@@ -221,9 +289,6 @@ func (node *IMAPNode) ApplyAppend(opPayload string) {
 				err = os.Remove(appendFileName)
 				if err != nil {
 					stdlog.Printf("[imap.ApplyAppend] ... failed: %v", err)
-					stdlog.Printf("[imap.ApplyAppend] Exiting")
-				} else {
-					stdlog.Printf("[imap.ApplyAppend] ... done - exiting")
 				}
 
 				os.Exit(1)
@@ -244,9 +309,6 @@ func (node *IMAPNode) ApplyAppend(opPayload string) {
 				err = os.Remove(appendFileName)
 				if err != nil {
 					stdlog.Printf("[imap.ApplyAppend] ... failed: %v", err)
-					stdlog.Printf("[imap.ApplyAppend] Exiting")
-				} else {
-					stdlog.Printf("[imap.ApplyAppend] ... done - exiting")
 				}
 
 				os.Exit(1)
@@ -311,7 +373,7 @@ func (node *IMAPNode) ApplyExpunge(opPayload string) {
 		// instances of mail file.
 		if userMailboxCRDT.Lookup(expungeUpd.RmvMail[0].Value) != true {
 
-			// Remove the file.
+			// If that is the case, remove the file.
 			err := os.Remove(delFileName)
 			if err != nil {
 				stdlog.Fatalf("[imap.ApplyExpunge] Failed to remove underlying mail file during EXPUNGE update: %v", err)
@@ -340,8 +402,6 @@ func (node *IMAPNode) ApplyStore(opPayload string) {
 	if err != nil {
 		stdlog.Fatalf("[imap.ApplyStore] Error while parsing STORE update from sync message: %v", err)
 	}
-
-	// Build up paths before entering critical section.
 
 	// Construct remove set from received values.
 	rmElements := make(map[string]string)
@@ -390,7 +450,7 @@ func (node *IMAPNode) ApplyStore(opPayload string) {
 		// instances of mail file.
 		if userMailboxCRDT.Lookup(storeUpd.RmvMail[0].Value) != true {
 
-			// Remove the file.
+			// If that is the case, remove the file.
 			err := os.Remove(delFileName)
 			if err != nil {
 				stdlog.Fatalf("[imap.ApplyStore] Failed to remove underlying mail file during STORE update: %v", err)
@@ -402,7 +462,7 @@ func (node *IMAPNode) ApplyStore(opPayload string) {
 		if userMailboxCRDT.Lookup(storeUpd.AddMail.Value) != true {
 
 			// If not yet present on node, place file
-			// contents at correct location.
+			// content at correct location.
 			storeFile, err := os.Create(storeFileName)
 			if err != nil {
 				stdlog.Fatalf("[imap.ApplyStore] Failed to create file for mail of STORE operation: %v", err)
@@ -419,15 +479,12 @@ func (node *IMAPNode) ApplyStore(opPayload string) {
 				err = os.Remove(storeFileName)
 				if err != nil {
 					stdlog.Printf("[imap.ApplyStore] ... failed: %v", err)
-					stdlog.Printf("[imap.ApplyStore] Exiting")
-				} else {
-					stdlog.Printf("[imap.ApplyStore] ... done - exiting")
 				}
 
 				os.Exit(1)
 			}
 
-			// Sync contents to stable storage.
+			// Sync content to stable storage.
 			err = storeFile.Sync()
 			if err != nil {
 
@@ -439,9 +496,6 @@ func (node *IMAPNode) ApplyStore(opPayload string) {
 				err = os.Remove(storeFileName)
 				if err != nil {
 					stdlog.Printf("[imap.ApplyStore] ... failed: %v", err)
-					stdlog.Printf("[imap.ApplyStore] Exiting")
-				} else {
-					stdlog.Printf("[imap.ApplyStore] ... done - exiting")
 				}
 
 				os.Exit(1)
@@ -459,9 +513,6 @@ func (node *IMAPNode) ApplyStore(opPayload string) {
 				err = os.Remove(storeFileName)
 				if err != nil {
 					stdlog.Printf("[imap.ApplyStore] ... failed: %v", err)
-					stdlog.Printf("[imap.ApplyStore] Exiting")
-				} else {
-					stdlog.Printf("[imap.ApplyStore] ... done - exiting")
 				}
 
 				os.Exit(1)

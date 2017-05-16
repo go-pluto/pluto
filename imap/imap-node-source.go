@@ -710,7 +710,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 		return false
 	}
 
-	// Write actual message contents to file.
+	// Write actual message content to file.
 	err = appDelivery.Write(msgBuffer)
 	if err != nil {
 		c.Error("Error while writing message during delivery", err)
@@ -872,7 +872,6 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan str
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
 				stdlog.Printf("[imap.Expunge] Failed to remove mails from user's selected mailbox CRDT: %v", err)
-
 				node.lock.Unlock()
 				os.Exit(1)
 			}
@@ -1075,10 +1074,10 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		// Retrieve mail file name.
 		mailFileName := node.MailboxContents[c.UserName][c.SelectedMailbox][msgNum]
 
-		// Read message contents from file.
-		mailFileContents, err := ioutil.ReadFile(filepath.Join(selectedMailbox, "cur", mailFileName))
+		// Read message content from file.
+		mailFileContent, err := ioutil.ReadFile(filepath.Join(selectedMailbox, "cur", mailFileName))
 		if err != nil {
-			c.Error("Error while reading in mail file contents in STORE operation", err)
+			c.Error("Error while reading in mail file content in STORE operation", err)
 			node.lock.Unlock()
 			return false
 		}
@@ -1129,7 +1128,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 			newMailFlags = []rune(tmpNewMailFlags)
 		}
 
-		// Check if we really have to perform and update
+		// Check if we really have to perform an update
 		// across the system or if we can save the energy.
 		if mailFlags != string(newMailFlags) {
 
@@ -1162,7 +1161,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 			// Second, add the new mail file's name and finally
 			// instruct all other nodes to do the same.
 			err = storeMailboxCRDT.Add(newMailFileName, func(payload string) {
-				syncChan <- fmt.Sprintf("store|%s|%s|%s|%s;%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(c.SelectedMailbox)), rmvElements, payload, base64.StdEncoding.EncodeToString(mailFileContents))
+				syncChan <- fmt.Sprintf("store|%s|%s|%s|%s;%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(c.SelectedMailbox)), rmvElements, payload, base64.StdEncoding.EncodeToString(mailFileContent))
 			})
 			if err != nil {
 
