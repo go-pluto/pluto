@@ -94,6 +94,8 @@ func main() {
 	// system based on passed command line flag.
 	if *distributorFlag {
 
+		metrics := NewPlutoMetrics(conf.Distributor.PrometheusAddr)
+
 		authenticator, err := initAuthenticator(conf)
 		if err != nil {
 			level.Error(logger).Log(
@@ -104,7 +106,7 @@ func main() {
 		}
 
 		// Initialize distributor.
-		distr, err := imap.InitDistributor(logger, conf, authenticator)
+		distr, err := imap.InitDistributor(logger, metrics.Distributor, conf, authenticator)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to initialize imap distributor",

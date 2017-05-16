@@ -34,40 +34,43 @@ type IMAP struct {
 // the first entry point of a pluto setup, the
 // IMAP request authenticator and distributor.
 type Distributor struct {
-	PublicIP     string
-	ListenIP     string
-	Port         string
-	AuthAdapter  string
-	PublicTLS    TLS
-	InternalTLS  TLS
-	AuthFile     *AuthFile
-	AuthPostgres *AuthPostgres
+	PublicIP       string
+	ListenIP       string
+	Port           string
+	PrometheusAddr string
+	AuthAdapter    string
+	PublicTLS      TLS
+	InternalTLS    TLS
+	AuthFile       *AuthFile
+	AuthPostgres   *AuthPostgres
 }
 
 // Worker contains the connection and user sharding
 // information for an individual IMAP worker node.
 type Worker struct {
-	PublicIP      string
-	ListenIP      string
-	MailPort      string
-	SyncPort      string
-	UserStart     int
-	UserEnd       int
-	MaildirRoot   string
-	CRDTLayerRoot string
-	TLS           TLS
+	PublicIP       string
+	ListenIP       string
+	MailPort       string
+	SyncPort       string
+	PrometheusAddr string
+	UserStart      int
+	UserEnd        int
+	MaildirRoot    string
+	CRDTLayerRoot  string
+	TLS            TLS
 }
 
 // Storage configures the global database node
 // storing all user data in a very safe manner.
 type Storage struct {
-	PublicIP      string
-	ListenIP      string
-	MailPort      string
-	SyncPort      string
-	MaildirRoot   string
-	CRDTLayerRoot string
-	TLS           TLS
+	PublicIP       string
+	ListenIP       string
+	MailPort       string
+	SyncPort       string
+	PrometheusAddr string
+	MaildirRoot    string
+	CRDTLayerRoot  string
+	TLS            TLS
 }
 
 // TLS contains Transport Layer Security relevant
