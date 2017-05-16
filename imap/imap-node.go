@@ -121,7 +121,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 			node.MailboxContents[createUpd.User][createUpd.Mailbox] = make([]string, 0, 6)
 
 			// If succeeded, add a new folder in user's main CRDT.
-			err = userMainCRDT.AddEffect(createUpd.AddMailbox.Value, createUpd.AddMailbox.Tag, true, true)
+			err = userMainCRDT.AddEffect(createUpd.AddMailbox.Value, createUpd.AddMailbox.Tag, true)
 			if err != nil {
 
 				// Perform clean up.
@@ -174,7 +174,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 			}
 
 			// Remove received pairs from user's main CRDT.
-			err = userMainCRDT.RemoveEffect(rmElements, true, true)
+			err = userMainCRDT.RemoveEffect(rmElements, true)
 			if err != nil {
 				node.lock.Unlock()
 				stdlog.Fatalf("[imap.ApplyCRDTUpd] Failed to remove elements from user's main CRDT: %v", err)
@@ -225,13 +225,13 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 
 			// Check if specified mailbox from append message is present
 			// in user's main CRDT on this node.
-			if userMainCRDT.Lookup(appendUpd.Mailbox, true) {
+			if userMainCRDT.Lookup(appendUpd.Mailbox) {
 
 				// Store concerned mailbox CRDT.
 				userMailboxCRDT := node.MailboxStructure[appendUpd.User][appendUpd.Mailbox]
 
 				// Check if mail is not yet present on this node.
-				if userMailboxCRDT.Lookup(appendUpd.AddMail.Value, true) != true {
+				if userMailboxCRDT.Lookup(appendUpd.AddMail.Value) != true {
 
 					// Construct path to new file.
 					var appendFileName string
@@ -295,7 +295,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 					node.MailboxContents[appendUpd.User][appendUpd.Mailbox] = append(node.MailboxContents[appendUpd.User][appendUpd.Mailbox], appendUpd.AddMail.Value)
 
 					// If succeeded, add new mail to mailbox' CRDT.
-					err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true, true)
+					err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true)
 					if err != nil {
 
 						// Perform clean up.
@@ -318,7 +318,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 				} else {
 
 					// Add new mail to mailbox' CRDT.
-					err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true, true)
+					err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true)
 					if err != nil {
 						node.lock.Unlock()
 						stdlog.Fatalf("[imap.ApplyCRDTUpd] APPEND fail: %s. Exiting.\n", err.Error())
@@ -346,7 +346,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 
 			// Check if specified mailbox from expunge message is
 			// present in user's main CRDT on this node.
-			if userMainCRDT.Lookup(expungeUpd.Mailbox, true) {
+			if userMainCRDT.Lookup(expungeUpd.Mailbox) {
 
 				// Store concerned mailbox CRDT.
 				userMailboxCRDT := node.MailboxStructure[expungeUpd.User][expungeUpd.Mailbox]
@@ -358,7 +358,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 				}
 
 				// Delete supplied elements from mailbox.
-				err := userMailboxCRDT.RemoveEffect(rmElements, true, true)
+				err := userMailboxCRDT.RemoveEffect(rmElements, true)
 				if err != nil {
 					node.lock.Unlock()
 					stdlog.Fatalf("[imap.ApplyCRDTUpd] Failed to remove mail elements from respective mailbox CRDT: %v", err)
@@ -366,7 +366,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 
 				// Check if just removed elements marked all
 				// instances of mail file.
-				if userMailboxCRDT.Lookup(expungeUpd.RmvMail[0].Value, true) != true {
+				if userMailboxCRDT.Lookup(expungeUpd.RmvMail[0].Value) != true {
 
 					// Construct path to old file.
 					var delFileName string
@@ -416,7 +416,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 
 			// Check if specified mailbox from store message is present
 			// in user's main CRDT on this node.
-			if userMainCRDT.Lookup(storeUpd.Mailbox, true) {
+			if userMainCRDT.Lookup(storeUpd.Mailbox) {
 
 				// Store concerned mailbox CRDT.
 				userMailboxCRDT := node.MailboxStructure[storeUpd.User][storeUpd.Mailbox]
@@ -428,7 +428,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 				}
 
 				// Delete supplied elements from mailbox.
-				err := userMailboxCRDT.RemoveEffect(rmElements, true, true)
+				err := userMailboxCRDT.RemoveEffect(rmElements, true)
 				if err != nil {
 					node.lock.Unlock()
 					stdlog.Fatalf("[imap.ApplyCRDTUpd] Failed to remove mail elements from respective mailbox CRDT: %v", err)
@@ -436,7 +436,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 
 				// Check if just removed elements marked all
 				// instances of mail file.
-				if userMailboxCRDT.Lookup(storeUpd.RmvMail[0].Value, true) != true {
+				if userMailboxCRDT.Lookup(storeUpd.RmvMail[0].Value) != true {
 
 					// Construct path to old file.
 					var delFileName string
@@ -456,7 +456,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 
 				// Check if new mail name is not yet present
 				// on this node.
-				if userMailboxCRDT.Lookup(storeUpd.AddMail.Value, true) != true {
+				if userMailboxCRDT.Lookup(storeUpd.AddMail.Value) != true {
 
 					// Construct path to new file.
 					var storeFileName string
@@ -518,7 +518,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 					}
 
 					// If succeeded, add renamed mail to mailbox' CRDT.
-					err = userMailboxCRDT.AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true, true)
+					err = userMailboxCRDT.AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true)
 					if err != nil {
 
 						// Perform clean up.
@@ -541,7 +541,7 @@ func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}
 				} else {
 
 					// Add renamed mail to mailbox' CRDT.
-					err = userMailboxCRDT.AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true, true)
+					err = userMailboxCRDT.AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true)
 					if err != nil {
 						node.lock.Unlock()
 						stdlog.Fatalf("[imap.ApplyCRDTUpd] STORE fail: %s. Exiting.\n", err.Error())
@@ -754,7 +754,7 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 	// conveniently use it hereafter.
 	userMainCRDT := node.MailboxStructure[c.UserName]["Structure"]
 
-	if userMainCRDT.Lookup(posMailbox, true) {
+	if userMainCRDT.Lookup(posMailbox) {
 
 		// If mailbox to-be-created already exists for user,
 		// this is a client error. Return NO response.
@@ -1192,7 +1192,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 	// conveniently use it hereafter.
 	userMainCRDT := node.MailboxStructure[c.UserName]["Structure"]
 
-	if userMainCRDT.Lookup(mailbox, true) != true {
+	if userMainCRDT.Lookup(mailbox) != true {
 
 		// If mailbox to append message to does not exist,
 		// this is a client error. Return NO response.
