@@ -217,6 +217,10 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 		return true
 	}
 
+	// Build up paths before entering critical section.
+	posMaildir := maildir.Dir(filepath.Join(c.UserMaildirPath, posMailbox))
+	posMailboxCRDTPath := filepath.Join(c.UserCRDTPath, fmt.Sprintf("%s.log", posMailbox))
+
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
 	node.lock.Lock()
@@ -240,16 +244,11 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 	}
 
 	// Create a new Maildir on stable storage.
-	posMaildir := maildir.Dir(filepath.Join(c.UserMaildirPath, posMailbox))
-
 	err := posMaildir.Create()
 	if err != nil {
 		c.Error("Error while creating Maildir for new mailbox", err)
 		return false
 	}
-
-	// Construct path to new CRDT file.
-	posMailboxCRDTPath := filepath.Join(c.UserCRDTPath, fmt.Sprintf("%s.log", posMailbox))
 
 	// Initialize new ORSet for new mailbox.
 	posMailboxCRDT, err := crdt.InitORSetWithFile(posMailboxCRDTPath)
@@ -369,6 +368,10 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 		return true
 	}
 
+	// Build up paths before entering critical section.
+	delMailboxCRDTPath := filepath.Join(c.UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
+	delMaildir := maildir.Dir(filepath.Join(c.UserMaildirPath, delMailbox))
+
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
 	node.lock.Lock()
@@ -406,7 +409,6 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 		// log file. Reverting actions were already taken, log error.
 		stdlog.Printf("[imap.Delete] Failed to remove elements from user's main CRDT: %v", err)
 
-		// Exit node.
 		os.Exit(1)
 	}
 
@@ -414,9 +416,6 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 	// mail contents slice.
 	delete(node.MailboxStructure[c.UserName], delMailbox)
 	delete(node.MailboxContents[c.UserName], delMailbox)
-
-	// Construct path to CRDT file to delete.
-	delMailboxCRDTPath := filepath.Join(c.UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
 
 	// Remove CRDT file of mailbox.
 	err = os.Remove(delMailboxCRDTPath)
@@ -428,8 +427,6 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 
 	// Remove files associated with deleted mailbox
 	// from stable storage.
-	delMaildir := maildir.Dir(filepath.Join(c.UserMaildirPath, delMailbox))
-
 	err = delMaildir.Remove()
 	if err != nil {
 		// TODO: Maybe think about better way to clean up here?
@@ -651,6 +648,14 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 		return true
 	}
 
+	// Construct path to maildir on node.
+	var appMaildir maildir.Dir
+	if mailbox == "INBOX" {
+		appMaildir = maildir.Dir(c.UserMaildirPath)
+	} else {
+		appMaildir = maildir.Dir(filepath.Join(c.UserMaildirPath, mailbox))
+	}
+
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
 	node.lock.Lock()
@@ -696,14 +701,6 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 	if err != nil {
 		c.Error("Encountered error while reading distributor literal data", err)
 		return false
-	}
-
-	// Construct path to maildir on node.
-	var appMaildir maildir.Dir
-	if mailbox == "INBOX" {
-		appMaildir = maildir.Dir(c.UserMaildirPath)
-	} else {
-		appMaildir = maildir.Dir(filepath.Join(c.UserMaildirPath, mailbox))
 	}
 
 	// Open a new Maildir delivery.
@@ -757,17 +754,16 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// Perform clean up.
 		stdlog.Printf("[imap.Append] Fail: %v", err)
-		stdlog.Printf("[imap.Append] Removing just appended mail message...\n")
+		stdlog.Printf("[imap.Append] Removing just appended mail message...")
 
 		err := os.Remove(mailFileNamePath)
 		if err != nil {
 			stdlog.Printf("[imap.Append] ... failed: %v", err)
-			stdlog.Printf("[imap.Append] Exiting.\n")
+			stdlog.Printf("[imap.Append] Exiting")
 		} else {
-			stdlog.Printf("[imap.Append] ... done. Exiting.\n")
+			stdlog.Printf("[imap.Append] ... done - exiting")
 		}
 
-		// Exit node.
 		os.Exit(1)
 	}
 
@@ -878,8 +874,6 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan str
 				stdlog.Printf("[imap.Expunge] Failed to remove mails from user's selected mailbox CRDT: %v", err)
 
 				node.lock.Unlock()
-
-				// Exit node.
 				os.Exit(1)
 			}
 
@@ -1014,6 +1008,9 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		selectedMailbox = filepath.Join(c.UserMaildirPath, c.SelectedMailbox)
 	}
 
+	// Build up paths before entering critical section.
+	mailMaildir := maildir.Dir(selectedMailbox)
+
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
 	node.lock.Lock()
@@ -1044,9 +1041,6 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 
 	// Prepare answer slice.
 	answerLines := make([]string, 0, len(msgNums))
-
-	// Construct path and Maildir for selected mailbox.
-	mailMaildir := maildir.Dir(selectedMailbox)
 
 	for _, msgNum := range msgNums {
 
@@ -1162,8 +1156,6 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 				// log file. Reverting actions were already taken, log error.
 				stdlog.Printf("[imap.Store] Failed to remove old mail name from selected mailbox CRDT: %v", err)
 				node.lock.Unlock()
-
-				// Exit node.
 				os.Exit(1)
 			}
 
@@ -1178,8 +1170,6 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 				// log file. Reverting actions were already taken, log error.
 				stdlog.Printf("[imap.Store] Failed to add renamed mail name to selected mailbox CRDT: %v", err)
 				node.lock.Unlock()
-
-				// Exit node.
 				os.Exit(1)
 			}
 
