@@ -745,7 +745,10 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 		return true
 	}
 
-	node.lock.RLock()
+	// Lock node exclusively to make execution
+	// of following CRDT operations atomic.
+	node.lock.Lock()
+	defer node.lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
@@ -758,11 +761,8 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 		err := c.InternalSend(true, fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
-			node.lock.RUnlock()
 			return false
 		}
-
-		node.lock.RUnlock()
 
 		return true
 	}
@@ -773,7 +773,6 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 	err := posMaildir.Create()
 	if err != nil {
 		c.Error("Error while creating Maildir for new mailbox", err)
-		node.lock.RUnlock()
 		return false
 	}
 
@@ -786,25 +785,20 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// Perform clean up.
 		stdlog.Printf("[imap.Create] Fail: %v", err)
-		stdlog.Printf("[imap.Create] Removing just created Maildir completely...\n")
+		stdlog.Printf("[imap.Create] Removing just created Maildir completely...")
 
 		// Attempt to remove Maildir.
 		err = posMaildir.Remove()
 		if err != nil {
 			stdlog.Printf("[imap.Create] ... failed to remove Maildir: %v", err)
-			stdlog.Printf("[imap.Create] Exiting.\n")
+			stdlog.Printf("[imap.Create] Exiting")
 		} else {
-			stdlog.Printf("[imap.Create] ... done. Exiting.\n")
+			stdlog.Printf("[imap.Create] ... done - exiting")
 		}
-
-		node.lock.RUnlock()
 
 		// Exit node.
 		os.Exit(1)
 	}
-
-	node.lock.RUnlock()
-	node.lock.Lock()
 
 	// Place newly created CRDT in mailbox structure.
 	node.MailboxStructure[c.UserName][posMailbox] = posMailboxCRDT
@@ -840,13 +834,9 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 			stdlog.Printf("[imap.Create] ... done. Exiting.\n")
 		}
 
-		node.lock.Unlock()
-
 		// Exit node.
 		os.Exit(1)
 	}
-
-	node.lock.Unlock()
 
 	// Send success answer.
 	err = c.InternalSend(true, fmt.Sprintf("%s OK CREATE completed", req.Tag))
@@ -909,6 +899,8 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 		return true
 	}
 
+	// Lock node exclusively to make execution
+	// of following CRDT operations atomic.
 	node.lock.Lock()
 	defer node.lock.Unlock()
 
@@ -1191,7 +1183,10 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 		return true
 	}
 
-	node.lock.RLock()
+	// Lock node exclusively to make execution
+	// of following CRDT operations atomic.
+	node.lock.Lock()
+	defer node.lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
@@ -1204,11 +1199,8 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 		err := c.InternalSend(true, fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
-			node.lock.RUnlock()
 			return false
 		}
-
-		node.lock.RUnlock()
 
 		return true
 	}
@@ -1217,7 +1209,6 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 	err = c.InternalSend(true, "+ Ready for literal data")
 	if err != nil {
 		c.Error("Encountered send error", err)
-		node.lock.RUnlock()
 		return false
 	}
 
@@ -1226,7 +1217,6 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 	err = c.SignalAwaitingLiteral(true, numBytes)
 	if err != nil {
 		c.Error("Encountered send error", err)
-		node.lock.RUnlock()
 		return false
 	}
 
@@ -1237,7 +1227,6 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 	_, err = io.ReadFull(c.IncReader, msgBuffer)
 	if err != nil {
 		c.Error("Encountered error while reading distributor literal data", err)
-		node.lock.RUnlock()
 		return false
 	}
 
@@ -1248,10 +1237,6 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 	} else {
 		appMaildir = maildir.Dir(filepath.Join(c.UserMaildirPath, mailbox))
 	}
-
-	node.lock.RUnlock()
-	node.lock.Lock()
-	defer node.lock.Unlock()
 
 	// Open a new Maildir delivery.
 	appDelivery, err := appMaildir.NewDelivery()
@@ -1375,20 +1360,18 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan str
 	// individual remove operations.
 	var expAnswerLines []string
 
-	node.lock.RLock()
+	// Lock node exclusively to make execution
+	// of following CRDT operations atomic.
+	node.lock.Lock()
 
 	// Save all mails possibly to delete and
-	// amount of these files.
+	// number of these files.
 	expMails := node.MailboxContents[c.UserName][c.SelectedMailbox]
 	numExpMails := len(expMails)
-
-	node.lock.RUnlock()
 
 	// Only do the work if there are any mails
 	// present in mailbox.
 	if numExpMails > 0 {
-
-		node.lock.Lock()
 
 		// Iterate over all mail files in reverse order.
 		for i := (numExpMails - 1); i >= 0; i-- {
@@ -1514,29 +1497,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		return true
 	}
 
-	node.lock.RLock()
-
-	// Retrieve number of messages in mailbox.
-	lenMailboxContents := len(node.MailboxContents[c.UserName][c.SelectedMailbox])
-
-	node.lock.RUnlock()
-
-	// Parse sequence numbers argument.
-	msgNums, err := ParseSeqNumbers(storeArgs[0], lenMailboxContents)
-	if err != nil {
-
-		// Parsing sequence numbers from STORE request produced
-		// an error. Return tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
-	}
-
-	// Parse data item type.
+	// Parse data item type (second parameter).
 	dataItemType := storeArgs[1]
 
 	if (dataItemType != "FLAGS") && (dataItemType != "FLAGS.SILENT") &&
@@ -1561,7 +1522,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		silent = true
 	}
 
-	// Parse flag argument.
+	// Parse flag argument (third parameter).
 	flags, err := ParseFlags(storeArgs[2])
 	if err != nil {
 
@@ -1583,6 +1544,34 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		selectedMailbox = c.UserMaildirPath
 	} else {
 		selectedMailbox = filepath.Join(c.UserMaildirPath, c.SelectedMailbox)
+	}
+
+	// Lock node exclusively to make execution
+	// of following CRDT operations atomic.
+	node.lock.Lock()
+
+	// Retrieve number of messages in mailbox.
+	lenMailboxContents := len(node.MailboxContents[c.UserName][c.SelectedMailbox])
+
+	// Parse sequence numbers argument (first parameter).
+	// CAUTION: We expect this function to fail if supplied
+	//          message sequence numbers did not refer to
+	//          existing messages in mailbox.
+	msgNums, err := ParseSeqNumbers(storeArgs[0], lenMailboxContents)
+	if err != nil {
+
+		// Parsing sequence numbers from STORE request produced
+		// an error. Return tagged BAD response.
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			node.lock.Unlock()
+			return false
+		}
+
+		node.lock.Unlock()
+
+		return true
 	}
 
 	// Prepare answer slice.
@@ -1621,8 +1610,6 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 			newMailFlags = append(newMailFlags, 'T')
 		}
 
-		node.lock.RLock()
-
 		// Retrieve mail file name.
 		mailFileName := node.MailboxContents[c.UserName][c.SelectedMailbox][msgNum]
 
@@ -1630,6 +1617,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		mailFileContents, err := ioutil.ReadFile(filepath.Join(selectedMailbox, "cur", mailFileName))
 		if err != nil {
 			c.Error("Error while reading in mail file contents in STORE operation", err)
+			node.lock.Unlock()
 			return false
 		}
 
@@ -1637,10 +1625,9 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		mailFlags, err := mailMaildir.Flags(mailFileName, false)
 		if err != nil {
 			c.Error("Error while retrieving flags from mail file", err)
+			node.lock.Unlock()
 			return false
 		}
-
-		node.lock.RUnlock()
 
 		// Check if supplied flags should be added
 		// to existing flags if not yet present.
@@ -1684,8 +1671,6 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		// across the system or if we can save the energy.
 		if mailFlags != string(newMailFlags) {
 
-			node.lock.Lock()
-
 			// Set just constructed new flags string in mail's
 			// file name (renaming it).
 			newMailFileName, err := mailMaildir.SetFlags(mailFileName, string(newMailFlags), false)
@@ -1708,7 +1693,6 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
 				stdlog.Printf("[imap.Store] Failed to remove old mail name from selected mailbox CRDT: %v", err)
-
 				node.lock.Unlock()
 
 				// Exit node.
@@ -1725,7 +1709,6 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
 				stdlog.Printf("[imap.Store] Failed to add renamed mail name to selected mailbox CRDT: %v", err)
-
 				node.lock.Unlock()
 
 				// Exit node.
@@ -1735,8 +1718,6 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 			// If we are done with that, also replace the mail's
 			// file name in the corresponding contents slice.
 			node.MailboxContents[c.UserName][c.SelectedMailbox][msgNum] = newMailFileName
-
-			node.lock.Unlock()
 		}
 
 		// Check if client requested update information.
@@ -1798,6 +1779,8 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 			answerLines = append(answerLines, fmt.Sprintf("* %d FETCH (FLAGS (%s))", realMsgNum, answerFlagString))
 		}
 	}
+
+	node.lock.Unlock()
 
 	// Check if client requested update information.
 	if silent != true {
