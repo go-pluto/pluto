@@ -22,6 +22,10 @@ func (node *IMAPNode) ApplyCreate(opPayload string) {
 		stdlog.Fatalf("[imap.ApplyCreate] Error while parsing CREATE update from sync message: %v", err)
 	}
 
+	// Build up paths before entering critical section.
+	posMaildir := maildir.Dir(filepath.Join(node.MaildirRoot, createUpd.User, createUpd.Mailbox))
+	posMailboxCRDTPath := filepath.Join(node.CRDTLayerRoot, createUpd.User, fmt.Sprintf("%s.log", createUpd.Mailbox))
+
 	// Lock node exclusively.
 	node.lock.Lock()
 	defer node.lock.Unlock()
@@ -31,15 +35,10 @@ func (node *IMAPNode) ApplyCreate(opPayload string) {
 	userMainCRDT := node.MailboxStructure[createUpd.User]["Structure"]
 
 	// Create a new Maildir on stable storage.
-	posMaildir := maildir.Dir(filepath.Join(node.MaildirRoot, createUpd.User, createUpd.Mailbox))
-
 	err = posMaildir.Create()
 	if err != nil {
 		stdlog.Fatalf("[imap.ApplyCreate] Maildir for new mailbox could not be created: %v", err)
 	}
-
-	// Construct path to new CRDT file.
-	posMailboxCRDTPath := filepath.Join(node.CRDTLayerRoot, createUpd.User, fmt.Sprintf("%s.log", createUpd.Mailbox))
 
 	// Initialize new ORSet for new mailbox.
 	posMailboxCRDT, err := crdt.InitORSetWithFile(posMailboxCRDTPath)
@@ -106,6 +105,10 @@ func (node *IMAPNode) ApplyDelete(opPayload string) {
 		stdlog.Fatalf("[imap.ApplyDelete] Error while parsing DELETE update from sync message: %v", err)
 	}
 
+	// Build up paths before entering critical section.
+	delMailboxCRDTPath := filepath.Join(node.CRDTLayerRoot, deleteUpd.User, fmt.Sprintf("%s.log", deleteUpd.Mailbox))
+	delMaildir := maildir.Dir(filepath.Join(node.MaildirRoot, deleteUpd.User, deleteUpd.Mailbox))
+
 	// Construct remove set from received values.
 	rmElements := make(map[string]string)
 	for _, element := range deleteUpd.RmvMailbox {
@@ -131,9 +134,6 @@ func (node *IMAPNode) ApplyDelete(opPayload string) {
 	delete(node.MailboxStructure[deleteUpd.User], deleteUpd.Mailbox)
 	delete(node.MailboxContents[deleteUpd.User], deleteUpd.Mailbox)
 
-	// Construct path to CRDT file to delete.
-	delMailboxCRDTPath := filepath.Join(node.CRDTLayerRoot, deleteUpd.User, fmt.Sprintf("%s.log", deleteUpd.Mailbox))
-
 	// Remove CRDT file of mailbox.
 	err = os.Remove(delMailboxCRDTPath)
 	if err != nil {
@@ -142,8 +142,6 @@ func (node *IMAPNode) ApplyDelete(opPayload string) {
 
 	// Remove files associated with deleted mailbox
 	// from stable storage.
-	delMaildir := maildir.Dir(filepath.Join(node.MaildirRoot, deleteUpd.User, deleteUpd.Mailbox))
-
 	err = delMaildir.Remove()
 	if err != nil {
 		stdlog.Fatalf("[imap.ApplyDelete] Maildir could not be deleted: %v", err)
@@ -158,6 +156,14 @@ func (node *IMAPNode) ApplyAppend(opPayload string) {
 	appendUpd, err := comm.ParseAppend(opPayload)
 	if err != nil {
 		stdlog.Fatalf("[imap.ApplyAppend] Error while parsing APPEND update from sync message: %v", err)
+	}
+
+	// Construct path to potential new file.
+	var appendFileName string
+	if appendUpd.Mailbox == "INBOX" {
+		appendFileName = filepath.Join(node.MaildirRoot, appendUpd.User, "cur", appendUpd.AddMail.Value)
+	} else {
+		appendFileName = filepath.Join(node.MaildirRoot, appendUpd.User, appendUpd.Mailbox, "cur", appendUpd.AddMail.Value)
 	}
 
 	// Lock node exclusively.
@@ -177,14 +183,6 @@ func (node *IMAPNode) ApplyAppend(opPayload string) {
 
 		// Check if mail is not yet present on this node.
 		if userMailboxCRDT.Lookup(appendUpd.AddMail.Value) != true {
-
-			// Construct path to new file.
-			var appendFileName string
-			if appendUpd.Mailbox == "INBOX" {
-				appendFileName = filepath.Join(node.MaildirRoot, appendUpd.User, "cur", appendUpd.AddMail.Value)
-			} else {
-				appendFileName = filepath.Join(node.MaildirRoot, appendUpd.User, appendUpd.Mailbox, "cur", appendUpd.AddMail.Value)
-			}
 
 			// If so, place file contents at correct location.
 			appendFile, err := os.Create(appendFileName)
@@ -274,6 +272,20 @@ func (node *IMAPNode) ApplyExpunge(opPayload string) {
 		stdlog.Fatalf("[imap.ApplyExpunge] Error while parsing EXPUNGE update from sync message: %v", err)
 	}
 
+	// Construct remove set from received values.
+	rmElements := make(map[string]string)
+	for _, element := range expungeUpd.RmvMail {
+		rmElements[element.Tag] = element.Value
+	}
+
+	// Construct path to old file.
+	var delFileName string
+	if expungeUpd.Mailbox == "INBOX" {
+		delFileName = filepath.Join(node.MaildirRoot, expungeUpd.User, "cur", expungeUpd.RmvMail[0].Value)
+	} else {
+		delFileName = filepath.Join(node.MaildirRoot, expungeUpd.User, expungeUpd.Mailbox, "cur", expungeUpd.RmvMail[0].Value)
+	}
+
 	// Lock node exclusively.
 	node.lock.Lock()
 	defer node.lock.Unlock()
@@ -289,12 +301,6 @@ func (node *IMAPNode) ApplyExpunge(opPayload string) {
 		// Store concerned mailbox CRDT.
 		userMailboxCRDT := node.MailboxStructure[expungeUpd.User][expungeUpd.Mailbox]
 
-		// Construct remove set from received values.
-		rmElements := make(map[string]string)
-		for _, element := range expungeUpd.RmvMail {
-			rmElements[element.Tag] = element.Value
-		}
-
 		// Delete supplied elements from mailbox.
 		err := userMailboxCRDT.RemoveEffect(rmElements, true)
 		if err != nil {
@@ -304,14 +310,6 @@ func (node *IMAPNode) ApplyExpunge(opPayload string) {
 		// Check if just removed elements marked all
 		// instances of mail file.
 		if userMailboxCRDT.Lookup(expungeUpd.RmvMail[0].Value) != true {
-
-			// Construct path to old file.
-			var delFileName string
-			if expungeUpd.Mailbox == "INBOX" {
-				delFileName = filepath.Join(node.MaildirRoot, expungeUpd.User, "cur", expungeUpd.RmvMail[0].Value)
-			} else {
-				delFileName = filepath.Join(node.MaildirRoot, expungeUpd.User, expungeUpd.Mailbox, "cur", expungeUpd.RmvMail[0].Value)
-			}
 
 			// Remove the file.
 			err := os.Remove(delFileName)
@@ -343,6 +341,30 @@ func (node *IMAPNode) ApplyStore(opPayload string) {
 		stdlog.Fatalf("[imap.ApplyStore] Error while parsing STORE update from sync message: %v", err)
 	}
 
+	// Build up paths before entering critical section.
+
+	// Construct remove set from received values.
+	rmElements := make(map[string]string)
+	for _, element := range storeUpd.RmvMail {
+		rmElements[element.Tag] = element.Value
+	}
+
+	// Construct path to old file.
+	var delFileName string
+	if storeUpd.Mailbox == "INBOX" {
+		delFileName = filepath.Join(node.MaildirRoot, storeUpd.User, "cur", storeUpd.RmvMail[0].Value)
+	} else {
+		delFileName = filepath.Join(node.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.RmvMail[0].Value)
+	}
+
+	// Construct path to potential new file.
+	var storeFileName string
+	if storeUpd.Mailbox == "INBOX" {
+		storeFileName = filepath.Join(node.MaildirRoot, storeUpd.User, "cur", storeUpd.AddMail.Value)
+	} else {
+		storeFileName = filepath.Join(node.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.AddMail.Value)
+	}
+
 	// Lock node exclusively.
 	node.lock.Lock()
 	defer node.lock.Unlock()
@@ -358,12 +380,6 @@ func (node *IMAPNode) ApplyStore(opPayload string) {
 		// Store concerned mailbox CRDT.
 		userMailboxCRDT := node.MailboxStructure[storeUpd.User][storeUpd.Mailbox]
 
-		// Construct remove set from received values.
-		rmElements := make(map[string]string)
-		for _, element := range storeUpd.RmvMail {
-			rmElements[element.Tag] = element.Value
-		}
-
 		// Delete supplied elements from mailbox.
 		err := userMailboxCRDT.RemoveEffect(rmElements, true)
 		if err != nil {
@@ -373,14 +389,6 @@ func (node *IMAPNode) ApplyStore(opPayload string) {
 		// Check if just removed elements marked all
 		// instances of mail file.
 		if userMailboxCRDT.Lookup(storeUpd.RmvMail[0].Value) != true {
-
-			// Construct path to old file.
-			var delFileName string
-			if storeUpd.Mailbox == "INBOX" {
-				delFileName = filepath.Join(node.MaildirRoot, storeUpd.User, "cur", storeUpd.RmvMail[0].Value)
-			} else {
-				delFileName = filepath.Join(node.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.RmvMail[0].Value)
-			}
 
 			// Remove the file.
 			err := os.Remove(delFileName)
@@ -392,14 +400,6 @@ func (node *IMAPNode) ApplyStore(opPayload string) {
 		// Check if new mail name is not yet present
 		// on this node.
 		if userMailboxCRDT.Lookup(storeUpd.AddMail.Value) != true {
-
-			// Construct path to new file.
-			var storeFileName string
-			if storeUpd.Mailbox == "INBOX" {
-				storeFileName = filepath.Join(node.MaildirRoot, storeUpd.User, "cur", storeUpd.AddMail.Value)
-			} else {
-				storeFileName = filepath.Join(node.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.AddMail.Value)
-			}
 
 			// If not yet present on node, place file
 			// contents at correct location.
