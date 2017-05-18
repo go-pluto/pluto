@@ -1026,7 +1026,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 
 		// Parsing sequence numbers from STORE request produced
 		// an error. Return tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			node.lock.Unlock()
