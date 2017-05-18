@@ -118,15 +118,15 @@ func TestInitORSetFromFile(t *testing.T) {
 		t.Fatalf("[crdt.TestInitORSetFromFile] marshalled5: Expected exactly three elements in set but found: %d", len(s.elements))
 	}
 
-	if s.Lookup("abc", true) != true {
+	if s.Lookup("abc") != true {
 		t.Fatalf("[crdt.TestInitORSetFromFile] Expected 'abc' to be in set but Lookup() returns false.")
 	}
 
-	if s.Lookup("def", true) != true {
+	if s.Lookup("def") != true {
 		t.Fatalf("[crdt.TestInitORSetFromFile] Expected 'def' to be in set but Lookup() returns false.")
 	}
 
-	if s.Lookup("ghi", true) != true {
+	if s.Lookup("ghi") != true {
 		t.Fatalf("[crdt.TestInitORSetFromFile] Expected 'ghi' to be in set but Lookup() returns false.")
 	}
 }
@@ -150,7 +150,7 @@ func TestWriteORSetToFile(t *testing.T) {
 	defer os.Remove("test-crdt.log")
 
 	// Write current ORSet to file.
-	err = s.WriteORSetToFile(true)
+	err = s.WriteORSetToFile()
 	if err != nil {
 		t.Fatalf("[crdt.TestWriteORSetToFile] Expected WriteORSetToFile() not to fail but got: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestWriteORSetToFile(t *testing.T) {
 	}
 
 	// Set a value in the set.
-	err = s.AddEffect("abc", "1", true, true)
+	err = s.AddEffect("abc", "1", true)
 	if err != nil {
 		t.Fatalf("[crdt.TestWriteORSetToFile] Expected AddEffect() not to fail but got: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestWriteORSetToFile(t *testing.T) {
 	}
 
 	// Set one more.
-	err = s.AddEffect("def", "2", true, true)
+	err = s.AddEffect("def", "2", true)
 	if err != nil {
 		t.Fatalf("[crdt.TestWriteORSetToFile] Expected AddEffect() not to fail but got: %v", err)
 	}
@@ -201,7 +201,7 @@ func TestWriteORSetToFile(t *testing.T) {
 	}
 
 	// And one last.
-	err = s.AddEffect("ghi", "3", true, true)
+	err = s.AddEffect("ghi", "3", true)
 	if err != nil {
 		t.Fatalf("[crdt.TestWriteORSetToFile] Expected AddEffect() not to fail but got: %v", err)
 	}
@@ -242,90 +242,90 @@ func TestLookup(t *testing.T) {
 	// that they are reachable via Lookup().
 
 	// v1
-	if s.Lookup(v1, true) == true {
+	if s.Lookup(v1) == true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.", v1)
 	}
 
 	s.elements["10000000-a071-4227-9e63-a4b0ee84688f"] = v1
 
-	if s.Lookup(v1, true) != true {
+	if s.Lookup(v1) != true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.", v1)
 	}
 
 	// v2
-	if s.Lookup(v2, true) == true {
+	if s.Lookup(v2) == true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.", v2)
 	}
 
 	s.elements["20000000-a071-4227-9e63-a4b0ee84688f"] = v2
 
-	if s.Lookup(v2, true) != true {
+	if s.Lookup(v2) != true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.", v2)
 	}
 
 	// v3
-	if s.Lookup(v3, true) == true {
+	if s.Lookup(v3) == true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.", v3)
 	}
 
 	s.elements["30000000-a071-4227-9e63-a4b0ee84688f"] = v3
 
-	if s.Lookup(v3, true) != true {
+	if s.Lookup(v3) != true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.", v3)
 	}
 
 	// v4
-	if s.Lookup(v4, true) == true {
+	if s.Lookup(v4) == true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.", v4)
 	}
 
 	s.elements["40000000-a071-4227-9e63-a4b0ee84688f"] = v4
 
-	if s.Lookup(v4, true) != true {
+	if s.Lookup(v4) != true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.", v4)
 	}
 
 	// v5
-	if s.Lookup(v5, true) == true {
+	if s.Lookup(v5) == true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.", v5)
 	}
 
 	s.elements["50000000-a071-4227-9e63-a4b0ee84688f"] = v5
 
-	if s.Lookup(v5, true) != true {
+	if s.Lookup(v5) != true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.", v5)
 	}
 
 	// v6
-	if s.Lookup(v6, true) == true {
+	if s.Lookup(v6) == true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.", v6)
 	}
 
 	s.elements["60000000-a071-4227-9e63-a4b0ee84688f"] = v6
 
-	if s.Lookup(v6, true) != true {
+	if s.Lookup(v6) != true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.", v6)
 	}
 
 	// v7
-	if s.Lookup(v7, true) == true {
+	if s.Lookup(v7) == true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.", v7)
 	}
 
 	s.elements["70000000-a071-4227-9e63-a4b0ee84688f"] = v7
 
-	if s.Lookup(v7, true) != true {
+	if s.Lookup(v7) != true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.", v7)
 	}
 
 	// v8
-	if s.Lookup(v8, true) == true {
+	if s.Lookup(v8) == true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' not to be in set but Lookup() returns true.", v8)
 	}
 
 	s.elements["80000000-a071-4227-9e63-a4b0ee84688f"] = v8
 
-	if s.Lookup(v8, true) != true {
+	if s.Lookup(v8) != true {
 		t.Fatalf("[crdt.TestLookup] Expected '%v' to be in set but Lookup() returns false.", v8)
 	}
 }
@@ -344,7 +344,7 @@ func benchmarkLookup(b *testing.B, e string) {
 	s.elements["80000000-a071-4227-9e63-a4b0ee84688f"] = v8
 
 	for i := 0; i < b.N; i++ {
-		s.Lookup(e, true)
+		s.Lookup(e)
 	}
 }
 
@@ -385,7 +385,7 @@ func TestAddEffect(t *testing.T) {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' not to be an active map key but found '%v' at that place.", k1, value)
 	}
 
-	err := s.AddEffect(v1, k1, true, false)
+	err := s.AddEffect(v1, k1, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestAddEffect] Expected AddEffect() not to fail but got: %v", err)
 	}
@@ -399,7 +399,7 @@ func TestAddEffect(t *testing.T) {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' not to be an active map key but found '%v' at that place.", k2, value)
 	}
 
-	err = s.AddEffect(v3, k2, true, false)
+	err = s.AddEffect(v3, k2, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestAddEffect] Expected AddEffect() not to fail but got: %v", err)
 	}
@@ -413,7 +413,7 @@ func TestAddEffect(t *testing.T) {
 		t.Fatalf("[crdt.TestAddEffect] Expected '%s' not to be an active map key but found '%v' at that place.", k3, value)
 	}
 
-	err = s.AddEffect(v5, k3, true, false)
+	err = s.AddEffect(v5, k3, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestAddEffect] Expected AddEffect() not to fail but got: %v", err)
 	}
@@ -442,7 +442,7 @@ func TestAdd(t *testing.T) {
 	// Add defined values to set.
 
 	// v2
-	if s.Lookup(v2, true) == true {
+	if s.Lookup(v2) == true {
 		t.Fatalf("[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true.", v2)
 	}
 
@@ -451,12 +451,12 @@ func TestAdd(t *testing.T) {
 		t.Fatalf("[crdt.TestAdd] Expected Add() to return nil error but received: %v", err)
 	}
 
-	if s.Lookup(v2, true) != true {
+	if s.Lookup(v2) != true {
 		t.Fatalf("[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false.", v2)
 	}
 
 	// v4
-	if s.Lookup(v4, true) == true {
+	if s.Lookup(v4) == true {
 		t.Fatalf("[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true.", v4)
 	}
 
@@ -465,12 +465,12 @@ func TestAdd(t *testing.T) {
 		t.Fatalf("[crdt.TestAdd] Expected Add() to return nil error but received: %v", err)
 	}
 
-	if s.Lookup(v4, true) != true {
+	if s.Lookup(v4) != true {
 		t.Fatalf("[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false.", v4)
 	}
 
 	// v6
-	if s.Lookup(v6, true) == true {
+	if s.Lookup(v6) == true {
 		t.Fatalf("[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true.", v6)
 	}
 
@@ -479,7 +479,7 @@ func TestAdd(t *testing.T) {
 		t.Fatalf("[crdt.TestAdd] Expected Add() to return nil error but received: %v", err)
 	}
 
-	if s.Lookup(v6, true) != true {
+	if s.Lookup(v6) != true {
 		t.Fatalf("[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false.", v6)
 	}
 
@@ -544,38 +544,38 @@ func TestRemoveEffect(t *testing.T) {
 
 	// In order to delete keys, we need to add some first.
 
-	err := s.AddEffect(v2, k1, true, false)
+	err := s.AddEffect(v2, k1, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %v", err)
 	}
 
-	err = s.AddEffect(v3, k2, true, false)
+	err = s.AddEffect(v3, k2, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %v", err)
 	}
 
-	err = s.AddEffect(v4, k3, true, false)
+	err = s.AddEffect(v4, k3, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %v", err)
 	}
 
-	err = s.AddEffect(v2, k4, true, false)
+	err = s.AddEffect(v2, k4, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %v", err)
 	}
 
-	err = s.AddEffect(v2, k5, true, false)
+	err = s.AddEffect(v2, k5, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %v", err)
 	}
 
-	err = s.AddEffect(v2, k6, true, false)
+	err = s.AddEffect(v2, k6, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %v", err)
 	}
 
 	// Attempt to delete non-existing keys.
-	err = s.RemoveEffect(testRSet, true, false)
+	err = s.RemoveEffect(testRSet, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected RemoveEffect() not to fail but got: %v", err)
 	}
@@ -584,15 +584,15 @@ func TestRemoveEffect(t *testing.T) {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected 6 elements in set but only found %d.", len(s.elements))
 	}
 
-	if s.Lookup(v2, true) != true {
+	if s.Lookup(v2) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v2)
 	}
 
-	if s.Lookup(v3, true) != true {
+	if s.Lookup(v3) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v3)
 	}
 
-	if s.Lookup(v4, true) != true {
+	if s.Lookup(v4) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v4)
 	}
 
@@ -600,7 +600,7 @@ func TestRemoveEffect(t *testing.T) {
 	testRSet["0"] = v2
 
 	// And try to remove that tag from the set.
-	err = s.RemoveEffect(testRSet, true, false)
+	err = s.RemoveEffect(testRSet, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected RemoveEffect() not to fail but got: %v", err)
 	}
@@ -609,15 +609,15 @@ func TestRemoveEffect(t *testing.T) {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected 6 elements in set but only found %d.", len(s.elements))
 	}
 
-	if s.Lookup(v2, true) != true {
+	if s.Lookup(v2) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v2)
 	}
 
-	if s.Lookup(v3, true) != true {
+	if s.Lookup(v3) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v3)
 	}
 
-	if s.Lookup(v4, true) != true {
+	if s.Lookup(v4) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v4)
 	}
 
@@ -626,7 +626,7 @@ func TestRemoveEffect(t *testing.T) {
 	testRSet["1"] = v2
 
 	// Remove all tags from set.
-	err = s.RemoveEffect(testRSet, true, false)
+	err = s.RemoveEffect(testRSet, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected RemoveEffect() not to fail but got: %v", err)
 	}
@@ -635,15 +635,15 @@ func TestRemoveEffect(t *testing.T) {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected 5 elements in set but only found %d.", len(s.elements))
 	}
 
-	if s.Lookup(v2, true) != true {
+	if s.Lookup(v2) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v2)
 	}
 
-	if s.Lookup(v3, true) != true {
+	if s.Lookup(v3) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v3)
 	}
 
-	if s.Lookup(v4, true) != true {
+	if s.Lookup(v4) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v4)
 	}
 
@@ -655,7 +655,7 @@ func TestRemoveEffect(t *testing.T) {
 	testRSet["6"] = v2
 
 	// Remove all tags from set.
-	err = s.RemoveEffect(testRSet, true, false)
+	err = s.RemoveEffect(testRSet, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected RemoveEffect() not to fail but got: %v", err)
 	}
@@ -664,26 +664,26 @@ func TestRemoveEffect(t *testing.T) {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected 2 elements in set but only found %d.", len(s.elements))
 	}
 
-	if s.Lookup(v2, true) == true {
+	if s.Lookup(v2) == true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' not to be in set but Lookup() returns true.", v2)
 	}
 
-	if s.Lookup(v3, true) != true {
+	if s.Lookup(v3) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v3)
 	}
 
-	if s.Lookup(v4, true) != true {
+	if s.Lookup(v4) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v4)
 	}
 
 	// Add one again.
-	err = s.AddEffect(v2, k6, true, false)
+	err = s.AddEffect(v2, k6, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected AddEffect() not to fail but got: %v", err)
 	}
 
 	// And remove all again.
-	err = s.RemoveEffect(testRSet, true, false)
+	err = s.RemoveEffect(testRSet, false)
 	if err != nil {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected RemoveEffect() not to fail but got: %v", err)
 	}
@@ -692,15 +692,15 @@ func TestRemoveEffect(t *testing.T) {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected 2 elements in set but only found %d.", len(s.elements))
 	}
 
-	if s.Lookup(v2, true) == true {
+	if s.Lookup(v2) == true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' not to be in set but Lookup() returns true.", v2)
 	}
 
-	if s.Lookup(v3, true) != true {
+	if s.Lookup(v3) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v3)
 	}
 
-	if s.Lookup(v4, true) != true {
+	if s.Lookup(v4) != true {
 		t.Fatalf("[crdt.TestRemoveEffect] Expected '%v' to be in set but Lookup() returns false.", v4)
 	}
 }
@@ -769,15 +769,15 @@ func TestRemove(t *testing.T) {
 		t.Fatalf("[crdt.TestRemove] Expected 5 elements in set but only found %d.", len(s.elements))
 	}
 
-	if s.Lookup(v2, true) != true {
+	if s.Lookup(v2) != true {
 		t.Fatalf("[crdt.TestRemove] Expected '%v' to be in set but Lookup() returns false.", v2)
 	}
 
-	if s.Lookup(v3, true) == true {
+	if s.Lookup(v3) == true {
 		t.Fatalf("[crdt.TestRemove] Expected '%v' not to be in set but Lookup() returns true.", v3)
 	}
 
-	if s.Lookup(v4, true) != true {
+	if s.Lookup(v4) != true {
 		t.Fatalf("[crdt.TestRemove] Expected '%v' to be in set but Lookup() returns false.", v4)
 	}
 
@@ -798,15 +798,15 @@ func TestRemove(t *testing.T) {
 		t.Fatalf("[crdt.TestRemove] Expected 1 elements in set but only found %d.", len(s.elements))
 	}
 
-	if s.Lookup(v2, true) == true {
+	if s.Lookup(v2) == true {
 		t.Fatalf("[crdt.TestRemove] Expected '%v' not to be in set but Lookup() returns true.", v2)
 	}
 
-	if s.Lookup(v3, true) == true {
+	if s.Lookup(v3) == true {
 		t.Fatalf("[crdt.TestRemove] Expected '%v' not to be in set but Lookup() returns true.", v3)
 	}
 
-	if s.Lookup(v4, true) != true {
+	if s.Lookup(v4) != true {
 		t.Fatalf("[crdt.TestRemove] Expected '%v' to be in set but Lookup() returns false.", v4)
 	}
 

@@ -17,7 +17,6 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/numbleroot/maildir"
-	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crdt"
 )
@@ -43,533 +42,6 @@ type IMAPNode struct {
 }
 
 // Functions
-
-// ApplyCRDTUpd receives strings representing CRDT
-// update operations from receiver and executes them.
-func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}) {
-
-	for {
-
-		// Receive update message from receiver
-		// via channel.
-		updMsg := <-applyChan
-
-		// Parse operation that payload specifies.
-		op, opPayload, err := comm.ParseOp(updMsg)
-		if err != nil {
-			stdlog.Fatalf("[imap.ApplyCRDTUpd] Error while parsing operation from sync message: %v", err)
-		}
-
-		// Depending on received operation,
-		// parse remaining payload further.
-		switch op {
-
-		case "create":
-
-			// Parse received payload message into create message struct.
-			createUpd, err := comm.ParseCreate(opPayload)
-			if err != nil {
-				stdlog.Fatalf("[imap.ApplyCRDTUpd] Error while parsing CREATE update from sync message: %v", err)
-			}
-
-			// Lock node exclusively.
-			node.lock.Lock()
-
-			// Save user's mailbox structure CRDT to more
-			// conveniently use it hereafter.
-			userMainCRDT := node.MailboxStructure[createUpd.User]["Structure"]
-
-			// Create a new Maildir on stable storage.
-			posMaildir := maildir.Dir(filepath.Join(node.MaildirRoot, createUpd.User, createUpd.Mailbox))
-
-			err = posMaildir.Create()
-			if err != nil {
-				node.lock.Unlock()
-				stdlog.Fatalf("[imap.ApplyCRDTUpd] Maildir for new mailbox could not be created: %v", err)
-			}
-
-			// Construct path to new CRDT file.
-			posMailboxCRDTPath := filepath.Join(node.CRDTLayerRoot, createUpd.User, fmt.Sprintf("%s.log", createUpd.Mailbox))
-
-			// Initialize new ORSet for new mailbox.
-			posMailboxCRDT, err := crdt.InitORSetWithFile(posMailboxCRDTPath)
-			if err != nil {
-
-				// Perform clean up.
-				stdlog.Printf("[imap.ApplyCRDTUpd] CREATE fail: %v", err)
-				stdlog.Printf("[imap.ApplyCRDTUpd] Removing just created Maildir completely...\n")
-
-				// Attempt to remove Maildir.
-				err = posMaildir.Remove()
-				if err != nil {
-					stdlog.Printf("[imap.ApplyCRDTUpd] ... failed to remove Maildir: %v", err)
-					stdlog.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
-				} else {
-					stdlog.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
-				}
-
-				// Exit node.
-				node.lock.Unlock()
-				os.Exit(1)
-			}
-
-			// Place newly created CRDT in mailbox structure.
-			node.MailboxStructure[createUpd.User][createUpd.Mailbox] = posMailboxCRDT
-
-			// Initialize contents slice for new mailbox to track
-			// message sequence numbers in it.
-			node.MailboxContents[createUpd.User][createUpd.Mailbox] = make([]string, 0, 6)
-
-			// If succeeded, add a new folder in user's main CRDT.
-			err = userMainCRDT.AddEffect(createUpd.AddMailbox.Value, createUpd.AddMailbox.Tag, true, true)
-			if err != nil {
-
-				// Perform clean up.
-				stdlog.Printf("[imap.ApplyCRDTUpd] CREATE fail: %v", err)
-				stdlog.Printf("[imap.Create] Removing added CRDT from mailbox structure and contents slice...\n")
-
-				// Remove just added CRDT of new maildir from mailbox structure
-				// and corresponding contents slice.
-				delete(node.MailboxStructure[createUpd.User], createUpd.Mailbox)
-				delete(node.MailboxContents[createUpd.User], createUpd.Mailbox)
-
-				stdlog.Printf("[imap.Create] ... done. Removing just created Maildir completely...\n")
-
-				// Attempt to remove Maildir.
-				err = posMaildir.Remove()
-				if err != nil {
-					stdlog.Printf("[imap.ApplyCRDTUpd] ... failed to remove Maildir: %v", err)
-					stdlog.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
-				} else {
-					stdlog.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
-				}
-
-				// Exit node.
-				node.lock.Unlock()
-				os.Exit(1)
-			}
-
-			// Unlock node.
-			node.lock.Unlock()
-
-		case "delete":
-
-			// Parse received payload message into delete message struct.
-			deleteUpd, err := comm.ParseDelete(opPayload)
-			if err != nil {
-				stdlog.Fatalf("[imap.ApplyCRDTUpd] Error while parsing DELETE update from sync message: %v", err)
-			}
-
-			// Lock node exclusively.
-			node.lock.Lock()
-
-			// Save user's mailbox structure CRDT to more
-			// conveniently use it hereafter.
-			userMainCRDT := node.MailboxStructure[deleteUpd.User]["Structure"]
-
-			// Construct remove set from received values.
-			rmElements := make(map[string]string)
-			for _, element := range deleteUpd.RmvMailbox {
-				rmElements[element.Tag] = element.Value
-			}
-
-			// Remove received pairs from user's main CRDT.
-			err = userMainCRDT.RemoveEffect(rmElements, true, true)
-			if err != nil {
-				node.lock.Unlock()
-				stdlog.Fatalf("[imap.ApplyCRDTUpd] Failed to remove elements from user's main CRDT: %v", err)
-			}
-
-			// Remove CRDT from mailbox structure and corresponding
-			// mail contents slice.
-			delete(node.MailboxStructure[deleteUpd.User], deleteUpd.Mailbox)
-			delete(node.MailboxContents[deleteUpd.User], deleteUpd.Mailbox)
-
-			// Construct path to CRDT file to delete.
-			delMailboxCRDTPath := filepath.Join(node.CRDTLayerRoot, deleteUpd.User, fmt.Sprintf("%s.log", deleteUpd.Mailbox))
-
-			// Remove CRDT file of mailbox.
-			err = os.Remove(delMailboxCRDTPath)
-			if err != nil {
-				node.lock.Unlock()
-				stdlog.Fatalf("[imap.ApplyCRDTUpd] CRDT file of mailbox could not be deleted: %v", err)
-			}
-
-			// Remove files associated with deleted mailbox
-			// from stable storage.
-			delMaildir := maildir.Dir(filepath.Join(node.MaildirRoot, deleteUpd.User, deleteUpd.Mailbox))
-
-			err = delMaildir.Remove()
-			if err != nil {
-				node.lock.Unlock()
-				stdlog.Fatalf("[imap.ApplyCRDTUpd] Maildir could not be deleted: %v", err)
-			}
-
-			// Unlock node.
-			node.lock.Unlock()
-
-		case "append":
-
-			// Parse received payload message into append message struct.
-			appendUpd, err := comm.ParseAppend(opPayload)
-			if err != nil {
-				stdlog.Fatalf("[imap.ApplyCRDTUpd] Error while parsing APPEND update from sync message: %v", err)
-			}
-
-			// Lock node exclusively.
-			node.lock.Lock()
-
-			// Save user's mailbox structure CRDT to more
-			// conveniently use it hereafter.
-			userMainCRDT := node.MailboxStructure[appendUpd.User]["Structure"]
-
-			// Check if specified mailbox from append message is present
-			// in user's main CRDT on this node.
-			if userMainCRDT.Lookup(appendUpd.Mailbox, true) {
-
-				// Store concerned mailbox CRDT.
-				userMailboxCRDT := node.MailboxStructure[appendUpd.User][appendUpd.Mailbox]
-
-				// Check if mail is not yet present on this node.
-				if userMailboxCRDT.Lookup(appendUpd.AddMail.Value, true) != true {
-
-					// Construct path to new file.
-					var appendFileName string
-					if appendUpd.Mailbox == "INBOX" {
-						appendFileName = filepath.Join(node.MaildirRoot, appendUpd.User, "cur", appendUpd.AddMail.Value)
-					} else {
-						appendFileName = filepath.Join(node.MaildirRoot, appendUpd.User, appendUpd.Mailbox, "cur", appendUpd.AddMail.Value)
-					}
-
-					// If so, place file contents at correct location.
-					appendFile, err := os.Create(appendFileName)
-					if err != nil {
-						node.lock.Unlock()
-						stdlog.Fatalf("[imap.ApplyCRDTUpd] Failed to create file for mail to append: %v", err)
-					}
-
-					_, err = appendFile.WriteString(appendUpd.AddMail.Contents)
-					if err != nil {
-
-						// Perform clean up.
-						stdlog.Printf("[imap.ApplyCRDTUpd] APPEND fail: %v", err)
-						stdlog.Printf("[imap.ApplyCRDTUpd] Removing just created mail file...\n")
-
-						// Remove just created mail file.
-						err = os.Remove(appendFileName)
-						if err != nil {
-							stdlog.Printf("[imap.ApplyCRDTUpd] ... failed: %v", err)
-							stdlog.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
-						} else {
-							stdlog.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
-						}
-
-						// Exit node.
-						node.lock.Unlock()
-						os.Exit(1)
-					}
-
-					// Sync contents to stable storage.
-					err = appendFile.Sync()
-					if err != nil {
-
-						// Perform clean up.
-						stdlog.Printf("[imap.ApplyCRDTUpd] APPEND fail: %v", err)
-						stdlog.Printf("[imap.ApplyCRDTUpd] Removing just created mail file...\n")
-
-						// Remove just created mail file.
-						err = os.Remove(appendFileName)
-						if err != nil {
-							stdlog.Printf("[imap.ApplyCRDTUpd] ... failed: %v", err)
-							stdlog.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
-						} else {
-							stdlog.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
-						}
-
-						// Exit node.
-						node.lock.Unlock()
-						os.Exit(1)
-					}
-
-					// Append new mail to mailbox' contents CRDT.
-					node.MailboxContents[appendUpd.User][appendUpd.Mailbox] = append(node.MailboxContents[appendUpd.User][appendUpd.Mailbox], appendUpd.AddMail.Value)
-
-					// If succeeded, add new mail to mailbox' CRDT.
-					err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true, true)
-					if err != nil {
-
-						// Perform clean up.
-						stdlog.Printf("[imap.ApplyCRDTUpd] APPEND fail: %v", err)
-						stdlog.Printf("[imap.ApplyCRDTUpd] Removing just created mail file...\n")
-
-						// Remove just created mail file.
-						err = os.Remove(appendFileName)
-						if err != nil {
-							stdlog.Printf("[imap.ApplyCRDTUpd] ... failed: %v", err)
-							stdlog.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
-						} else {
-							stdlog.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
-						}
-
-						// Exit node.
-						node.lock.Unlock()
-						os.Exit(1)
-					}
-				} else {
-
-					// Add new mail to mailbox' CRDT.
-					err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true, true)
-					if err != nil {
-						node.lock.Unlock()
-						stdlog.Fatalf("[imap.ApplyCRDTUpd] APPEND fail: %s. Exiting.\n", err.Error())
-					}
-				}
-			}
-
-			// Unlock node.
-			node.lock.Unlock()
-
-		case "expunge":
-
-			// Parse received payload message into expunge message struct.
-			expungeUpd, err := comm.ParseExpunge(opPayload)
-			if err != nil {
-				stdlog.Fatalf("[imap.ApplyCRDTUpd] Error while parsing EXPUNGE update from sync message: %v", err)
-			}
-
-			// Lock node exclusively.
-			node.lock.Lock()
-
-			// Save user's mailbox structure CRDT to more
-			// conveniently use it hereafter.
-			userMainCRDT := node.MailboxStructure[expungeUpd.User]["Structure"]
-
-			// Check if specified mailbox from expunge message is
-			// present in user's main CRDT on this node.
-			if userMainCRDT.Lookup(expungeUpd.Mailbox, true) {
-
-				// Store concerned mailbox CRDT.
-				userMailboxCRDT := node.MailboxStructure[expungeUpd.User][expungeUpd.Mailbox]
-
-				// Construct remove set from received values.
-				rmElements := make(map[string]string)
-				for _, element := range expungeUpd.RmvMail {
-					rmElements[element.Tag] = element.Value
-				}
-
-				// Delete supplied elements from mailbox.
-				err := userMailboxCRDT.RemoveEffect(rmElements, true, true)
-				if err != nil {
-					node.lock.Unlock()
-					stdlog.Fatalf("[imap.ApplyCRDTUpd] Failed to remove mail elements from respective mailbox CRDT: %v", err)
-				}
-
-				// Check if just removed elements marked all
-				// instances of mail file.
-				if userMailboxCRDT.Lookup(expungeUpd.RmvMail[0].Value, true) != true {
-
-					// Construct path to old file.
-					var delFileName string
-					if expungeUpd.Mailbox == "INBOX" {
-						delFileName = filepath.Join(node.MaildirRoot, expungeUpd.User, "cur", expungeUpd.RmvMail[0].Value)
-					} else {
-						delFileName = filepath.Join(node.MaildirRoot, expungeUpd.User, expungeUpd.Mailbox, "cur", expungeUpd.RmvMail[0].Value)
-					}
-
-					// Remove the file.
-					err := os.Remove(delFileName)
-					if err != nil {
-						node.lock.Unlock()
-						stdlog.Fatalf("[imap.ApplyCRDTUpd] Failed to remove underlying mail file during EXPUNGE update: %v", err)
-					}
-				}
-
-				for msgNum, msgName := range node.MailboxContents[expungeUpd.User][expungeUpd.Mailbox] {
-
-					// Find removed mail file's sequence number.
-					if msgName == expungeUpd.RmvMail[0].Value {
-
-						// Delete mail's sequence number from contents structure.
-						realMsgNum := msgNum + 1
-						node.MailboxContents[expungeUpd.User][expungeUpd.Mailbox] = append(node.MailboxContents[expungeUpd.User][expungeUpd.Mailbox][:msgNum], node.MailboxContents[expungeUpd.User][expungeUpd.Mailbox][realMsgNum:]...)
-					}
-				}
-			}
-
-			// Unlock node.
-			node.lock.Unlock()
-
-		case "store":
-
-			// Parse received payload message into store message struct.
-			storeUpd, err := comm.ParseStore(opPayload)
-			if err != nil {
-				stdlog.Fatalf("[imap.ApplyCRDTUpd] Error while parsing STORE update from sync message: %v", err)
-			}
-
-			// Lock node exclusively.
-			node.lock.Lock()
-
-			// Save user's mailbox structure CRDT to more
-			// conveniently use it hereafter.
-			userMainCRDT := node.MailboxStructure[storeUpd.User]["Structure"]
-
-			// Check if specified mailbox from store message is present
-			// in user's main CRDT on this node.
-			if userMainCRDT.Lookup(storeUpd.Mailbox, true) {
-
-				// Store concerned mailbox CRDT.
-				userMailboxCRDT := node.MailboxStructure[storeUpd.User][storeUpd.Mailbox]
-
-				// Construct remove set from received values.
-				rmElements := make(map[string]string)
-				for _, element := range storeUpd.RmvMail {
-					rmElements[element.Tag] = element.Value
-				}
-
-				// Delete supplied elements from mailbox.
-				err := userMailboxCRDT.RemoveEffect(rmElements, true, true)
-				if err != nil {
-					node.lock.Unlock()
-					stdlog.Fatalf("[imap.ApplyCRDTUpd] Failed to remove mail elements from respective mailbox CRDT: %v", err)
-				}
-
-				// Check if just removed elements marked all
-				// instances of mail file.
-				if userMailboxCRDT.Lookup(storeUpd.RmvMail[0].Value, true) != true {
-
-					// Construct path to old file.
-					var delFileName string
-					if storeUpd.Mailbox == "INBOX" {
-						delFileName = filepath.Join(node.MaildirRoot, storeUpd.User, "cur", storeUpd.RmvMail[0].Value)
-					} else {
-						delFileName = filepath.Join(node.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.RmvMail[0].Value)
-					}
-
-					// Remove the file.
-					err := os.Remove(delFileName)
-					if err != nil {
-						node.lock.Unlock()
-						stdlog.Fatalf("[imap.ApplyCRDTUpd] Failed to remove underlying mail file during STORE update: %v", err)
-					}
-				}
-
-				// Check if new mail name is not yet present
-				// on this node.
-				if userMailboxCRDT.Lookup(storeUpd.AddMail.Value, true) != true {
-
-					// Construct path to new file.
-					var storeFileName string
-					if storeUpd.Mailbox == "INBOX" {
-						storeFileName = filepath.Join(node.MaildirRoot, storeUpd.User, "cur", storeUpd.AddMail.Value)
-					} else {
-						storeFileName = filepath.Join(node.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.AddMail.Value)
-					}
-
-					// If not yet present on node, place file
-					// contents at correct location.
-					storeFile, err := os.Create(storeFileName)
-					if err != nil {
-						node.lock.Unlock()
-						stdlog.Fatalf("[imap.ApplyCRDTUpd] Failed to create file for mail of STORE operation: %v", err)
-					}
-
-					_, err = storeFile.WriteString(storeUpd.AddMail.Contents)
-					if err != nil {
-
-						// Perform clean up.
-						stdlog.Printf("[imap.ApplyCRDTUpd] STORE fail: %v", err)
-						stdlog.Printf("[imap.ApplyCRDTUpd] Removing just created mail file...\n")
-
-						// Remove just created mail file.
-						err = os.Remove(storeFileName)
-						if err != nil {
-							stdlog.Printf("[imap.ApplyCRDTUpd] ... failed: %v", err)
-							stdlog.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
-						} else {
-							stdlog.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
-						}
-
-						// Exit node.
-						node.lock.Unlock()
-						os.Exit(1)
-					}
-
-					// Sync contents to stable storage.
-					err = storeFile.Sync()
-					if err != nil {
-
-						// Perform clean up.
-						stdlog.Printf("[imap.ApplyCRDTUpd] STORE fail: %v", err)
-						stdlog.Printf("[imap.ApplyCRDTUpd] Removing just created mail file...\n")
-
-						// Remove just created mail file.
-						err = os.Remove(storeFileName)
-						if err != nil {
-							stdlog.Printf("[imap.ApplyCRDTUpd] ... failed: %v", err)
-							stdlog.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
-						} else {
-							stdlog.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
-						}
-
-						// Exit node.
-						node.lock.Unlock()
-						os.Exit(1)
-					}
-
-					// If succeeded, add renamed mail to mailbox' CRDT.
-					err = userMailboxCRDT.AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true, true)
-					if err != nil {
-
-						// Perform clean up.
-						stdlog.Printf("[imap.ApplyCRDTUpd] STORE fail: %v", err)
-						stdlog.Printf("[imap.ApplyCRDTUpd] Removing just created mail file...\n")
-
-						// Remove just created mail file.
-						err = os.Remove(storeFileName)
-						if err != nil {
-							stdlog.Printf("[imap.ApplyCRDTUpd] ... failed: %v", err)
-							stdlog.Printf("[imap.ApplyCRDTUpd] Exiting.\n")
-						} else {
-							stdlog.Printf("[imap.ApplyCRDTUpd] ... done. Exiting.\n")
-						}
-
-						// Exit node.
-						node.lock.Unlock()
-						os.Exit(1)
-					}
-				} else {
-
-					// Add renamed mail to mailbox' CRDT.
-					err = userMailboxCRDT.AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true, true)
-					if err != nil {
-						node.lock.Unlock()
-						stdlog.Fatalf("[imap.ApplyCRDTUpd] STORE fail: %s. Exiting.\n", err.Error())
-					}
-				}
-
-				for msgNum, msgName := range node.MailboxContents[storeUpd.User][storeUpd.Mailbox] {
-
-					// Find old mail file's sequence number.
-					if msgName == storeUpd.RmvMail[0].Value {
-
-						// Replace old file name with renamed new one.
-						node.MailboxContents[storeUpd.User][storeUpd.Mailbox][msgNum] = storeUpd.AddMail.Value
-					}
-				}
-			}
-
-			// Unlock node.
-			node.lock.Unlock()
-
-		}
-
-		// Signal receiver that update was performed.
-		doneChan <- struct{}{}
-	}
-}
-
-// Mailbox functions
 
 // Select sets the current mailbox based on supplied
 // payload to user-instructed value. A return value of
@@ -745,40 +217,38 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 		return true
 	}
 
-	node.lock.RLock()
+	// Build up paths before entering critical section.
+	posMaildir := maildir.Dir(filepath.Join(c.UserMaildirPath, posMailbox))
+	posMailboxCRDTPath := filepath.Join(c.UserCRDTPath, fmt.Sprintf("%s.log", posMailbox))
+
+	// Lock node exclusively to make execution
+	// of following CRDT operations atomic.
+	node.lock.Lock()
+	defer node.lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
 	userMainCRDT := node.MailboxStructure[c.UserName]["Structure"]
 
-	if userMainCRDT.Lookup(posMailbox, true) {
+	if userMainCRDT.Lookup(posMailbox) {
 
 		// If mailbox to-be-created already exists for user,
 		// this is a client error. Return NO response.
 		err := c.InternalSend(true, fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
-			node.lock.RUnlock()
 			return false
 		}
-
-		node.lock.RUnlock()
 
 		return true
 	}
 
 	// Create a new Maildir on stable storage.
-	posMaildir := maildir.Dir(filepath.Join(c.UserMaildirPath, posMailbox))
-
 	err := posMaildir.Create()
 	if err != nil {
 		c.Error("Error while creating Maildir for new mailbox", err)
-		node.lock.RUnlock()
 		return false
 	}
-
-	// Construct path to new CRDT file.
-	posMailboxCRDTPath := filepath.Join(c.UserCRDTPath, fmt.Sprintf("%s.log", posMailbox))
 
 	// Initialize new ORSet for new mailbox.
 	posMailboxCRDT, err := crdt.InitORSetWithFile(posMailboxCRDTPath)
@@ -786,25 +256,19 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// Perform clean up.
 		stdlog.Printf("[imap.Create] Fail: %v", err)
-		stdlog.Printf("[imap.Create] Removing just created Maildir completely...\n")
+		stdlog.Printf("[imap.Create] Removing just created Maildir completely...")
 
 		// Attempt to remove Maildir.
 		err = posMaildir.Remove()
 		if err != nil {
 			stdlog.Printf("[imap.Create] ... failed to remove Maildir: %v", err)
-			stdlog.Printf("[imap.Create] Exiting.\n")
+			stdlog.Printf("[imap.Create] Exiting")
 		} else {
-			stdlog.Printf("[imap.Create] ... done. Exiting.\n")
+			stdlog.Printf("[imap.Create] ... done - exiting")
 		}
 
-		node.lock.RUnlock()
-
-		// Exit node.
 		os.Exit(1)
 	}
-
-	node.lock.RUnlock()
-	node.lock.Lock()
 
 	// Place newly created CRDT in mailbox structure.
 	node.MailboxStructure[c.UserName][posMailbox] = posMailboxCRDT
@@ -822,31 +286,26 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// Perform clean up.
 		stdlog.Printf("[imap.Create] Fail: %v", err)
-		stdlog.Printf("[imap.Create] Removing added CRDT from mailbox structure...\n")
+		stdlog.Printf("[imap.Create] Removing added CRDT from mailbox structure...")
 
 		// Remove just added CRDT of new maildir from mailbox structure
 		// and corresponding contents slice.
 		delete(node.MailboxStructure[c.UserName], posMailbox)
 		delete(node.MailboxContents[c.UserName], posMailbox)
 
-		stdlog.Printf("[imap.Create] ... done. Removing just created Maildir completely...\n")
+		stdlog.Printf("[imap.Create] ... done. Removing just created Maildir completely...")
 
 		// Attempt to remove Maildir.
 		err = posMaildir.Remove()
 		if err != nil {
 			stdlog.Printf("[imap.Create] ... failed to remove Maildir: %v", err)
-			stdlog.Printf("[imap.Create] Exiting.\n")
+			stdlog.Printf("[imap.Create] Exiting")
 		} else {
-			stdlog.Printf("[imap.Create] ... done. Exiting.\n")
+			stdlog.Printf("[imap.Create] ... done - exiting")
 		}
 
-		node.lock.Unlock()
-
-		// Exit node.
 		os.Exit(1)
 	}
-
-	node.lock.Unlock()
 
 	// Send success answer.
 	err = c.InternalSend(true, fmt.Sprintf("%s OK CREATE completed", req.Tag))
@@ -909,6 +368,12 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 		return true
 	}
 
+	// Build up paths before entering critical section.
+	delMailboxCRDTPath := filepath.Join(c.UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
+	delMaildir := maildir.Dir(filepath.Join(c.UserMaildirPath, delMailbox))
+
+	// Lock node exclusively to make execution
+	// of following CRDT operations atomic.
 	node.lock.Lock()
 	defer node.lock.Unlock()
 
@@ -944,7 +409,6 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 		// log file. Reverting actions were already taken, log error.
 		stdlog.Printf("[imap.Delete] Failed to remove elements from user's main CRDT: %v", err)
 
-		// Exit node.
 		os.Exit(1)
 	}
 
@@ -952,9 +416,6 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 	// mail contents slice.
 	delete(node.MailboxStructure[c.UserName], delMailbox)
 	delete(node.MailboxContents[c.UserName], delMailbox)
-
-	// Construct path to CRDT file to delete.
-	delMailboxCRDTPath := filepath.Join(c.UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
 
 	// Remove CRDT file of mailbox.
 	err = os.Remove(delMailboxCRDTPath)
@@ -966,8 +427,6 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 
 	// Remove files associated with deleted mailbox
 	// from stable storage.
-	delMaildir := maildir.Dir(filepath.Join(c.UserMaildirPath, delMailbox))
-
 	err = delMaildir.Remove()
 	if err != nil {
 		// TODO: Maybe think about better way to clean up here?
@@ -1081,8 +540,6 @@ func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan string
 	return true
 }
 
-// Mail functions
-
 // Append puts supplied message into specified mailbox.
 func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan string) bool {
 
@@ -1191,24 +648,32 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 		return true
 	}
 
-	node.lock.RLock()
+	// Construct path to maildir on node.
+	var appMaildir maildir.Dir
+	if mailbox == "INBOX" {
+		appMaildir = maildir.Dir(c.UserMaildirPath)
+	} else {
+		appMaildir = maildir.Dir(filepath.Join(c.UserMaildirPath, mailbox))
+	}
+
+	// Lock node exclusively to make execution
+	// of following CRDT operations atomic.
+	node.lock.Lock()
+	defer node.lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
 	userMainCRDT := node.MailboxStructure[c.UserName]["Structure"]
 
-	if userMainCRDT.Lookup(mailbox, true) != true {
+	if userMainCRDT.Lookup(mailbox) != true {
 
 		// If mailbox to append message to does not exist,
 		// this is a client error. Return NO response.
 		err := c.InternalSend(true, fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag))
 		if err != nil {
 			c.Error("Encountered send error", err)
-			node.lock.RUnlock()
 			return false
 		}
-
-		node.lock.RUnlock()
 
 		return true
 	}
@@ -1217,7 +682,6 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 	err = c.InternalSend(true, "+ Ready for literal data")
 	if err != nil {
 		c.Error("Encountered send error", err)
-		node.lock.RUnlock()
 		return false
 	}
 
@@ -1226,7 +690,6 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 	err = c.SignalAwaitingLiteral(true, numBytes)
 	if err != nil {
 		c.Error("Encountered send error", err)
-		node.lock.RUnlock()
 		return false
 	}
 
@@ -1237,21 +700,8 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 	_, err = io.ReadFull(c.IncReader, msgBuffer)
 	if err != nil {
 		c.Error("Encountered error while reading distributor literal data", err)
-		node.lock.RUnlock()
 		return false
 	}
-
-	// Construct path to maildir on node.
-	var appMaildir maildir.Dir
-	if mailbox == "INBOX" {
-		appMaildir = maildir.Dir(c.UserMaildirPath)
-	} else {
-		appMaildir = maildir.Dir(filepath.Join(c.UserMaildirPath, mailbox))
-	}
-
-	node.lock.RUnlock()
-	node.lock.Lock()
-	defer node.lock.Unlock()
 
 	// Open a new Maildir delivery.
 	appDelivery, err := appMaildir.NewDelivery()
@@ -1260,7 +710,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 		return false
 	}
 
-	// Write actual message contents to file.
+	// Write actual message content to file.
 	err = appDelivery.Write(msgBuffer)
 	if err != nil {
 		c.Error("Error while writing message during delivery", err)
@@ -1304,17 +754,16 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// Perform clean up.
 		stdlog.Printf("[imap.Append] Fail: %v", err)
-		stdlog.Printf("[imap.Append] Removing just appended mail message...\n")
+		stdlog.Printf("[imap.Append] Removing just appended mail message...")
 
 		err := os.Remove(mailFileNamePath)
 		if err != nil {
 			stdlog.Printf("[imap.Append] ... failed: %v", err)
-			stdlog.Printf("[imap.Append] Exiting.\n")
+			stdlog.Printf("[imap.Append] Exiting")
 		} else {
-			stdlog.Printf("[imap.Append] ... done. Exiting.\n")
+			stdlog.Printf("[imap.Append] ... done - exiting")
 		}
 
-		// Exit node.
 		os.Exit(1)
 	}
 
@@ -1375,20 +824,18 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan str
 	// individual remove operations.
 	var expAnswerLines []string
 
-	node.lock.RLock()
+	// Lock node exclusively to make execution
+	// of following CRDT operations atomic.
+	node.lock.Lock()
 
 	// Save all mails possibly to delete and
-	// amount of these files.
+	// number of these files.
 	expMails := node.MailboxContents[c.UserName][c.SelectedMailbox]
 	numExpMails := len(expMails)
-
-	node.lock.RUnlock()
 
 	// Only do the work if there are any mails
 	// present in mailbox.
 	if numExpMails > 0 {
-
-		node.lock.Lock()
 
 		// Iterate over all mail files in reverse order.
 		for i := (numExpMails - 1); i >= 0; i-- {
@@ -1425,10 +872,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan str
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
 				stdlog.Printf("[imap.Expunge] Failed to remove mails from user's selected mailbox CRDT: %v", err)
-
 				node.lock.Unlock()
-
-				// Exit node.
 				os.Exit(1)
 			}
 
@@ -1514,29 +958,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		return true
 	}
 
-	node.lock.RLock()
-
-	// Retrieve number of messages in mailbox.
-	lenMailboxContents := len(node.MailboxContents[c.UserName][c.SelectedMailbox])
-
-	node.lock.RUnlock()
-
-	// Parse sequence numbers argument.
-	msgNums, err := ParseSeqNumbers(storeArgs[0], lenMailboxContents)
-	if err != nil {
-
-		// Parsing sequence numbers from STORE request produced
-		// an error. Return tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
-	}
-
-	// Parse data item type.
+	// Parse data item type (second parameter).
 	dataItemType := storeArgs[1]
 
 	if (dataItemType != "FLAGS") && (dataItemType != "FLAGS.SILENT") &&
@@ -1561,7 +983,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		silent = true
 	}
 
-	// Parse flag argument.
+	// Parse flag argument (third parameter).
 	flags, err := ParseFlags(storeArgs[2])
 	if err != nil {
 
@@ -1585,11 +1007,39 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		selectedMailbox = filepath.Join(c.UserMaildirPath, c.SelectedMailbox)
 	}
 
+	// Build up paths before entering critical section.
+	mailMaildir := maildir.Dir(selectedMailbox)
+
+	// Lock node exclusively to make execution
+	// of following CRDT operations atomic.
+	node.lock.Lock()
+
+	// Retrieve number of messages in mailbox.
+	lenMailboxContents := len(node.MailboxContents[c.UserName][c.SelectedMailbox])
+
+	// Parse sequence numbers argument (first parameter).
+	// CAUTION: We expect this function to fail if supplied
+	//          message sequence numbers did not refer to
+	//          existing messages in mailbox.
+	msgNums, err := ParseSeqNumbers(storeArgs[0], lenMailboxContents)
+	if err != nil {
+
+		// Parsing sequence numbers from STORE request produced
+		// an error. Return tagged BAD response.
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
+		if err != nil {
+			c.Error("Encountered send error", err)
+			node.lock.Unlock()
+			return false
+		}
+
+		node.lock.Unlock()
+
+		return true
+	}
+
 	// Prepare answer slice.
 	answerLines := make([]string, 0, len(msgNums))
-
-	// Construct path and Maildir for selected mailbox.
-	mailMaildir := maildir.Dir(selectedMailbox)
 
 	for _, msgNum := range msgNums {
 
@@ -1621,15 +1071,14 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 			newMailFlags = append(newMailFlags, 'T')
 		}
 
-		node.lock.RLock()
-
 		// Retrieve mail file name.
 		mailFileName := node.MailboxContents[c.UserName][c.SelectedMailbox][msgNum]
 
-		// Read message contents from file.
-		mailFileContents, err := ioutil.ReadFile(filepath.Join(selectedMailbox, "cur", mailFileName))
+		// Read message content from file.
+		mailFileContent, err := ioutil.ReadFile(filepath.Join(selectedMailbox, "cur", mailFileName))
 		if err != nil {
-			c.Error("Error while reading in mail file contents in STORE operation", err)
+			c.Error("Error while reading in mail file content in STORE operation", err)
+			node.lock.Unlock()
 			return false
 		}
 
@@ -1637,10 +1086,9 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		mailFlags, err := mailMaildir.Flags(mailFileName, false)
 		if err != nil {
 			c.Error("Error while retrieving flags from mail file", err)
+			node.lock.Unlock()
 			return false
 		}
-
-		node.lock.RUnlock()
 
 		// Check if supplied flags should be added
 		// to existing flags if not yet present.
@@ -1680,11 +1128,9 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 			newMailFlags = []rune(tmpNewMailFlags)
 		}
 
-		// Check if we really have to perform and update
+		// Check if we really have to perform an update
 		// across the system or if we can save the energy.
 		if mailFlags != string(newMailFlags) {
-
-			node.lock.Lock()
 
 			// Set just constructed new flags string in mail's
 			// file name (renaming it).
@@ -1708,35 +1154,27 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
 				stdlog.Printf("[imap.Store] Failed to remove old mail name from selected mailbox CRDT: %v", err)
-
 				node.lock.Unlock()
-
-				// Exit node.
 				os.Exit(1)
 			}
 
 			// Second, add the new mail file's name and finally
 			// instruct all other nodes to do the same.
 			err = storeMailboxCRDT.Add(newMailFileName, func(payload string) {
-				syncChan <- fmt.Sprintf("store|%s|%s|%s|%s;%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(c.SelectedMailbox)), rmvElements, payload, base64.StdEncoding.EncodeToString(mailFileContents))
+				syncChan <- fmt.Sprintf("store|%s|%s|%s|%s;%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(c.SelectedMailbox)), rmvElements, payload, base64.StdEncoding.EncodeToString(mailFileContent))
 			})
 			if err != nil {
 
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
 				stdlog.Printf("[imap.Store] Failed to add renamed mail name to selected mailbox CRDT: %v", err)
-
 				node.lock.Unlock()
-
-				// Exit node.
 				os.Exit(1)
 			}
 
 			// If we are done with that, also replace the mail's
 			// file name in the corresponding contents slice.
 			node.MailboxContents[c.UserName][c.SelectedMailbox][msgNum] = newMailFileName
-
-			node.lock.Unlock()
 		}
 
 		// Check if client requested update information.
@@ -1798,6 +1236,8 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 			answerLines = append(answerLines, fmt.Sprintf("* %d FETCH (FLAGS (%s))", realMsgNum, answerFlagString))
 		}
 	}
+
+	node.lock.Unlock()
 
 	// Check if client requested update information.
 	if silent != true {

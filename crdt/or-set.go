@@ -5,7 +5,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"sync"
 
 	"encoding/base64"
 	"io/ioutil"
@@ -19,7 +18,6 @@ import (
 // removed set defined by Shapiro, Preguiça, Baquero,
 // and Zawirski. It consists of unique IDs and data items.
 type ORSet struct {
-	lock     *sync.RWMutex
 	file     *os.File
 	elements map[string]string
 }
@@ -36,7 +34,6 @@ type sendFunc func(string)
 func InitORSet() *ORSet {
 
 	return &ORSet{
-		lock:     &sync.RWMutex{},
 		elements: make(map[string]string),
 	}
 }
@@ -63,7 +60,7 @@ func InitORSetWithFile(fileName string) (*ORSet, error) {
 	s.file = f
 
 	// Write newly created CRDT file to stable storage.
-	if err = s.WriteORSetToFile(false); err != nil {
+	if err = s.WriteORSetToFile(); err != nil {
 		return nil, fmt.Errorf("error during CRDT file write-back: %v", err)
 	}
 
@@ -128,13 +125,7 @@ func InitORSetFromFile(fileName string) (*ORSet, error) {
 // stable storage at location from initialization.
 // This allows for a CRDT ORSet to be made persistent
 // and later be resumed from prior state.
-func (s *ORSet) WriteORSetToFile(needsLocking bool) error {
-
-	if needsLocking {
-		// Write-lock the set and unlock on any exit.
-		s.lock.Lock()
-		defer s.lock.Unlock()
-	}
+func (s *ORSet) WriteORSetToFile() error {
 
 	marshalled := ""
 
@@ -180,10 +171,6 @@ func (s *ORSet) WriteORSetToFile(needsLocking bool) error {
 // of a supplied ORSet.
 func (s *ORSet) GetAllValues() []string {
 
-	// Read-lock set and unlock on exit.
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
 	// Make a slice of initial size 0.
 	allValues := make([]string, 0)
 
@@ -211,13 +198,7 @@ func (s *ORSet) GetAllValues() []string {
 // Lookup cycles through elements in ORSet and
 // returns true if element e is present and
 // false otherwise.
-func (s *ORSet) Lookup(e string, needsLocking bool) bool {
-
-	if needsLocking {
-		// Read-lock set and unlock on exit.
-		s.lock.RLock()
-		defer s.lock.RUnlock()
-	}
+func (s *ORSet) Lookup(e string) bool {
 
 	for _, value := range s.elements {
 
@@ -236,13 +217,7 @@ func (s *ORSet) Lookup(e string, needsLocking bool) bool {
 // defined by the specification. It is executed by all
 // replicas of the data set including the source node. It
 // inserts given element and tag into the set representation.
-func (s *ORSet) AddEffect(e string, tag string, needsLocking bool, needsWriteBack bool) error {
-
-	if needsLocking {
-		// Write-lock set and unlock on exit.
-		s.lock.Lock()
-		defer s.lock.Unlock()
-	}
+func (s *ORSet) AddEffect(e string, tag string, needsWriteBack bool) error {
 
 	// Insert data element e at key tag.
 	s.elements[tag] = e
@@ -252,7 +227,7 @@ func (s *ORSet) AddEffect(e string, tag string, needsLocking bool, needsWriteBac
 	}
 
 	// Instructed to write changes back to file.
-	err := s.WriteORSetToFile(false)
+	err := s.WriteORSetToFile()
 	if err != nil {
 
 		// Error during write-back to stable storage.
@@ -262,7 +237,7 @@ func (s *ORSet) AddEffect(e string, tag string, needsLocking bool, needsWriteBac
 		rSet[tag] = e
 
 		// Revert just made changes.
-		s.RemoveEffect(rSet, false, false)
+		s.RemoveEffect(rSet, false)
 
 		return fmt.Errorf("error during writing CRDT file back: %v", err)
 	}
@@ -281,13 +256,9 @@ func (s *ORSet) Add(e string, send sendFunc) error {
 	// Create a new unique tag.
 	tag := uuid.NewV4().String()
 
-	// Write-lock set and unlock on exit.
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	// Apply effect part of update add. Do not lock
-	// structure but write changes back to stable storage.
-	err := s.AddEffect(e, tag, false, true)
+	// Apply effect part of update add.
+	// Write changes back to stable storage.
+	err := s.AddEffect(e, tag, true)
 	if err != nil {
 		return err
 	}
@@ -302,13 +273,7 @@ func (s *ORSet) Add(e string, send sendFunc) error {
 // operation defined by the specification. It is executed
 // by all replicas of the data set including the source node.
 // It removes supplied set of tags from the ORSet's set.
-func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool, needsWriteBack bool) error {
-
-	if needsLocking {
-		// Write-lock set and unlock on exit.
-		s.lock.Lock()
-		defer s.lock.Unlock()
-	}
+func (s *ORSet) RemoveEffect(rSet map[string]string, needsWriteBack bool) error {
 
 	// Range over set of received tags to-be-deleted.
 	for rTag := range rSet {
@@ -325,14 +290,14 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool, needsWri
 	}
 
 	// Instructed to write changes back to file.
-	err := s.WriteORSetToFile(false)
+	err := s.WriteORSetToFile()
 	if err != nil {
 
 		// Error during write-back to stable storage.
 
 		// Revert just made changes.
 		for tag, value := range rSet {
-			s.AddEffect(value, tag, false, false)
+			s.AddEffect(value, tag, false)
 		}
 
 		return fmt.Errorf("error during writing CRDT file back: %v", err)
@@ -349,12 +314,8 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsLocking bool, needsWri
 // sends out the remove message to all other replicas.
 func (s *ORSet) Remove(e string, send sendFunc) error {
 
-	// Write-lock set and unlock on exit.
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	// Check precondition: is element present in set?
-	if s.Lookup(e, false) != true {
+	if s.Lookup(e) != true {
 		return fmt.Errorf("element to be removed not found in set")
 	}
 
@@ -383,10 +344,9 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 		}
 	}
 
-	// Execute the effect part of the update remove but do
-	// not lock the set structure as we already maintain a lock.
+	// Execute the effect part of the update remove.
 	// Also, write changes back to stable storage.
-	if err := s.RemoveEffect(rmElements, false, true); err != nil {
+	if err := s.RemoveEffect(rmElements, true); err != nil {
 		return err
 	}
 

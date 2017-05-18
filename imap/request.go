@@ -79,8 +79,11 @@ func ParseRequest(req string) (*Request, error) {
 // of message sequence numbers for use in e.g. STORE command.
 func ParseSeqNumbers(recv string, lenMailboxContents int) ([]int, error) {
 
-	// TODO: Check for each value if it is a valid sequence
-	//       number inside the provided mail list.
+	// If supplied number of mail messages in selected
+	// folder indicated an empty mailbox, immediately return.
+	if lenMailboxContents == 0 {
+		return nil, fmt.Errorf("Cannot select mail in empty mailbox")
+	}
 
 	// Initialize needed data stores.
 	var err error
@@ -92,8 +95,8 @@ func ParseSeqNumbers(recv string, lenMailboxContents int) ([]int, error) {
 
 	for _, numsSet := range msgNumsSet {
 
-		var numStart int
-		var numEnd int
+		numStart := 0
+		numEnd := 0
 
 		// Split into sequence numbers if not already done.
 		msgNumsRange := strings.Split(numsSet, ":")
@@ -103,16 +106,9 @@ func ParseSeqNumbers(recv string, lenMailboxContents int) ([]int, error) {
 			// If wildcard symbol was set as beginning range
 			// number, replace it with maximum number in mailbox.
 			numStart = lenMailboxContents
-
-			if numStart == 0 {
-
-				// Wildcard symbol used although selected mailbox is empty.
-				// Client error, return tagged BAD response.
-				return nil, fmt.Errorf("Cannot select mail in empty mailbox")
-			}
 		} else {
 
-			// Convert string to numer.
+			// Convert string to number.
 			numStart, err = strconv.Atoi(msgNumsRange[0])
 			if err != nil {
 
@@ -122,35 +118,16 @@ func ParseSeqNumbers(recv string, lenMailboxContents int) ([]int, error) {
 			}
 		}
 
-		if len(msgNumsRange) == 1 {
-
-			if _, seen := seenMsgNums[numStart]; !seen {
-
-				// Sequence number specified, append it if
-				// we have not yet seen this value.
-				msgNums = append(msgNums, (numStart - 1))
-
-				// Set corresponding seen value to true.
-				seenMsgNums[numStart] = true
-			}
-
-		} else {
+		if len(msgNumsRange) > 1 {
 
 			if msgNumsRange[1] == "*" {
 
 				// If wildcard symbol was set as end number of range,
 				// replace it with maximum number in mailbox.
 				numEnd = lenMailboxContents
-
-				if numEnd == 0 {
-
-					// Wildcard symbol used although selected mailbox is empty.
-					// Client error, return tagged BAD response.
-					return nil, fmt.Errorf("Cannot select mail in empty mailbox")
-				}
 			} else {
 
-				// Convert string to numer.
+				// Convert string to number.
 				numEnd, err = strconv.Atoi(msgNumsRange[1])
 				if err != nil {
 
@@ -167,6 +144,33 @@ func ParseSeqNumbers(recv string, lenMailboxContents int) ([]int, error) {
 				numTmp := numEnd
 				numEnd = numStart
 				numStart = numTmp
+			}
+		}
+
+		if len(msgNumsRange) == 1 {
+
+			// Make sure that numStart refers to an
+			// existing message sequence number.
+			if (numStart < 1) || (numStart > lenMailboxContents) {
+				return nil, fmt.Errorf("Command STORE was sent with a number parameter not referring to an existing mail message")
+			}
+
+			if _, seen := seenMsgNums[numStart]; !seen {
+
+				// Sequence number specified, append it if
+				// we have not yet seen this value.
+				msgNums = append(msgNums, (numStart - 1))
+
+				// Set corresponding seen value to true.
+				seenMsgNums[numStart] = true
+			}
+
+		} else {
+
+			// Make sure that numStart and numEnd both
+			// refer to existing message sequence numbers.
+			if (numStart < 1) || (numStart > lenMailboxContents) || (numEnd < 1) || (numEnd > lenMailboxContents) {
+				return nil, fmt.Errorf("Command STORE was sent with a number parameter not referring to an existing mail message")
 			}
 
 			for u := numStart; u <= numEnd; u++ {
