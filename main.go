@@ -2,14 +2,20 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"net"
 	"os"
 	"runtime"
 	"strings"
+
+	"crypto/tls"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/numbleroot/pluto/auth"
 	"github.com/numbleroot/pluto/config"
+	"github.com/numbleroot/pluto/crypto"
+	"github.com/numbleroot/pluto/distributor"
 	"github.com/numbleroot/pluto/imap"
 )
 
@@ -63,6 +69,17 @@ func initLogger(loglevel string) log.Logger {
 	return logger
 }
 
+// Load public TLS config based on config values.
+func publicDistributorConn(conf config.Distributor) (net.Listener, error) {
+	tlsConfig, err := crypto.NewPublicTLSConfig(conf.PublicTLS.CertLoc, conf.PublicTLS.KeyLoc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Start to listen for incoming public connections on defined IP and port.
+	return tls.Listen("tcp", fmt.Sprintf("%s:%s", conf.ListenIP, conf.Port), tlsConfig)
+}
+
 func main() {
 
 	var err error
@@ -102,6 +119,43 @@ func main() {
 			)
 			os.Exit(2)
 		}
+
+		intConnectioner, err := NewInternalConnection(
+			conf.Distributor.InternalTLS.CertLoc,
+			conf.Distributor.InternalTLS.KeyLoc,
+			conf.RootCertLoc,
+			conf.IntlConnRetry,
+		)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to initialize internal connectioner",
+				"err", err,
+			)
+		}
+
+		conn, err := publicDistributorConn(conf.Distributor)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to create public distributor connection",
+				"err", err,
+			)
+			os.Exit(2)
+		}
+		defer conn.Close()
+
+		ds := distributor.NewService(authenticator, intConnectioner)
+
+		if err := ds.Run(conn, conf.IMAP.Greeting); err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to run distributor",
+				"err", err,
+			)
+		}
+
+		//
+		// TODO: Delete the old code beneath
+		//
+		return
 
 		// Initialize distributor.
 		distr, err := imap.InitDistributor(logger, conf, authenticator)
