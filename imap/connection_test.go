@@ -1,8 +1,10 @@
 package imap
 
 import (
+	"bufio"
 	"fmt"
 	"testing"
+	"time"
 
 	"crypto/tls"
 
@@ -11,7 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestInternalConnect(t *testing.T) {
+// TestInternalConnectAndSend tests two of the
+// main internal communication functions of pluto.
+func TestInternalConnectAndSend(t *testing.T) {
 
 	// Read configuration from file.
 	config, err := config.LoadConfig("../test-config.toml")
@@ -57,6 +61,8 @@ func TestInternalConnect(t *testing.T) {
 
 	go func() {
 
+		var c Connection
+
 		conn, err := worker.Accept()
 		if err != nil {
 			t.Fatal(err)
@@ -65,11 +71,15 @@ func TestInternalConnect(t *testing.T) {
 		tlsConn, ok := conn.(*tls.Conn)
 		assert.Equal(t, true, ok, "Worker-1 should be able to assert TLS connection")
 
-		err = tlsConn.Handshake()
-		assert.Nil(t, err, "TLS handshake should not yield an error")
+		c.IncConn = tlsConn
+		c.IncReader = bufio.NewReader(tlsConn)
 
-		tlsConn.Close()
-		fmt.Println("Closed conn at worker-1")
+		text, err := c.InternalReceive(true)
+		assert.Nil(t, err, "InternalReceive at worker-1 should not return an error")
+		assert.Equal(t, "test", text, "InternalReceive at worker-1 should have received 'test'")
+
+		c.Terminate()
+		worker.Close()
 	}()
 
 	// Listen on a port for TLS connections on storage.
@@ -80,6 +90,8 @@ func TestInternalConnect(t *testing.T) {
 
 	go func() {
 
+		var c Connection
+
 		conn, err := storage.Accept()
 		if err != nil {
 			t.Fatal(err)
@@ -88,16 +100,30 @@ func TestInternalConnect(t *testing.T) {
 		tlsConn, ok := conn.(*tls.Conn)
 		assert.Equal(t, true, ok, "Storage should be able to assert TLS connection")
 
-		err = tlsConn.Handshake()
-		assert.Nil(t, err, "TLS handshake should not yield an error")
+		c.IncConn = tlsConn
+		c.IncReader = bufio.NewReader(tlsConn)
 
-		tlsConn.Close()
-		fmt.Println("Closed conn at storage")
+		text, err := c.InternalReceive(true)
+		assert.Nil(t, err, "InternalReceive at storage should not return an error")
+		assert.Equal(t, "rofl", text, "InternalReceive at storage should have received 'rofl'")
+
+		c.Terminate()
+		storage.Close()
 	}()
 
-	_, err = InternalConnect(addrWorker, tlsConfigD, 0, false, "")
+	var c Connection
+	c.IntlTLSConfig = tlsConfigD
+
+	c.IncConn, err = InternalConnect(addrWorker, c.IntlTLSConfig, 0, false, "")
 	assert.Nil(t, err, "InternalConnect (worker-only) should not return an error")
 
-	_, err = InternalConnect(addrWorker, tlsConfigD, 0, true, addrStorage)
-	assert.Nil(t, err, "InternalConnect (failover to storage) should not return an error")
+	err = c.InternalSend(true, "test", false, "")
+	assert.Nil(t, err, "InternalSend (worker-only) should not return an error")
+
+	time.Sleep(1 * time.Second)
+
+	err = c.InternalSend(true, "rofl", true, addrStorage)
+	assert.Nil(t, err, "InternalSend (failover to storage) should not return an error")
+
+	time.Sleep(1 * time.Second)
 }

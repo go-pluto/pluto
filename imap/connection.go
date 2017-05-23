@@ -161,17 +161,9 @@ func (c *Connection) InternalSend(inc bool, text string, isDistributor bool, sto
 		return fmt.Errorf("sending ping to node %s failed: %v", conn.RemoteAddr().String(), err)
 	}
 
-	// After 5 failed reconnection attempts to a worker
-	// node, the distributor will connect to the storage
-	// node of the deployment.
-	doFailoverAfter := 5
-	curFailedAttempts := 0
-
 	// Write message to TLS connections.
 	_, err = fmt.Fprintf(conn, "%s\r\n", text)
 	for err != nil {
-
-		curFailedAttempts += 1
 
 		// Define what IP and port of remote node look like.
 		remoteAddr := conn.RemoteAddr().String()
@@ -184,28 +176,14 @@ func (c *Connection) InternalSend(inc bool, text string, isDistributor bool, sto
 
 		if (err.Error() == okErrorDefault) || (err.Error() == okErrorStorage) {
 
-			if isDistributor && (curFailedAttempts >= doFailoverAfter) {
-
-				// We reached the number of failed connection attempts
-				// to a worker at which the distributor will instead
-				// connect to the provided storage node address directly.
-				// We call this behaviour failover mode.
-				conn, err = InternalConnect(storageAddr, c.IntlTLSConfig, c.IntlConnRetry, false, "")
-				if err != nil {
-					return fmt.Errorf("failover mode: failed to connect to storage at %s: %v", storageAddr, err)
-				}
-
-				stdlog.Printf("[imap.InternalSend] Failover mode: connected to storage at %s.", storageAddr)
-			} else {
-
-				// Reestablish TLS connection to remote node.
-				conn, err = InternalConnect(remoteAddr, c.IntlTLSConfig, c.IntlConnRetry, false, "")
-				if err != nil {
-					return fmt.Errorf("failed to reestablish connection with %s: %v", remoteAddr, err)
-				}
-
-				stdlog.Printf("[imap.InternalSend] Reconnected to %s.", remoteAddr)
+			// Reestablish TLS connection to remote node or
+			// fail over to storage node directly.
+			conn, err = InternalConnect(remoteAddr, c.IntlTLSConfig, c.IntlConnRetry, true, storageAddr)
+			if err != nil {
+				return fmt.Errorf("failed to reestablish connection: %v", err)
 			}
+
+			stdlog.Printf("[imap.InternalSend] Reconnected to %s", conn.RemoteAddr().String())
 
 			// Save context to connection.
 			if inc {
