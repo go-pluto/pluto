@@ -97,7 +97,7 @@ func InternalConnect(remoteAddr string, tlsConfig *tls.Config, retry int, isDist
 
 		if err != nil {
 
-			curFailedAttempts += 1
+			curFailedAttempts++
 
 			if (err.Error() == okErrorDefault) || (err.Error() == okErrorStorage) {
 				time.Sleep(time.Duration(retry) * time.Millisecond)
@@ -105,9 +105,9 @@ func InternalConnect(remoteAddr string, tlsConfig *tls.Config, retry int, isDist
 
 				if isDistributor {
 					return nil, fmt.Errorf("failover mode: could not connect to port of storage node %s because of: %v", storageAddr, err)
-				} else {
-					return nil, fmt.Errorf("could not connect to port of node %s because of: %v", remoteAddr, err)
 				}
+
+				return nil, fmt.Errorf("could not connect to port of node %s because of: %v", remoteAddr, err)
 			}
 		}
 	}
