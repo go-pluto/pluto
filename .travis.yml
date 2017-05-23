@@ -18,9 +18,11 @@ script:
 
 after_success:
   - bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
-  - docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}";
-  - docker build -t numbleroot/pluto:latest .
-  - docker push numbleroot/pluto:latest
+  - 'if [ ${TRAVIS_EVENT_TYPE} = "push" && ${TRAVIS_BRANCH} = "master" ]; then
+      docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}" || travis_terminate 1;
+      docker build -t numbleroot/pluto:latest . || travis_terminate 1;
+      docker push numbleroot/pluto:latest || travis_terminate 1;
+    fi'
 
 before_deploy:
   - docker build -t numbleroot/pluto:${TRAVIS_TAG} .
