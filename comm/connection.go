@@ -33,7 +33,7 @@ func ReliableConnect(remoteAddr string, tlsConfig *tls.Config, retry int) (*tls.
 			if err.Error() == okError {
 				time.Sleep(time.Duration(retry) * time.Millisecond)
 			} else {
-				return nil, fmt.Errorf("could not connect to port of node '%s' because of: %s", remoteAddr, err.Error())
+				return nil, fmt.Errorf("could not connect to port of node %s because of: %v", remoteAddr, err)
 			}
 		}
 	}
@@ -50,14 +50,15 @@ func ReliableSend(conn *tls.Conn, text string, remoteAddr string, tlsConfig *tls
 	//       pipe and after that attempting 'ping' test
 	//       with exponential (?) backoff for write deadline
 	//       up to timeout.
+	// ELSE: Move everything to gRPC.
 
 	// Set configured timeout on waiting for response.
 	conn.SetWriteDeadline(time.Now().Add(time.Duration(timeout) * time.Millisecond))
 
-	// Test long-lived connection.
+	// Test if supplied TLS connection is still active.
 	_, err := conn.Write([]byte("> ping <\r\n"))
 	if err != nil {
-		return fmt.Errorf("sending ping to node '%s' failed with: %s\n", remoteAddr, err.Error())
+		return fmt.Errorf("sending ping to node %s failed with: %v", remoteAddr, err)
 	}
 
 	// Wait for configured time to pass.
@@ -70,9 +71,9 @@ func ReliableSend(conn *tls.Conn, text string, remoteAddr string, tlsConfig *tls
 	_, err = fmt.Fprintf(conn, "%s\r\n", text)
 	for err != nil {
 
-		stdlog.Printf("[comm.ReliableSend] Sending to node '%s' failed, trying to recover...\n", remoteAddr)
+		stdlog.Printf("[comm.ReliableSend] Sending to node %s failed, trying to recover...", remoteAddr)
 
-		// Define an error we can deal with.
+		// Define possible error we can deal with.
 		okError := fmt.Sprintf("write tcp %s->%s: write: broken pipe", conn.LocalAddr().String(), remoteAddr)
 
 		if err.Error() == okError {
@@ -80,15 +81,15 @@ func ReliableSend(conn *tls.Conn, text string, remoteAddr string, tlsConfig *tls
 			// Connection was lost. Reconnect.
 			conn, err = ReliableConnect(remoteAddr, tlsConfig, retry)
 			if err != nil {
-				return fmt.Errorf("could not reestablish connection with '%s': %s", remoteAddr, err.Error())
+				return fmt.Errorf("could not reestablish connection with %s: %v", remoteAddr, err)
 			}
 
-			stdlog.Printf("[comm.ReliableSend] Reconnected to '%s'.\n", remoteAddr)
+			stdlog.Printf("[comm.ReliableSend] Reconnected to %s.", remoteAddr)
 
 			// Resend message.
 			_, err = fmt.Fprintf(conn, "%s\r\n", text)
 		} else {
-			return fmt.Errorf("could not reestablish connection with '%s': %s", remoteAddr, err.Error())
+			return fmt.Errorf("could not reestablish connection with %s: %v", remoteAddr, err)
 		}
 	}
 

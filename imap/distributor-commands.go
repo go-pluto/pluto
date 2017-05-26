@@ -6,8 +6,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-
-	"github.com/numbleroot/pluto/comm"
 )
 
 // Functions
@@ -175,13 +173,12 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 
 	distr.lock.RUnlock()
 
-	// Prepare connection.
-	c.IntlTLSConfig = distr.IntlTLSConfig
-	c.IntlConnRetry = distr.Config.IntlConnRetry
-	c.OutAddr = fmt.Sprintf("%s:%s", workerIP, workerPort)
+	// Prepare address string of storage node for
+	// eventual use.
+	storageAddr := fmt.Sprintf("%s:%s", distr.Config.Storage.PublicIP, distr.Config.Storage.MailPort)
 
 	// Establish TLS connection to worker.
-	conn, err := comm.ReliableConnect(c.OutAddr, distr.IntlTLSConfig, distr.Config.IntlConnRetry)
+	conn, err := InternalConnect(fmt.Sprintf("%s:%s", workerIP, workerPort), distr.IntlTLSConfig, distr.Config.IntlConnRetry, true, storageAddr)
 	if err != nil {
 		c.Error("Internal connection failure", err)
 		return false
@@ -190,11 +187,13 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 	// Save context to connection.
 	c.OutConn = conn
 	c.OutReader = bufio.NewReader(conn)
+	c.IntlTLSConfig = distr.IntlTLSConfig
+	c.IntlConnRetry = distr.Config.IntlConnRetry
 	c.ClientID = clientID
 	c.UserName = userCredentials[0]
 
 	// Inform worker node about which session just started.
-	err = c.SignalSessionStart(false)
+	err = c.SignalSessionStart(false, true, storageAddr)
 	if err != nil {
 		c.Error("Encountered send error when distributor was signalling context to worker", err)
 		return false
@@ -215,7 +214,7 @@ func (distr *Distributor) Login(c *Connection, req *Request) bool {
 func (distr *Distributor) Proxy(c *Connection, rawReq string) bool {
 
 	// Pass message to worker node.
-	err := c.InternalSend(false, rawReq)
+	err := c.InternalSend(false, rawReq, true, fmt.Sprintf("%s:%s", distr.Config.Storage.PublicIP, distr.Config.Storage.MailPort))
 	if err != nil {
 		c.Error("Could not proxy request to worker", err)
 		return false

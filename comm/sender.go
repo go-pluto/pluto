@@ -287,13 +287,13 @@ func (sender *Sender) SendMsgs() {
 					// Connect to node.
 					conn, err := ReliableConnect(nodeAddr, sender.tlsConfig, sender.intlConnRetry)
 					if err != nil {
-						stdlog.Fatalf("[comm.SendMsgs] Failed to connect to '%s': %s\n", nodeAddr, err.Error())
+						stdlog.Fatalf("[comm.SendMsgs] Failed to connect to %s: %v", nodeAddr, err)
 					}
 
 					// Send payload reliably to other nodes.
 					err = ReliableSend(conn, marshalledMsg, nodeAddr, sender.tlsConfig, sender.intlConnTimeout, sender.intlConnRetry)
 					if err != nil {
-						stdlog.Fatalf("[comm.SendMsgs] Failed to send to '%s': %s\n", nodeAddr, err.Error())
+						stdlog.Fatalf("[comm.SendMsgs] Failed to send to %s: %v", nodeAddr, err)
 					}
 				}
 

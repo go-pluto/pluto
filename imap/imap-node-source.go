@@ -59,7 +59,7 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan stri
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command SELECT cannot be executed in this state", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command SELECT cannot be executed in this state", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -72,7 +72,7 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// If no mailbox to select was specified in payload,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -88,7 +88,7 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// If there were more than two names supplied to select,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -115,7 +115,7 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// If specified maildir did not turn out to be a valid one,
 		// this is a client error. Return NO statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -157,7 +157,7 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan stri
 	// TODO: Add other SELECT response elements if needed.
 
 	// Send answer to requesting client.
-	err = c.InternalSend(true, fmt.Sprintf("* %d EXISTS\r\n* %d RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\n%s OK [READ-WRITE] SELECT completed", len(selMailboxContents), recentMails, req.Tag))
+	err = c.InternalSend(true, fmt.Sprintf("* %d EXISTS\r\n* %d RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\n%s OK [READ-WRITE] SELECT completed", len(selMailboxContents), recentMails, req.Tag), false, "")
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -175,7 +175,7 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -191,7 +191,7 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// If payload did not contain exactly one element,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command CREATE was not sent with exactly one parameter", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command CREATE was not sent with exactly one parameter", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -208,7 +208,7 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// If mailbox to-be-created was named INBOX,
 		// this is a client error. Return NO response.
-		err := c.InternalSend(true, fmt.Sprintf("%s NO New mailbox cannot be named INBOX", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s NO New mailbox cannot be named INBOX", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -234,7 +234,7 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// If mailbox to-be-created already exists for user,
 		// this is a client error. Return NO response.
-		err := c.InternalSend(true, fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -308,7 +308,7 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 	}
 
 	// Send success answer.
-	err = c.InternalSend(true, fmt.Sprintf("%s OK CREATE completed", req.Tag))
+	err = c.InternalSend(true, fmt.Sprintf("%s OK CREATE completed", req.Tag), false, "")
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -326,7 +326,7 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command DELETE cannot be executed in this state", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command DELETE cannot be executed in this state", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -342,7 +342,7 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// If payload did not contain exactly one element,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command DELETE was not sent with exactly one parameter", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command DELETE was not sent with exactly one parameter", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -359,7 +359,7 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// If mailbox to-be-deleted was named INBOX,
 		// this is a client error. Return NO response.
-		err := c.InternalSend(true, fmt.Sprintf("%s NO Forbidden to delete INBOX", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s NO Forbidden to delete INBOX", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -396,7 +396,7 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 		if err.Error() == "element to be removed not found in set" {
 
 			// If so, return a NO response.
-			err := c.InternalSend(true, fmt.Sprintf("%s NO Cannot delete folder that does not exist", req.Tag))
+			err := c.InternalSend(true, fmt.Sprintf("%s NO Cannot delete folder that does not exist", req.Tag), false, "")
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return false
@@ -435,7 +435,7 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 	}
 
 	// Send success answer.
-	err = c.InternalSend(true, fmt.Sprintf("%s OK DELETE completed", req.Tag))
+	err = c.InternalSend(true, fmt.Sprintf("%s OK DELETE completed", req.Tag), false, "")
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -453,7 +453,7 @@ func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan string
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command LIST cannot be executed in this state", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command LIST cannot be executed in this state", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -469,7 +469,7 @@ func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan string
 
 		// If payload did not contain between exactly two elements,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command LIST was not sent with exactly two arguments", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command LIST was not sent with exactly two arguments", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -482,7 +482,7 @@ func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan string
 
 		// If second argument is not one of two wildcards,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command LIST needs either '%%' or '*' as mailbox name", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command LIST needs either '%%' or '*' as mailbox name", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -523,7 +523,7 @@ func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan string
 	// Send out LIST response lines.
 	for _, listAnswerLine := range listAnswerLines {
 
-		err := c.InternalSend(true, listAnswerLine)
+		err := c.InternalSend(true, listAnswerLine, false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -531,7 +531,7 @@ func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan string
 	}
 
 	// Send success answer.
-	err := c.InternalSend(true, fmt.Sprintf("%s OK LIST completed", req.Tag))
+	err := c.InternalSend(true, fmt.Sprintf("%s OK LIST completed", req.Tag), false, "")
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -553,7 +553,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -571,7 +571,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 		// If payload did not contain between two and four
 		// elements, this is a client error.
 		// Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND was not sent with appropriate number of parameters", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND was not sent with appropriate number of parameters", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -612,7 +612,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 
 			// Parsing flags from APPEND request produced
 			// an error. Return tagged BAD response.
-			err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
+			err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), false, "")
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return false
@@ -639,7 +639,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// If we were not able to parse out the number,
 		// it was probably a client error. Send tagged BAD.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND did not contain proper literal data byte number", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND did not contain proper literal data byte number", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -669,7 +669,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 
 		// If mailbox to append message to does not exist,
 		// this is a client error. Return NO response.
-		err := c.InternalSend(true, fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -679,7 +679,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 	}
 
 	// Send command continuation to client.
-	err = c.InternalSend(true, "+ Ready for literal data")
+	err = c.InternalSend(true, "+ Ready for literal data", false, "")
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -768,7 +768,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 	}
 
 	// Send success answer.
-	err = c.InternalSend(true, fmt.Sprintf("%s OK APPEND completed", req.Tag))
+	err = c.InternalSend(true, fmt.Sprintf("%s OK APPEND completed", req.Tag), false, "")
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -787,7 +787,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan str
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD No mailbox selected to expunge", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD No mailbox selected to expunge", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -800,7 +800,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan str
 
 		// If payload was not empty to EXPUNGE command,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command EXPUNGE was sent with extra parameters", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command EXPUNGE was sent with extra parameters", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -900,7 +900,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan str
 		// Send out FETCH part with new flags.
 		for _, expAnswerLine := range expAnswerLines {
 
-			err := c.InternalSend(true, expAnswerLine)
+			err := c.InternalSend(true, expAnswerLine, false, "")
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return false
@@ -909,7 +909,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan str
 	}
 
 	// Send success answer.
-	err := c.InternalSend(true, fmt.Sprintf("%s OK EXPUNGE completed", req.Tag))
+	err := c.InternalSend(true, fmt.Sprintf("%s OK EXPUNGE completed", req.Tag), false, "")
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
@@ -932,7 +932,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD No mailbox selected for store", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD No mailbox selected for store", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -949,7 +949,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		// If payload did not contain at least three
 		// elements, this is a client error.
 		// Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command STORE was not sent with three parameters", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command STORE was not sent with three parameters", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -968,7 +968,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		// If supplied data item type is none of the
 		// supported ones, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Unknown data item type specified", req.Tag))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD Unknown data item type specified", req.Tag), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -989,7 +989,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 
 		// Parsing flags from STORE request produced
 		// an error. Return tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			return false
@@ -1026,7 +1026,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 
 		// Parsing sequence numbers from STORE request produced
 		// an error. Return tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()))
+		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
 			node.lock.Unlock()
@@ -1245,7 +1245,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 		// Send out FETCH part with new flags.
 		for _, answerLine := range answerLines {
 
-			err = c.InternalSend(true, answerLine)
+			err = c.InternalSend(true, answerLine, false, "")
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return false
@@ -1254,7 +1254,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 	}
 
 	// Send success answer.
-	err = c.InternalSend(true, fmt.Sprintf("%s OK STORE completed", req.Tag))
+	err = c.InternalSend(true, fmt.Sprintf("%s OK STORE completed", req.Tag), false, "")
 	if err != nil {
 		c.Error("Encountered send error", err)
 		return false
