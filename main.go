@@ -23,7 +23,7 @@ import (
 
 // initAuthenticator of the correct implementation specified in the config
 // to be used in the imap.Distributor.
-func initAuthenticator(config *config.Config) (imap.PlainAuthenticator, error) {
+func initAuthenticator(config *config.Config) (distributor.Authenticator, error) {
 
 	switch config.Distributor.AuthAdapter {
 	case "AuthPostgres":
@@ -143,38 +143,13 @@ func main() {
 		}
 		defer conn.Close()
 
-		ds := distributor.NewService(authenticator, intConnectioner)
+		ds := distributor.NewService(authenticator, intConnectioner, conf.Workers)
 
 		if err := ds.Run(conn, conf.IMAP.Greeting); err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to run distributor",
 				"err", err,
 			)
-		}
-
-		//
-		// TODO: Delete the old code beneath
-		//
-		return
-
-		// Initialize distributor.
-		distr, err := imap.InitDistributor(logger, conf, authenticator)
-		if err != nil {
-			level.Error(logger).Log(
-				"msg", "failed to initialize imap distributor",
-				"err", err,
-			)
-			os.Exit(3)
-		}
-		defer distr.Socket.Close()
-
-		// Loop on incoming requests.
-		if err = distr.Run(); err != nil {
-			level.Error(logger).Log(
-				"msg", "failed to initialize imap distributor",
-				"err", err,
-			)
-			os.Exit(4)
 		}
 	} else if *workerFlag != "" {
 

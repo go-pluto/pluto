@@ -68,12 +68,14 @@ type Service interface {
 type service struct {
 	authenticator      Authenticator
 	internalConnection InternalConnection
+	workers            map[string]config.Worker
 }
 
-func NewService(authenticator Authenticator, internalConnection InternalConnection) Service {
+func NewService(authenticator Authenticator, internalConnection InternalConnection, workers map[string]config.Worker) Service {
 	return &service{
 		authenticator:      authenticator,
 		internalConnection: internalConnection,
+		workers:            workers,
 	}
 }
 
@@ -297,7 +299,7 @@ func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
 		return true
 	}
 
-	_, clientID, err := s.authenticator.AuthenticatePlain(userCredentials[0], userCredentials[1], c.IncConn.RemoteAddr().String())
+	id, clientID, err := s.authenticator.AuthenticatePlain(userCredentials[0], userCredentials[1], c.IncConn.RemoteAddr().String())
 	if err != nil {
 
 		// If supplied credentials failed to authenticate client,
@@ -311,36 +313,27 @@ func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
 		return true
 	}
 
-	//// Find worker node responsible for this connection.
-	//respWorker, err := s.authenticator.GetWorkerForUser(s.Config.Workers, id)
-	//if err != nil {
-	//	c.Error("Authentication error", err)
-	//	return false
-	//}
-	//
-	//s.lock.RLock()
-	//
-	//// Store worker connection information.
-	//workerIP := distr.Config.Workers[respWorker].PublicIP
-	//workerPort := distr.Config.Workers[respWorker].MailPort
-	//
-	//s.lock.RUnlock()
-	//
-	//// Prepare connection.
-	//c.IntlTLSConfig = distr.IntlTLSConfig
-	//c.IntlConnRetry = distr.Config.IntlConnRetry
-	//c.OutAddr = fmt.Sprintf("%s:%s", workerIP, workerPort)
-	//
-	//// Establish TLS connection to worker.
-	//conn, err := comm.ReliableConnect(c.OutAddr, distr.IntlTLSConfig, distr.Config.IntlConnRetry)
-	//if err != nil {
-	//	c.Error("Internal connection failure", err)
-	//	return false
-	//}
-	//
-	//// Save context to connection.
-	//c.OutConn = conn
-	//c.OutReader = bufio.NewReader(conn)
+	// Find worker node responsible for this connection.
+	respWorker, err := s.authenticator.GetWorkerForUser(s.workers, id)
+	if err != nil {
+		c.Error("Authentication error", err)
+		return false
+	}
+
+	// Store worker connection information.
+	workerIP := s.workers[respWorker].PublicIP
+	workerPort := s.workers[respWorker].MailPort
+
+	c.OutAddr = fmt.Sprintf("%s:%s", workerIP, workerPort)
+	conn, err := s.internalConnection.ReliableConnect(c.OutAddr)
+	if err != nil {
+		c.Error("Internal connection failure", err)
+		return false
+	}
+
+	// Save context to connection.
+	c.OutConn = conn
+	c.OutReader = bufio.NewReader(conn)
 	c.ClientID = clientID
 	c.UserName = userCredentials[0]
 
