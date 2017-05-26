@@ -91,7 +91,6 @@ func main() {
 	configFlag := flag.String("config", "config.toml", "Provide path to configuration file in TOML syntax.")
 	distributorFlag := flag.Bool("distributor", false, "Append this flag to indicate that this process should take the role of the distributor.")
 	workerFlag := flag.String("worker", "", "If this process is intended to run as one of the IMAP worker nodes, specify which of the ones defined in your config file this should be.")
-	failoverFlag := flag.Bool("failover", false, "Add this flag to a worker node in order to operate this node as a passthrough-failover node for specified crashed worker node.")
 	storageFlag := flag.Bool("storage", false, "Append this flag to indicate that this process should take the role of the storage node.")
 	loglevelFlag := flag.String("loglevel", "debug", "This flag sets the default logging level.")
 	flag.Parse()
@@ -153,51 +152,26 @@ func main() {
 		}
 	} else if *workerFlag != "" {
 
-		if *failoverFlag {
+		// Initialize a worker.
+		worker, err := imap.InitWorker(logger, conf, *workerFlag)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to initialize imap worker",
+				"err", err,
+			)
+			os.Exit(5)
+		}
+		defer worker.MailSocket.Close()
+		defer worker.SyncSocket.Close()
 
-			// Initialize a failover worker node.
-			failWorker, err := imap.InitFailoverWorker(conf, *workerFlag)
-			if err != nil {
-				level.Error(logger).Log(
-					"msg", "failed to initialize failover imap worker",
-					"err", err,
-				)
-				os.Exit(5)
-			}
-			defer failWorker.MailSocket.Close()
-
-			// Loop on incoming requests to pass on.
-			err = failWorker.RunFailover()
-			if err != nil {
-				level.Error(logger).Log(
-					"msg", "failed to start the initialized failover worker node",
-					"err", err,
-				)
-				os.Exit(6)
-			}
-		} else {
-
-			// Initialize a normally operating worker.
-			worker, err := imap.InitWorker(logger, conf, *workerFlag)
-			if err != nil {
-				level.Error(logger).Log(
-					"msg", "failed to initialize imap worker",
-					"err", err,
-				)
-				os.Exit(7)
-			}
-			defer worker.MailSocket.Close()
-			defer worker.SyncSocket.Close()
-
-			// Loop on incoming requests.
-			err = worker.Run()
-			if err != nil {
-				level.Error(logger).Log(
-					"msg", "failed to start the initialized worker node",
-					"err", err,
-				)
-				os.Exit(8)
-			}
+		// Loop on incoming requests.
+		err = worker.Run()
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to start the initialized worker node",
+				"err", err,
+			)
+			os.Exit(6)
 		}
 	} else if *storageFlag {
 
@@ -208,7 +182,7 @@ func main() {
 				"msg", "failed to initialize imap storage node",
 				"err", err,
 			)
-			os.Exit(9)
+			os.Exit(7)
 		}
 		defer storage.MailSocket.Close()
 		defer storage.SyncSocket.Close()
@@ -220,12 +194,12 @@ func main() {
 				"msg", "failed to start the initialized storage node",
 				"err", err,
 			)
-			os.Exit(10)
+			os.Exit(8)
 		}
 	} else {
 		// If no flags were specified, print usage
 		// and return with failure value.
 		flag.Usage()
-		os.Exit(11)
+		os.Exit(9)
 	}
 }

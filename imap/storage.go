@@ -232,7 +232,7 @@ func (storage *Storage) HandleConnection(conn net.Conn) {
 		if err != nil {
 
 			// Signal error to client.
-			err := c.InternalSend(true, err.Error())
+			err := c.InternalSend(true, err.Error(), false, "")
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return
@@ -256,7 +256,7 @@ func (storage *Storage) HandleConnection(conn net.Conn) {
 
 		storage.lock.RUnlock()
 
-		stdlog.Printf("[imap.HandleConnection] Storage: working on failover request from %s: '%s'\n", origWorker, rawReq)
+		stdlog.Printf("[imap.HandleConnection] Storage: working on failover request for %s: %s", origWorker, rawReq)
 
 		switch {
 
@@ -339,7 +339,7 @@ func (storage *Storage) HandleConnection(conn net.Conn) {
 
 		default:
 			// Client sent inappropriate command. Signal tagged error.
-			err := c.InternalSend(true, fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
+			err := c.InternalSend(true, fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag), false, "")
 			if err != nil {
 				c.Error("Encountered send error", err)
 				return

@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 
 	// Give background synchronization enough
 	// time to finish communication.
-	time.Sleep(15 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	// Tear down test setup.
 	TearDownNormalSetup(testEnv)
@@ -61,7 +61,7 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			// Wait for shutdown signal on channel.
 			<-testEnv.DownStorage
 
-			stdlog.Printf("[utils.RunAllNodes] Closing storage socket.\n")
+			stdlog.Printf("[utils.RunAllNodes] Closing storage socket")
 
 			// Shut down storage node.
 			storage.MailSocket.Close()
@@ -91,7 +91,7 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			// Wait for shutdown signal on channel.
 			<-testEnv.DownWorker
 
-			stdlog.Printf("[utils.RunAllNodes] Closing '%s' socket.\n", workerName)
+			stdlog.Printf("[utils.RunAllNodes] Closing %s socket", workerName)
 
 			// Shut down worker node.
 			worker.MailSocket.Close()
@@ -138,7 +138,7 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			// Wait for shutdown signal on channel.
 			<-testEnv.DownDistr
 
-			stdlog.Printf("[utils.RunAllNodes] Closing distributor socket.\n")
+			stdlog.Printf("[utils.RunAllNodes] Closing distributor socket")
 
 			// Signal back successful shutdown.
 			testEnv.DoneDistr <- struct{}{}

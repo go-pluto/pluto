@@ -2,14 +2,13 @@ package distributor
 
 import (
 	"bufio"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"strconv"
 	"strings"
-
-	"crypto/tls"
 
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/imap"
@@ -21,7 +20,6 @@ import (
 // perform an IMAP AUTH=PLAIN authentication in order
 // to reach authenticated state (also LOGIN).
 type Authenticator interface {
-
 	// GetWorkerForUser allows us to route an IMAP request to the
 	// worker node responsible for a specific user.
 	GetWorkerForUser(workers map[string]config.Worker, id int) (string, error)
@@ -324,8 +322,9 @@ func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
 	workerIP := s.workers[respWorker].PublicIP
 	workerPort := s.workers[respWorker].MailPort
 
-	c.OutAddr = fmt.Sprintf("%s:%s", workerIP, workerPort)
-	conn, err := s.internalConnection.ReliableConnect(c.OutAddr)
+	outAddr := fmt.Sprintf("%s:%s", workerIP, workerPort)
+	conn, err := s.internalConnection.ReliableConnect(outAddr)
+
 	if err != nil {
 		c.Error("Internal connection failure", err)
 		return false
@@ -338,7 +337,8 @@ func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
 	c.UserName = userCredentials[0]
 
 	// Inform worker node about which session just started.
-	err = c.SignalSessionStart(false)
+	storageAddr := "" // TODO, this needs to be an actual address
+	err = c.SignalSessionStart(false, true, storageAddr)
 	if err != nil {
 		c.Error("Encountered send error when distributor was signalling context to worker", err)
 		return false
@@ -382,12 +382,13 @@ func (s *service) StartTLS(c *imap.Connection, req *imap.Request) bool {
 
 func (s *service) Proxy(c *imap.Connection, rawReq string) bool {
 
+	// TODO
 	// Pass message to worker node.
-	err := c.InternalSend(false, rawReq)
-	if err != nil {
-		c.Error("Could not proxy request to worker", err)
-		return false
-	}
+	//err := c.InternalSend(false, rawReq, true, fmt.Sprintf("%s:%s", distr.Config.Storage.PublicIP, distr.Config.Storage.MailPort))
+	//if err != nil {
+	//	c.Error("Could not proxy request to worker", err)
+	//	return false
+	//}
 
 	// Reserve space for answer buffer.
 	bufResp := make([]string, 0, 6)
