@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/log"
+	"github.com/numbleroot/pluto/distributor"
 	"github.com/numbleroot/pluto/imap"
 	"github.com/numbleroot/pluto/utils"
 )
 
 // Functions
 
-// TestMain executes initilization and teardown
+// TestMain executes initialization and teardown
 // code needed for all tests in package main.
 func TestMain(m *testing.M) {
 
@@ -114,11 +115,23 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			stdlog.Fatal(err)
 		}
 
-		// Initialize distributor node.
-		distr, err := imap.InitDistributor(log.NewNopLogger(), testEnv.Config, authenticator)
+		intConnectioner, err := NewInternalConnection(
+			testEnv.Config.Distributor.InternalTLS.CertLoc,
+			testEnv.Config.Distributor.InternalTLS.KeyLoc,
+			testEnv.Config.RootCertLoc,
+			testEnv.Config.IntlConnRetry,
+		)
 		if err != nil {
 			stdlog.Fatal(err)
 		}
+
+		conn, err := publicDistributorConn(testEnv.Config.Distributor)
+		if err != nil {
+			stdlog.Fatal(err)
+		}
+		defer conn.Close()
+
+		distr := distributor.NewService(authenticator, intConnectioner, testEnv.Config.Workers)
 
 		go func() {
 
@@ -127,15 +140,12 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
 			stdlog.Printf("[utils.RunAllNodes] Closing distributor socket.\n")
 
-			// Shut down distributor node.
-			distr.Socket.Close()
-
 			// Signal back successful shutdown.
 			testEnv.DoneDistr <- struct{}{}
 		}()
 
 		// Run the distributor node.
-		_ = distr.Run()
+		_ = distr.Run(conn, testEnv.Config.IMAP.Greeting)
 	}()
 
 	// Wait shortly for worker node to have started.
