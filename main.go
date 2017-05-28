@@ -17,6 +17,7 @@ import (
 	"github.com/numbleroot/pluto/crypto"
 	"github.com/numbleroot/pluto/distributor"
 	"github.com/numbleroot/pluto/imap"
+	"github.com/numbleroot/pluto/worker"
 )
 
 // Functions
@@ -151,6 +152,35 @@ func main() {
 			)
 		}
 	} else if *workerFlag != "" {
+
+		// Check if supplied worker with workerName actually is configured.
+		workerConfig, ok := conf.Workers[*workerFlag]
+		if !ok {
+
+			var workerID string
+
+			// Retrieve first valid worker ID to provide feedback.
+			for workerID = range conf.Workers {
+				break
+			}
+
+			fmt.Errorf("[imap.InitWorker] Specified worker ID does not exist in config file. Please provide a valid one, for example '%s'", workerID)
+			os.Exit(1)
+		}
+
+		var ws worker.Service
+		ws = worker.NewService(intConnectioner, workerConfig, *workerFlag)
+		ws = worker.NewLoggingService(logger, ws)
+
+		if err := ws.Run(); err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to run worker",
+				"err", err,
+			)
+		}
+
+		return
+		// TODO: Remove obsolete code below
 
 		// Initialize a worker.
 		worker, err := imap.InitWorker(logger, conf, *workerFlag)
