@@ -107,6 +107,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	intConnectioner, err := NewInternalConnection(
+		conf.Distributor.InternalTLS.CertLoc,
+		conf.Distributor.InternalTLS.KeyLoc,
+		conf.RootCertLoc,
+		conf.IntlConnRetry,
+	)
+	if err != nil {
+		level.Error(logger).Log(
+			"msg", "failed to initialize internal connectioner",
+			"err", err,
+		)
+	}
+
 	// Initialize and run a node of the pluto
 	// system based on passed command line flag.
 	if *distributorFlag {
@@ -118,19 +131,6 @@ func main() {
 				"err", err,
 			)
 			os.Exit(2)
-		}
-
-		intConnectioner, err := NewInternalConnection(
-			conf.Distributor.InternalTLS.CertLoc,
-			conf.Distributor.InternalTLS.KeyLoc,
-			conf.RootCertLoc,
-			conf.IntlConnRetry,
-		)
-		if err != nil {
-			level.Error(logger).Log(
-				"msg", "failed to initialize internal connectioner",
-				"err", err,
-			)
 		}
 
 		conn, err := publicDistributorConn(conf.Distributor)
