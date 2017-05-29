@@ -20,6 +20,7 @@ import (
 // perform an IMAP AUTH=PLAIN authentication in order
 // to reach authenticated state (also LOGIN).
 type Authenticator interface {
+
 	// GetWorkerForUser allows us to route an IMAP request to the
 	// worker node responsible for a specific user.
 	GetWorkerForUser(workers map[string]config.Worker, id int) (string, error)
@@ -36,6 +37,7 @@ type InternalConnection interface {
 }
 
 type Service interface {
+
 	// Run loops over incoming requests at distributor and
 	// dispatches each one to a goroutine taking care of
 	// the commands supplied.

@@ -20,6 +20,7 @@ type InternalConnection interface {
 }
 
 type Service interface {
+
 	// Run loops over incoming requests at worker and
 	// dispatches each one to a goroutine taking care of
 	// the commands supplied.
@@ -67,6 +68,7 @@ type service struct {
 }
 
 func NewService(internalConnection InternalConnection, config config.Worker, name string) Service {
+
 	s := &service{
 		imapNode: &imap.IMAPNode{
 			//lock:             new(sync.RWMutex), // TODO: should work without
@@ -216,7 +218,6 @@ func (s *service) Run() error {
 		// Dispatch into own goroutine.
 		go s.HandleConnection(conn)
 	}
-
 }
 
 func (s *service) HandleConnection(conn net.Conn) error {

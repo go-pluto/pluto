@@ -18,10 +18,11 @@ func NewLoggingService(logger log.Logger, s Service) Service {
 }
 
 func (s *loggingService) Run() error {
+
 	err := s.Service.Run()
 
 	level.Warn(s.logger).Log(
-		"msg", "failed to run the service",
+		"msg", "failed to run worker service",
 		"err", err,
 	)
 
@@ -29,6 +30,7 @@ func (s *loggingService) Run() error {
 }
 
 func (s *loggingService) HandleConnection(conn net.Conn) error {
+
 	err := s.Service.HandleConnection(conn)
 
 	level.Info(s.logger).Log(
@@ -40,16 +42,17 @@ func (s *loggingService) HandleConnection(conn net.Conn) error {
 }
 
 func (s *loggingService) Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+
 	ok := s.Service.Select(c, req, syncChan)
 
 	logger := log.With(s.logger,
-		"method", "Select",
+		"method", "SELECT",
 		"command", req.Command,
 		"payload", req.Payload,
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to select successfully")
+		level.Info(logger).Log("msg", "failed to perform operation SELECT correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
@@ -58,16 +61,17 @@ func (s *loggingService) Select(c *imap.IMAPConnection, req *imap.Request, syncC
 }
 
 func (s *loggingService) Create(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+
 	ok := s.Service.Create(c, req, syncChan)
 
 	logger := log.With(s.logger,
-		"method", "Create",
+		"method", "CREATE",
 		"command", req.Command,
 		"payload", req.Payload,
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to create successfully")
+		level.Info(logger).Log("msg", "failed to perform operation CREATE correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
@@ -76,16 +80,17 @@ func (s *loggingService) Create(c *imap.IMAPConnection, req *imap.Request, syncC
 }
 
 func (s *loggingService) Delete(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+
 	ok := s.Service.Delete(c, req, syncChan)
 
 	logger := log.With(s.logger,
-		"method", "Delete",
+		"method", "DELETE",
 		"command", req.Command,
 		"payload", req.Payload,
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to delete successfully")
+		level.Info(logger).Log("msg", "failed to perform operation DELETE correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
@@ -94,16 +99,17 @@ func (s *loggingService) Delete(c *imap.IMAPConnection, req *imap.Request, syncC
 }
 
 func (s *loggingService) List(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+
 	ok := s.Service.List(c, req, syncChan)
 
 	logger := log.With(s.logger,
-		"method", "List",
+		"method", "LIST",
 		"command", req.Command,
 		"payload", req.Payload,
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to list successfully")
+		level.Info(logger).Log("msg", "failed to perform operation LIST correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
@@ -112,16 +118,17 @@ func (s *loggingService) List(c *imap.IMAPConnection, req *imap.Request, syncCha
 }
 
 func (s *loggingService) Append(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+
 	ok := s.Service.Append(c, req, syncChan)
 
 	logger := log.With(s.logger,
-		"method", "Append",
+		"method", "APPEND",
 		"command", req.Command,
 		"payload", req.Payload,
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to append successfully")
+		level.Info(logger).Log("msg", "failed to perform operation APPEND correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
@@ -130,16 +137,17 @@ func (s *loggingService) Append(c *imap.IMAPConnection, req *imap.Request, syncC
 }
 
 func (s *loggingService) Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+
 	ok := s.Service.Expunge(c, req, syncChan)
 
 	logger := log.With(s.logger,
-		"method", "Expunge",
+		"method", "EXPUNGE",
 		"command", req.Command,
 		"payload", req.Payload,
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to expunge successfully")
+		level.Info(logger).Log("msg", "failed to perform operation EXPUNGE correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
@@ -148,16 +156,17 @@ func (s *loggingService) Expunge(c *imap.IMAPConnection, req *imap.Request, sync
 }
 
 func (s *loggingService) Store(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+
 	ok := s.Service.Store(c, req, syncChan)
 
 	logger := log.With(s.logger,
-		"method", "Store",
+		"method", "STORE",
 		"command", req.Command,
 		"payload", req.Payload,
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to store successfully")
+		level.Info(logger).Log("msg", "failed to perform operation STORE correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
