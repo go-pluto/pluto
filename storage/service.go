@@ -1,4 +1,4 @@
-package worker
+package storage
 
 import (
 	"bufio"
@@ -20,54 +20,50 @@ type InternalConnection interface {
 }
 
 type Service interface {
-
-	// Run loops over incoming requests at worker and
+	// Run loops over incoming requests at storage and
 	// dispatches each one to a goroutine taking care of
 	// the commands supplied.
 	Run() error
 
-	// HandleConnection is the main worker routine where all
-	// incoming requests against worker nodes have to go through.
+	// HandleConnection is the main storage routine where all
+	// incoming requests against this storage node have to go through.
 	HandleConnection(conn net.Conn) error
 
 	// TODO: Maybe make the following an interface on its own.
 
 	// Select sets the current mailbox based on supplied payload to user-instructed value.
-	Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	Select(*imap.IMAPConnection, *imap.Request, chan string) bool
 
 	// Create attempts to create a mailbox with name taken from payload of request.
-	Create(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	Create(*imap.IMAPConnection, *imap.Request, chan string) bool
 
 	// Delete an existing mailbox with all included content.
-	Delete(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	Delete(*imap.IMAPConnection, *imap.Request, chan string) bool
 
 	// List allows clients to learn about the mailboxes
 	// available and also returns the hierarchy delimiter.
-	List(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	List(*imap.IMAPConnection, *imap.Request, chan string) bool
 
 	// Append puts supplied message into specified mailbox.
-	Append(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	Append(*imap.IMAPConnection, *imap.Request, chan string) bool
 
 	// Expunge deletes messages permanently from currently
 	// selected mailbox that have been flagged as Deleted
 	// prior to calling this function.
-	Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	Expunge(*imap.IMAPConnection, *imap.Request, chan string) bool
 
 	// Store takes in message sequence numbers and some set
 	// of flags to change in those messages and changes the
 	// attributes for these mails throughout the system.
-	Store(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	Store(*imap.IMAPConnection, *imap.Request, chan string) bool
 }
 
 type service struct {
-	imapNode           *imap.IMAPNode
-	Name               string
-	SyncSendChan       chan string
-	internalConnection InternalConnection
-	config             config.Worker
+	imapNode      *imap.IMAPNode
+	SyncSendChans map[string]chan string
 }
 
-func NewService(internalConnection InternalConnection, config config.Worker, name string) Service {
+func NewService(internalConnection InternalConnection, config config.Storage, workers map[string]config.Worker) Service {
 
 	s := &service{
 		imapNode: &imap.IMAPNode{
@@ -75,11 +71,11 @@ func NewService(internalConnection InternalConnection, config config.Worker, nam
 			Connections:      make(map[string]*tls.Conn),
 			MailboxStructure: make(map[string]map[string]*crdt.ORSet),
 			MailboxContents:  make(map[string]map[string][]string),
+			CRDTLayerRoot:    config.CRDTLayerRoot,
+			MaildirRoot:      config.MaildirRoot,
+			//Config:           config,
 		},
-		Name:               name,
-		SyncSendChan:       make(chan string),
-		internalConnection: internalConnection,
-		config:             config,
+		SyncSendChans: make(map[string]chan string),
 	}
 
 	// TODO: Probably better to move initializing into its own method, so we can check errors.
@@ -88,74 +84,74 @@ func NewService(internalConnection InternalConnection, config config.Worker, nam
 		return nil
 	}
 
-	// Set correct paths.
-	s.imapNode.CRDTLayerRoot = config.CRDTLayerRoot
-	s.imapNode.MaildirRoot = config.MaildirRoot
-
 	// TODO: Move this out and inject from the outside
 	//// Load internal TLS config.
-	//internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Workers[worker.Name].TLS.CertLoc, config.Workers[worker.Name].TLS.KeyLoc, config.RootCertLoc)
+	//internalTLSConfig, err := crypto.NewInternalTLSConfig(config.TLS.CertLoc, config.TLS.KeyLoc, config.RootCertLoc)
 	//if err != nil {
 	//	return nil, err
 	//}
 	//
 	//// Start to listen for incoming internal connections on defined IP and sync port.
-	//worker.SyncSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].ListenIP, config.Workers[worker.Name].SyncPort), internalTLSConfig)
+	//storage.SyncSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.ListenIP, config.SyncPort), internalTLSConfig)
 	//if err != nil {
-	//	return nil, fmt.Errorf("[imap.InitWorker] Listening for internal sync TLS connections failed with: %v", err)
+	//	return nil, fmt.Errorf("[imap.InitStorage] Listening for internal sync TLS connections failed with: %v", err)
 	//}
 	//
-	//stdlog.Printf("[imap.InitWorker] Listening for incoming sync requests on %s.\n", worker.SyncSocket.Addr())
+	//stdlog.Printf("[imap.InitStorage] Listening for incoming sync requests on %s.\n", config.SyncSocket.Addr())
 	//
 	//// Start to listen for incoming internal connections on defined IP and mail port.
-	//worker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].ListenIP, config.Workers[worker.Name].MailPort), internalTLSConfig)
+	//storage.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.ListenIP, config.MailPort), internalTLSConfig)
 	//if err != nil {
-	//	return nil, fmt.Errorf("[imap.InitWorker] Listening for internal IMAP TLS connections failed with: %v", err)
+	//	return nil, fmt.Errorf("[imap.InitStorage] Listening for internal IMAP TLS connections failed with: %v", err)
 	//}
 	//
-	//stdlog.Printf("[imap.InitWorker] Listening for incoming IMAP requests on %s.\n", worker.MailSocket.Addr())
+	//stdlog.Printf("[imap.InitStorage] Listening for incoming IMAP requests on %s.\n", storage.MailSocket.Addr())
 
-	// Initialize channels for this node.
-	applyCRDTUpdChan := make(chan string)
-	doneCRDTUpdChan := make(chan struct{})
-	//downRecv := make(chan struct{})
-	//downSender := make(chan struct{})
+	for workerName, workerNode := range workers {
 
-	// TODO: Probably inject as dependency from the outside too
-	//// Construct path to receiving and sending CRDT logs for storage node.
-	//recvCRDTLog := filepath.Join(s.imapNode.CRDTLayerRoot, "receiving.log")
-	//sendCRDTLog := filepath.Join(s.imapNode.CRDTLayerRoot, "sending.log")
-	//vclockLog := filepath.Join(s.imapNode.CRDTLayerRoot, "vclock.log")
-	//
-	//// Initialize receiving goroutine for sync operations.
-	//chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(s.Name, recvCRDTLog, vclockLog, s.SyncSocket, applyCRDTUpdChan, doneCRDTUpdChan, downRecv, []string{"storage"})
-	//if err != nil {
-	//	return nil
-	//}
-	//
-	//// Create subnet to distribute CRDT changes in.
-	//curCRDTSubnet := make(map[string]string)
-	//curCRDTSubnet["storage"] = fmt.Sprintf("%s:%s", config.Storage.PublicIP, config.Storage.SyncPort)
-	//
-	//// Init sending part of CRDT communication and send messages in background.
-	//s.SyncSendChan, err = comm.InitSender(s.Name, sendCRDTLog, internalTLSConfig, config.IntlConnTimeout, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
-	//if err != nil {
-	//	return nil
-	//}
+		// Initialize channels for this node.
+		applyCRDTUpdChan := make(chan string)
+		doneCRDTUpdChan := make(chan struct{})
+		//downRecv := make(chan struct{})
+		//downSender := make(chan struct{})
 
-	// Apply received CRDT messages in background.
-	go s.imapNode.ApplyCRDTUpd(applyCRDTUpdChan, doneCRDTUpdChan)
+		//// Construct path to receiving and sending CRDT logs for
+		//// current worker node.
+		//recvCRDTLog := filepath.Join(s.imapNode.CRDTLayerRoot, fmt.Sprintf("receiving-%s.log", workerName))
+		//sendCRDTLog := filepath.Join(s.imapNode.CRDTLayerRoot, fmt.Sprintf("sending-%s.log", workerName))
+		//vclockLog := filepath.Join(s.imapNode.CRDTLayerRoot, fmt.Sprintf("vclock-%s.log", workerName))
+
+		//// Initialize a receiving goroutine for sync operations
+		//// for each worker node.
+		//chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver("storage", recvCRDTLog, vclockLog, s.imapNode.SyncSocket, applyCRDTUpdChan, doneCRDTUpdChan, downRecv, []string{workerName})
+		//if err != nil {
+		//	return err
+		//}
+
+		// Create subnet to distribute CRDT changes in.
+		curCRDTSubnet := make(map[string]string)
+		curCRDTSubnet[workerName] = fmt.Sprintf("%s:%s", workerNode.PublicIP, workerNode.SyncPort)
+
+		// TODO: Use injected connection
+		//// Init sending part of CRDT communication and send messages in background.
+		//s.SyncSendChans[workerName], err = comm.InitSender("storage", sendCRDTLog, internalTLSConfig, config.IntlConnTimeout, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
+		//if err != nil {
+		//	return nil, err
+		//}
+
+		// Apply received CRDT messages in background.
+		go s.imapNode.ApplyCRDTUpd(applyCRDTUpdChan, doneCRDTUpdChan)
+	}
 
 	return s
 }
 
-// findFiles below this node's CRDT root layer.
 func (s *service) findFiles() error {
 
 	// Find all files below this node's CRDT root layer.
 	userFolders, err := filepath.Glob(filepath.Join(s.imapNode.CRDTLayerRoot, "*"))
 	if err != nil {
-		return fmt.Errorf("[imap.InitWorker] Globbing for CRDT folders of users failed with: %v", err)
+		return fmt.Errorf("[imap.InitStorage] Globbing for CRDT folders of users failed with: %v", err)
 	}
 
 	for _, folder := range userFolders {
@@ -163,7 +159,7 @@ func (s *service) findFiles() error {
 		// Retrieve information about accessed file.
 		folderInfo, err := os.Stat(folder)
 		if err != nil {
-			return fmt.Errorf("[imap.InitWorker] Error during stat'ing possible user CRDT folder: %v", err)
+			return fmt.Errorf("[imap.InitStorage] Error during stat'ing possible user CRDT folder: %v", err)
 		}
 
 		// Only consider folders for building up CRDT map.
@@ -175,7 +171,7 @@ func (s *service) findFiles() error {
 			// Read in mailbox structure CRDT from file.
 			userMainCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, "mailbox-structure.log"))
 			if err != nil {
-				return fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %v", err)
+				return fmt.Errorf("[imap.InitStorage] Reading CRDT failed: %v", err)
 			}
 
 			// Store main CRDT in designated map for user name.
@@ -194,7 +190,7 @@ func (s *service) findFiles() error {
 				// Read in each mailbox CRDT from file.
 				userMailboxCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, fmt.Sprintf("%s.log", userMailbox)))
 				if err != nil {
-					return fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %v", err)
+					return fmt.Errorf("[imap.InitStorage] Reading CRDT failed: %v", err)
 				}
 
 				// Store each read-in CRDT in map under the respective
@@ -218,7 +214,7 @@ func (s *service) Run() error {
 		// Accept request or fail on error.
 		conn, err := s.imapNode.MailSocket.Accept()
 		if err != nil {
-			return fmt.Errorf("[imap.Run] Accepting incoming request at %s failed with: %v", s.Name, err)
+			return fmt.Errorf("[imap.Run] Accepting incoming request at storage failed with: %v", err)
 		}
 
 		// Dispatch into own goroutine.
@@ -231,7 +227,7 @@ func (s *service) HandleConnection(conn net.Conn) error {
 	// Assert we are talking via a TLS connection.
 	tlsConn, ok := conn.(*tls.Conn)
 	if ok != true {
-		return fmt.Errorf("[imap.HandleConnection] Worker %s could not convert connection into TLS connection", s.Name)
+		return fmt.Errorf("[imap.HandleConnection] Storage could not convert connection into TLS connection.")
 	}
 
 	// Create a new connection struct for incoming request.
@@ -250,19 +246,9 @@ func (s *service) HandleConnection(conn net.Conn) error {
 		return nil
 	}
 
-	// TODO: Lock inside that package?!
-	//worker.lock.RLock()
-
-	// Extract CRDT and Maildir location for later use.
-	CRDTLayerRoot := s.config.CRDTLayerRoot
-	MaildirRoot := s.config.MaildirRoot
-
-	// TODO: Lock inside that package?!
-	//worker.lock.RUnlock()
-
 	// Based on received client information, update IMAP
 	// connection to reflect these information.
-	_, err = c.UpdateClientContext(clientInfo, CRDTLayerRoot, MaildirRoot)
+	origWorker, err := c.UpdateClientContext(clientInfo, s.imapNode.CRDTLayerRoot, s.imapNode.MaildirRoot)
 	if err != nil {
 		c.Error("Error extracting client information", err)
 		return nil
@@ -275,7 +261,7 @@ func (s *service) HandleConnection(conn net.Conn) error {
 		return nil
 	}
 
-	// As long as the distributor node did not indicate that
+	// As long as the proxying node did not indicate that
 	// the client connection was ended, we accept requests.
 	for rawReq != "> done <" {
 
@@ -301,28 +287,37 @@ func (s *service) HandleConnection(conn net.Conn) error {
 			continue
 		}
 
-		switch req.Command {
+		// TODO: Lock inside that package?!
+		//storage.lock.RLock()
 
-		case "SELECT":
-			s.Select(c, req, s.SyncSendChan)
+		// Retrieve sync channel for node.
+		workerSyncChan := s.SyncSendChans[origWorker]
 
-		case "CREATE":
-			s.Create(c, req, s.SyncSendChan)
+		// TODO: Lock inside that package?!
+		//storage.lock.RUnlock()
 
-		case "DELETE":
-			s.Delete(c, req, s.SyncSendChan)
+		switch {
 
-		case "LIST":
-			s.List(c, req, s.SyncSendChan)
+		case req.Command == "SELECT":
+			s.Select(c, req, workerSyncChan)
 
-		case "APPEND":
-			s.Append(c, req, s.SyncSendChan)
+		case req.Command == "CREATE":
+			s.Create(c, req, workerSyncChan)
 
-		case "EXPUNGE":
-			s.Expunge(c, req, s.SyncSendChan)
+		case req.Command == "DELETE":
+			s.Delete(c, req, workerSyncChan)
 
-		case "STORE":
-			s.Store(c, req, s.SyncSendChan)
+		case req.Command == "LIST":
+			s.List(c, req, workerSyncChan)
+
+		case req.Command == "APPEND":
+			s.Append(c, req, workerSyncChan)
+
+		case req.Command == "EXPUNGE":
+			s.Expunge(c, req, workerSyncChan)
+
+		case req.Command == "STORE":
+			s.Store(c, req, workerSyncChan)
 
 		default:
 			// Client sent inappropriate command. Signal tagged error.
@@ -348,7 +343,8 @@ func (s *service) HandleConnection(conn net.Conn) error {
 	}
 
 	// Terminate connection after logout.
-	if err := c.Terminate(); err != nil {
+	err = c.Terminate()
+	if err != nil {
 		return fmt.Errorf("[imap.HandleConnection] Failed to terminate connection: %v", err)
 	}
 
@@ -358,12 +354,12 @@ func (s *service) HandleConnection(conn net.Conn) error {
 	return nil
 }
 
-func (s *service) Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) Select(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
-	ok := s.imapNode.Select(c, req, s.SyncSendChan)
+	ok := s.imapNode.Select(c, req, workerSyncChan)
 	if ok {
 
-		// If successful, signal end of operation to distributor.
+		// If successful, signal end of operation to proxy node.
 		err := c.SignalSessionDone(true)
 		if err != nil {
 			c.Error("Encountered send error", err)
@@ -374,12 +370,12 @@ func (s *service) Select(c *imap.IMAPConnection, req *imap.Request, syncChan cha
 	return ok
 }
 
-func (s *service) Create(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) Create(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
-	ok := s.imapNode.Create(c, req, s.SyncSendChan)
+	ok := s.imapNode.Create(c, req, workerSyncChan)
 	if ok {
 
-		// If successful, signal end of operation to distributor.
+		// If successful, signal end of operation to proxy node.
 		err := c.SignalSessionDone(true)
 		if err != nil {
 			c.Error("Encountered send error", err)
@@ -390,12 +386,12 @@ func (s *service) Create(c *imap.IMAPConnection, req *imap.Request, syncChan cha
 	return ok
 }
 
-func (s *service) Delete(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) Delete(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
-	ok := s.imapNode.Delete(c, req, s.SyncSendChan)
+	ok := s.imapNode.Delete(c, req, workerSyncChan)
 	if ok {
 
-		// If successful, signal end of operation to distributor.
+		// If successful, signal end of operation to proxy node.
 		err := c.SignalSessionDone(true)
 		if err != nil {
 			c.Error("Encountered send error", err)
@@ -406,12 +402,12 @@ func (s *service) Delete(c *imap.IMAPConnection, req *imap.Request, syncChan cha
 	return ok
 }
 
-func (s *service) List(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) List(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
-	ok := s.imapNode.List(c, req, s.SyncSendChan)
+	ok := s.imapNode.List(c, req, workerSyncChan)
 	if ok {
 
-		// If successful, signal end of operation to distributor.
+		// If successful, signal end of operation to proxy node.
 		err := c.SignalSessionDone(true)
 		if err != nil {
 			c.Error("Encountered send error", err)
@@ -422,12 +418,12 @@ func (s *service) List(c *imap.IMAPConnection, req *imap.Request, syncChan chan 
 	return ok
 }
 
-func (s *service) Append(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) Append(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
-	ok := s.imapNode.Append(c, req, s.SyncSendChan)
+	ok := s.imapNode.Append(c, req, workerSyncChan)
 	if ok {
 
-		// If successful, signal end of operation to distributor.
+		// If successful, signal end of operation to proxy node.
 		err := c.SignalSessionDone(true)
 		if err != nil {
 			c.Error("Encountered send error", err)
@@ -438,12 +434,12 @@ func (s *service) Append(c *imap.IMAPConnection, req *imap.Request, syncChan cha
 	return ok
 }
 
-func (s *service) Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) Expunge(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
-	ok := s.imapNode.Expunge(c, req, s.SyncSendChan)
+	ok := s.imapNode.Expunge(c, req, workerSyncChan)
 	if ok {
 
-		// If successful, signal end of operation to distributor.
+		// If successful, signal end of operation to proxy node.
 		err := c.SignalSessionDone(true)
 		if err != nil {
 			c.Error("Encountered send error", err)
@@ -454,12 +450,12 @@ func (s *service) Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan ch
 	return ok
 }
 
-func (s *service) Store(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) Store(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
-	ok := s.imapNode.Store(c, req, s.SyncSendChan)
+	ok := s.imapNode.Store(c, req, workerSyncChan)
 	if ok {
 
-		// If successful, signal end of operation to distributor.
+		// If successful, signal end of operation to proxy node.
 		err := c.SignalSessionDone(true)
 		if err != nil {
 			c.Error("Encountered send error", err)

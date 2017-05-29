@@ -16,7 +16,7 @@ import (
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crypto"
 	"github.com/numbleroot/pluto/distributor"
-	"github.com/numbleroot/pluto/imap"
+	"github.com/numbleroot/pluto/storage"
 	"github.com/numbleroot/pluto/worker"
 )
 
@@ -182,53 +182,16 @@ func main() {
 				"err", err,
 			)
 		}
-
-		return
-		// TODO: Remove obsolete code below
-
-		// Initialize a worker.
-		worker, err := imap.InitWorker(logger, conf, *workerFlag)
-		if err != nil {
-			level.Error(logger).Log(
-				"msg", "failed to initialize imap worker",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-		defer worker.MailSocket.Close()
-		defer worker.SyncSocket.Close()
-
-		// Loop on incoming requests.
-		err = worker.Run()
-		if err != nil {
-			level.Error(logger).Log(
-				"msg", "failed to start the initialized worker node",
-				"err", err,
-			)
-			os.Exit(1)
-		}
 	} else if *storageFlag {
 
-		// Initialize storage.
-		storage, err := imap.InitStorage(conf)
-		if err != nil {
-			level.Error(logger).Log(
-				"msg", "failed to initialize imap storage node",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-		defer storage.MailSocket.Close()
-		defer storage.SyncSocket.Close()
+		var ss storage.Service
+		ss = storage.NewService(intConnectioner, conf.Storage, conf.Workers)
 
-		// Loop on incoming requests.
-		err = storage.Run()
-		if err != nil {
+		if err := ss.Run(); err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to start the initialized storage node",
+				"msg", "failed to run storage",
 				"err", err,
 			)
-			os.Exit(1)
 		}
 	} else {
 		// If no flags were specified, print usage
