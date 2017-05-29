@@ -11,7 +11,10 @@ clean:
 	find . -name test-\*.log -type f -delete
 	rm -f generate_pki generate_cert generate_cert.go
 
-build:
+proto:
+	 protoc -I comm/ comm/replica.proto --go_out=plugins=grpc:comm
+
+build: proto
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'
 
 docker: build

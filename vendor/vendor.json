@@ -3,10 +3,10 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "hqDDDpue/5363luidNMBS8z8eJU=",
+			"checksumSHA1": "pPH/BoINXxzYDObljpsGZbysMrw=",
 			"path": "github.com/BurntSushi/toml",
-			"revision": "99064174e013895bbd9b025c31100bd1d9b590ca",
-			"revisionTime": "2016-07-17T15:07:09Z"
+			"revision": "b26d9c308763d68093482582cea63d69be07a0f0",
+			"revisionTime": "2017-03-28T06:15:53Z"
 		},
 		{
 			"checksumSHA1": "spyv5/YFBjYyZLZa1U2LBfDR8PM=",
@@ -18,20 +18,20 @@
 			"checksumSHA1": "OFu4xJEIjiI8Suu+j/gabfp+y6Q=",
 			"origin": "github.com/stretchr/testify/vendor/github.com/davecgh/go-spew/spew",
 			"path": "github.com/davecgh/go-spew/spew",
-			"revision": "4d4bfba8f1d1027c4fdbe371823030df51419987",
-			"revisionTime": "2017-01-30T11:31:45Z"
+			"revision": "46b3c8225b20f01377eeefe3e6b7b147bb742eff",
+			"revisionTime": "2017-05-29T13:21:59Z"
 		},
 		{
-			"checksumSHA1": "Y1zpEnbSvlhLozUt6U63CvC3PNw=",
+			"checksumSHA1": "bzCBeQrZ+LxbYyJbp7uDILX6t7c=",
 			"path": "github.com/go-kit/kit/log",
-			"revision": "5d93a23737003ed3ad90359f0aeb25e08dfdf547",
-			"revisionTime": "2017-03-24T23:12:18Z"
+			"revision": "454871a6797ad352a5d31e3af3ccf5071de4affb",
+			"revisionTime": "2017-05-26T13:35:26Z"
 		},
 		{
 			"checksumSHA1": "t7aTpDH0h4BZcGU0KkUr14QQG2w=",
 			"path": "github.com/go-kit/kit/log/level",
-			"revision": "5d93a23737003ed3ad90359f0aeb25e08dfdf547",
-			"revisionTime": "2017-03-24T23:12:18Z"
+			"revision": "454871a6797ad352a5d31e3af3ccf5071de4affb",
+			"revisionTime": "2017-05-26T13:35:26Z"
 		},
 		{
 			"checksumSHA1": "rt/goV5G9VZ+R7feZq/vVXPpWu0=",
@@ -64,16 +64,16 @@
 			"revisionTime": "2016-11-15T14:25:13Z"
 		},
 		{
-			"checksumSHA1": "2sj/DbXoXdnPAfjAEyhS0Jj5QL0=",
+			"checksumSHA1": "VcLNrvCcnZuSnebTxMRyNtzY3ZY=",
 			"path": "github.com/go-stack/stack",
-			"revision": "100eb0c0a9c5b306ca2fb4f165df21d80ada4b82",
-			"revisionTime": "2016-05-14T03:44:11Z"
+			"revision": "7a2f19628aabfe68f0766b59e74d6315f8347d22",
+			"revisionTime": "2017-05-04T03:43:18Z"
 		},
 		{
-			"checksumSHA1": "kBeNcaKk56FguvPSUCEaH6AxpRc=",
+			"checksumSHA1": "qlPUeFabwF4RKAOF1H+yBFU1Veg=",
 			"path": "github.com/golang/protobuf/proto",
-			"revision": "c9c7427a2a70d2eb3bafa0ab2dc163e45f143317",
-			"revisionTime": "2017-03-07T00:15:33Z"
+			"revision": "9f174c986221c608fb5143bd623b6076a71feae3",
+			"revisionTime": "2017-05-26T16:57:56Z"
 		},
 		{
 			"checksumSHA1": "bKMZjd2wPw13VwoE7mBeSv5djFA=",
@@ -91,14 +91,14 @@
 			"checksumSHA1": "zKKp5SZ3d3ycKe4EKMNT0BqAWBw=",
 			"origin": "github.com/stretchr/testify/vendor/github.com/pmezard/go-difflib/difflib",
 			"path": "github.com/pmezard/go-difflib/difflib",
-			"revision": "4d4bfba8f1d1027c4fdbe371823030df51419987",
-			"revisionTime": "2017-01-30T11:31:45Z"
+			"revision": "46b3c8225b20f01377eeefe3e6b7b147bb742eff",
+			"revisionTime": "2017-05-29T13:21:59Z"
 		},
 		{
-			"checksumSHA1": "V7BV/OAGXK4PZh8EyKFRQxMyNj8=",
+			"checksumSHA1": "8oKQtUZLRuxPAQ9bHKqPkOda0hM=",
 			"path": "github.com/prometheus/client_golang/prometheus",
-			"revision": "a5060f1eaab721946b185b2de468ff83ea5b89cb",
-			"revisionTime": "2017-03-07T14:33:02Z"
+			"revision": "de4d4ffe63b9eff7f27484fdef6e421597e6abb4",
+			"revisionTime": "2017-06-06T10:22:53Z"
 		},
 		{
 			"checksumSHA1": "DvwvOlPNAgRntBzt3b3OSRMS2N4=",
@@ -109,50 +109,50 @@
 		{
 			"checksumSHA1": "Wtpzndm/+bdwwNU5PCTfb4oUhc8=",
 			"path": "github.com/prometheus/common/expfmt",
-			"revision": "49fee292b27bfff7f354ee0f64e1bc4850462edf",
-			"revisionTime": "2017-02-20T10:38:46Z"
+			"revision": "13ba4ddd0caa9c28ca7b7bffe1dfa9ed8d5ef207",
+			"revisionTime": "2017-04-27T09:54:55Z"
 		},
 		{
 			"checksumSHA1": "GWlM3d2vPYyNATtTFgftS10/A9w=",
 			"path": "github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg",
-			"revision": "49fee292b27bfff7f354ee0f64e1bc4850462edf",
-			"revisionTime": "2017-02-20T10:38:46Z"
+			"revision": "13ba4ddd0caa9c28ca7b7bffe1dfa9ed8d5ef207",
+			"revisionTime": "2017-04-27T09:54:55Z"
 		},
 		{
 			"checksumSHA1": "0LL9u9tfv1KPBjNEiMDP6q7lpog=",
 			"path": "github.com/prometheus/common/model",
-			"revision": "49fee292b27bfff7f354ee0f64e1bc4850462edf",
-			"revisionTime": "2017-02-20T10:38:46Z"
+			"revision": "13ba4ddd0caa9c28ca7b7bffe1dfa9ed8d5ef207",
+			"revisionTime": "2017-04-27T09:54:55Z"
 		},
 		{
-			"checksumSHA1": "cD4xn1qxbkiuXqUExpdnDroCTrY=",
+			"checksumSHA1": "Yyg/3nrbmiSL8eQnPisYWINAxqw=",
 			"path": "github.com/prometheus/procfs",
-			"revision": "a1dba9ce8baed984a2495b658c82687f8157b98f",
-			"revisionTime": "2017-02-16T22:32:56Z"
+			"revision": "65c1f6f8f0fc1e2185eb9863a3bc751496404259",
+			"revisionTime": "2017-05-19T19:08:37Z"
 		},
 		{
-			"checksumSHA1": "kOWRcAHWFkId0aCIOSOyjzC0Zfc=",
+			"checksumSHA1": "xCiFAAwVTrjsfZT1BIJQ3DgeNCY=",
 			"path": "github.com/prometheus/procfs/xfs",
-			"revision": "a1dba9ce8baed984a2495b658c82687f8157b98f",
-			"revisionTime": "2017-02-16T22:32:56Z"
+			"revision": "65c1f6f8f0fc1e2185eb9863a3bc751496404259",
+			"revisionTime": "2017-05-19T19:08:37Z"
 		},
 		{
 			"checksumSHA1": "zmC8/3V4ls53DJlNTKDZwPSC/dA=",
 			"path": "github.com/satori/go.uuid",
-			"revision": "b061729afc07e77a8aa4fad0a2fd840958f1942a",
-			"revisionTime": "2016-09-27T10:08:44Z"
+			"revision": "5bf94b69c6b68ee1b541973bb8e1144db23a194b",
+			"revisionTime": "2017-03-21T23:07:31Z"
 		},
 		{
-			"checksumSHA1": "JXUVA1jky8ZX8w09p2t5KLs97Nc=",
+			"checksumSHA1": "JrOt/M8No13ZxxdPhpTC7YUBWDY=",
 			"path": "github.com/stretchr/testify/assert",
-			"revision": "4d4bfba8f1d1027c4fdbe371823030df51419987",
-			"revisionTime": "2017-01-30T11:31:45Z"
+			"revision": "46b3c8225b20f01377eeefe3e6b7b147bb742eff",
+			"revisionTime": "2017-05-29T13:21:59Z"
 		},
 		{
-			"checksumSHA1": "IbtK+qVBj+748DSuh/GvTYZeNLA=",
+			"checksumSHA1": "IsbvvctcA3vAKR5netcAwqcSlt0=",
 			"path": "gopkg.in/jackc/pgx.v2",
-			"revision": "2508faa9ced29f4bbb3a39483e4b5ac2627a7c48",
-			"revisionTime": "2016-08-26T12:39:15Z"
+			"revision": "97c01fb52451c10e686fb847ad390338bf1799ae",
+			"revisionTime": "2017-03-17T13:06:00Z"
 		}
 	],
 	"rootPath": "github.com/numbleroot/pluto"

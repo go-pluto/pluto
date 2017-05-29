@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package comm;
+
+service Replica {
+    rpc Synchronization(stream Msg) returns (stream Msg) {}
+}
+
+message Msg {
+
+    message Element {
+        string value = 1;
+        string tag = 2;
+        string contents = 3;
+    }
+
+    message CREATE {
+        string user = 1;
+        string mailbox = 2;
+        Element addMailbox = 3;
+    }
+
+    message DELETE {
+        string user = 1;
+        string mailbox = 2;
+        repeated Element rmvMailbox = 3;
+    }
+
+    message RENAME {
+        string user = 1;
+        string mailbox = 2;
+        repeated Element rmvMailbox = 3;
+        Element addMailbox = 4;
+        repeated Element addMails = 5;
+    }
+
+    message APPEND {
+        string user = 1;
+        string mailbox = 2;
+        Element addMail = 3;
+    }
+
+    message EXPUNGE {
+        string user = 1;
+        string mailbox = 2;
+        repeated Element rmvMail = 3;
+    }
+
+    message STORE {
+        string user = 1;
+        string mailbox = 2;
+        repeated Element rmvMail = 3;
+        Element addMail = 4;
+    }
+
+    message COPY {
+        string user = 1;
+        string mailbox = 2;
+        repeated Element addMails = 3;
+    }
+
+    string replica = 1;
+    map<string, uint32> vclock = 2;
+    string operation = 3;
+
+    CREATE create = 4;
+    DELETE delete = 5;
+    RENAME rename = 6;
+    APPEND append = 7;
+    EXPUNGE expunge = 8;
+    STORE store = 9;
+    COPY copy = 10;
+}
