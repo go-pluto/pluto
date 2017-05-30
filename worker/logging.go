@@ -13,6 +13,8 @@ type loggingService struct {
 	Service
 }
 
+// NewLoggingService wraps a provided existing
+// service with the provided logger.
 func NewLoggingService(logger log.Logger, s Service) Service {
 	return &loggingService{logger, s}
 }

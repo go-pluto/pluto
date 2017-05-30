@@ -14,6 +14,9 @@ type internalConnection struct {
 	retry  int
 }
 
+// NewInternalConnection returns a configuration object
+// containing relevant parts for secure connections in
+// pluto's internal network.
 func NewInternalConnection(certLoc string, keyLoc string, rootCertPath string, retry int) (*internalConnection, error) {
 
 	// Load internal TLS config.
@@ -28,6 +31,8 @@ func NewInternalConnection(certLoc string, keyLoc string, rootCertPath string, r
 	}, nil
 }
 
+// ReliableConnect provides a mechanism for nodes in
+// pluto's internal network to reliably contact one another.
 func (c *internalConnection) ReliableConnect(addr string) (*tls.Conn, error) {
 
 	var err error

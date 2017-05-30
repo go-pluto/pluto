@@ -19,6 +19,8 @@ type InternalConnection interface {
 	ReliableConnect(addr string) (*tls.Conn, error)
 }
 
+// Service defines the interface a worker node
+// in a pluto network provides.
 type Service interface {
 
 	// Run loops over incoming requests at worker and
@@ -67,6 +69,9 @@ type service struct {
 	config             config.Worker
 }
 
+// NewService takes in all required parameters for spinning
+// up a new worker node, runs initialization code, and returns
+// a service struct for this node type wrapping all information.
 func NewService(internalConnection InternalConnection, config config.Worker, name string) Service {
 
 	s := &service{

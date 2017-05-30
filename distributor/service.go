@@ -36,6 +36,8 @@ type InternalConnection interface {
 	ReliableConnect(addr string) (*tls.Conn, error)
 }
 
+// Service defines the interface a distributor node
+// in a pluto network provides.
 type Service interface {
 
 	// Run loops over incoming requests at distributor and
@@ -71,6 +73,9 @@ type service struct {
 	workers            map[string]config.Worker
 }
 
+// NewService takes in all required parameters for spinning
+// up a new distributor node and returns a service struct for
+// this node type wrapping all information.
 func NewService(authenticator Authenticator, internalConnection InternalConnection, workers map[string]config.Worker) Service {
 	return &service{
 		authenticator:      authenticator,

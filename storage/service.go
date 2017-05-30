@@ -19,6 +19,8 @@ type InternalConnection interface {
 	ReliableConnect(addr string) (*tls.Conn, error)
 }
 
+// Service defines the interface a storage node
+// in a pluto network provides.
 type Service interface {
 
 	// Run loops over incoming requests at storage and
@@ -66,6 +68,9 @@ type service struct {
 	config             config.Storage
 }
 
+// NewService takes in all required parameters for spinning
+// up a new storage node, runs initialization code, and returns
+// a service struct for this node type wrapping all information.
 func NewService(internalConnection InternalConnection, config config.Storage, workers map[string]config.Worker) Service {
 
 	s := &service{
@@ -232,7 +237,7 @@ func (s *service) HandleConnection(conn net.Conn) error {
 	// Assert we are talking via a TLS connection.
 	tlsConn, ok := conn.(*tls.Conn)
 	if ok != true {
-		return fmt.Errorf("[imap.HandleConnection] Storage could not convert connection into TLS connection.")
+		return fmt.Errorf("[imap.HandleConnection] Storage could not convert connection into TLS connection")
 	}
 
 	// Create a new connection struct for incoming request.
