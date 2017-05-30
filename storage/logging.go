@@ -1,4 +1,4 @@
-package worker
+package storage
 
 import (
 	"net"
@@ -17,14 +17,14 @@ func NewLoggingService(logger log.Logger, s Service) Service {
 	return &loggingService{logger, s}
 }
 
-// Run wraps this service's Run method
-// with added logging capabilities.
+// Run wraps this service's Run method with
+// added logging capabilities.
 func (s *loggingService) Run() error {
 
 	err := s.Service.Run()
 
 	level.Warn(s.logger).Log(
-		"msg", "failed to run worker service",
+		"msg", "failed to run storage service",
 		"err", err,
 	)
 
@@ -58,7 +58,7 @@ func (s *loggingService) Select(c *imap.IMAPConnection, req *imap.Request, syncC
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to perform operation SELECT correctly")
+		level.Info(logger).Log("msg", "failed to perform operation SELECT (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
@@ -79,7 +79,7 @@ func (s *loggingService) Create(c *imap.IMAPConnection, req *imap.Request, syncC
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to perform operation CREATE correctly")
+		level.Info(logger).Log("msg", "failed to perform operation CREATE (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
@@ -100,7 +100,7 @@ func (s *loggingService) Delete(c *imap.IMAPConnection, req *imap.Request, syncC
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to perform operation DELETE correctly")
+		level.Info(logger).Log("msg", "failed to perform operation DELETE (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
@@ -121,7 +121,7 @@ func (s *loggingService) List(c *imap.IMAPConnection, req *imap.Request, syncCha
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to perform operation LIST correctly")
+		level.Info(logger).Log("msg", "failed to perform operation LIST (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
@@ -129,7 +129,7 @@ func (s *loggingService) List(c *imap.IMAPConnection, req *imap.Request, syncCha
 	return ok
 }
 
-// Append wraps this service's Append method
+// Create wraps this service's Create method
 // with added logging capabilities.
 func (s *loggingService) Append(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
 
@@ -142,7 +142,7 @@ func (s *loggingService) Append(c *imap.IMAPConnection, req *imap.Request, syncC
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to perform operation APPEND correctly")
+		level.Info(logger).Log("msg", "failed to perform operation APPEND (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
@@ -163,7 +163,7 @@ func (s *loggingService) Expunge(c *imap.IMAPConnection, req *imap.Request, sync
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to perform operation EXPUNGE correctly")
+		level.Info(logger).Log("msg", "failed to perform operation EXPUNGE (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
@@ -184,7 +184,7 @@ func (s *loggingService) Store(c *imap.IMAPConnection, req *imap.Request, syncCh
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to perform operation STORE correctly")
+		level.Info(logger).Log("msg", "failed to perform operation STORE (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}

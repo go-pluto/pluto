@@ -71,7 +71,7 @@ func initLogger(loglevel string) log.Logger {
 }
 
 // publicDistributorConn listens on config supplied socket
-// for incoming public TLS connections.
+// for incoming public TLS connections to the distributor.
 func publicDistributorConn(conf config.Distributor) (net.Listener, error) {
 
 	// Load public TLS config based on config values.
@@ -104,7 +104,8 @@ func main() {
 	conf, err := config.LoadConfig(*configFlag)
 	if err != nil {
 		level.Error(logger).Log(
-			"msg", "failed to load the config", "err", err,
+			"msg", "failed to load config",
+			"err", err,
 		)
 		os.Exit(1)
 	}
@@ -145,11 +146,11 @@ func main() {
 		}
 		defer conn.Close()
 
-		var ds distributor.Service
-		ds = distributor.NewService(authenticator, intConnectioner, conf.Workers)
-		ds = distributor.NewLoggingService(logger, ds)
+		var distrS distributor.Service
+		distrS = distributor.NewService(authenticator, intConnectioner, conf.Workers)
+		distrS = distributor.NewLoggingService(logger, distrS)
 
-		if err := ds.Run(conn, conf.IMAP.Greeting); err != nil {
+		if err := distrS.Run(conn, conf.IMAP.Greeting); err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to run distributor",
 				"err", err,
@@ -161,22 +162,23 @@ func main() {
 		workerConfig, ok := conf.Workers[*workerFlag]
 		if !ok {
 
-			var workerID string
-
 			// Retrieve first valid worker ID to provide feedback.
+			var workerID string
 			for workerID = range conf.Workers {
 				break
 			}
 
-			fmt.Errorf("[imap.InitWorker] Specified worker ID does not exist in config file. Please provide a valid one, for example '%s'", workerID)
+			level.Error(logger).Log(
+				"msg", fmt.Sprintf("specified worker ID does not exist in config file, use for example '%s'", workerID),
+			)
 			os.Exit(1)
 		}
 
-		var ws worker.Service
-		ws = worker.NewService(intConnectioner, workerConfig, *workerFlag)
-		ws = worker.NewLoggingService(logger, ws)
+		var workerS worker.Service
+		workerS = worker.NewService(intConnectioner, workerConfig, *workerFlag)
+		workerS = worker.NewLoggingService(logger, workerS)
 
-		if err := ws.Run(); err != nil {
+		if err := workerS.Run(); err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to run worker",
 				"err", err,
@@ -184,16 +186,18 @@ func main() {
 		}
 	} else if *storageFlag {
 
-		var ss storage.Service
-		ss = storage.NewService(intConnectioner, conf.Storage, conf.Workers)
+		var storageS storage.Service
+		storageS = storage.NewService(intConnectioner, conf.Storage, conf.Workers)
+		storageS = storage.NewLoggingService(logger, storageS)
 
-		if err := ss.Run(); err != nil {
+		if err := storageS.Run(); err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to run storage",
 				"err", err,
 			)
 		}
 	} else {
+
 		// If no flags were specified, print usage
 		// and return with failure value.
 		flag.Usage()

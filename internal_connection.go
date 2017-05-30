@@ -14,14 +14,18 @@ type internalConnection struct {
 	retry  int
 }
 
-func NewInternalConnection(certLoc, keyLoc, rootCertPath string, retry int) (*internalConnection, error) {
+func NewInternalConnection(certLoc string, keyLoc string, rootCertPath string, retry int) (*internalConnection, error) {
+
 	// Load internal TLS config.
 	tlsConfig, err := crypto.NewInternalTLSConfig(certLoc, keyLoc, rootCertPath)
 	if err != nil {
 		return nil, err
 	}
 
-	return &internalConnection{config: tlsConfig}, nil
+	return &internalConnection{
+		config: tlsConfig,
+		retry:  retry,
+	}, nil
 }
 
 func (c *internalConnection) ReliableConnect(addr string) (*tls.Conn, error) {

@@ -20,6 +20,7 @@ type InternalConnection interface {
 }
 
 type Service interface {
+
 	// Run loops over incoming requests at storage and
 	// dispatches each one to a goroutine taking care of
 	// the commands supplied.
@@ -27,40 +28,42 @@ type Service interface {
 
 	// HandleConnection is the main storage routine where all
 	// incoming requests against this storage node have to go through.
-	HandleConnection(conn net.Conn) error
+	HandleConnection(net.Conn) error
 
 	// TODO: Maybe make the following an interface on its own.
 
 	// Select sets the current mailbox based on supplied payload to user-instructed value.
-	Select(*imap.IMAPConnection, *imap.Request, chan string) bool
+	Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
 
 	// Create attempts to create a mailbox with name taken from payload of request.
-	Create(*imap.IMAPConnection, *imap.Request, chan string) bool
+	Create(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
 
 	// Delete an existing mailbox with all included content.
-	Delete(*imap.IMAPConnection, *imap.Request, chan string) bool
+	Delete(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
 
 	// List allows clients to learn about the mailboxes
 	// available and also returns the hierarchy delimiter.
-	List(*imap.IMAPConnection, *imap.Request, chan string) bool
+	List(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
 
 	// Append puts supplied message into specified mailbox.
-	Append(*imap.IMAPConnection, *imap.Request, chan string) bool
+	Append(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
 
 	// Expunge deletes messages permanently from currently
 	// selected mailbox that have been flagged as Deleted
 	// prior to calling this function.
-	Expunge(*imap.IMAPConnection, *imap.Request, chan string) bool
+	Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
 
 	// Store takes in message sequence numbers and some set
 	// of flags to change in those messages and changes the
 	// attributes for these mails throughout the system.
-	Store(*imap.IMAPConnection, *imap.Request, chan string) bool
+	Store(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
 }
 
 type service struct {
-	imapNode      *imap.IMAPNode
-	SyncSendChans map[string]chan string
+	imapNode           *imap.IMAPNode
+	SyncSendChans      map[string]chan string
+	internalConnection InternalConnection
+	config             config.Storage
 }
 
 func NewService(internalConnection InternalConnection, config config.Storage, workers map[string]config.Worker) Service {
@@ -75,7 +78,9 @@ func NewService(internalConnection InternalConnection, config config.Storage, wo
 			MaildirRoot:      config.MaildirRoot,
 			//Config:           config,
 		},
-		SyncSendChans: make(map[string]chan string),
+		SyncSendChans:      make(map[string]chan string),
+		internalConnection: internalConnection,
+		config:             config,
 	}
 
 	// TODO: Probably better to move initializing into its own method, so we can check errors.
