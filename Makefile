@@ -12,7 +12,7 @@ clean:
 	rm -f generate_pki generate_cert generate_cert.go
 
 proto:
-	 protoc -I comm/ comm/replica.proto --go_out=plugins=grpc:comm
+	 protoc -I comm/ comm/receiver.proto --go_out=plugins=grpc:comm
 
 build: proto
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'

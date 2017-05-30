@@ -2,10 +2,6 @@ syntax = "proto3";
 
 package comm;
 
-service Replica {
-    rpc Synchronization(stream Msg) returns (stream Msg) {}
-}
-
 message Msg {
 
     message Element {
@@ -70,4 +66,12 @@ message Msg {
     EXPUNGE expunge = 8;
     STORE store = 9;
     COPY copy = 10;
+}
+
+message Closed {
+    uint32 status = 1;
+}
+
+service Receiver {
+    rpc Incoming(stream Msg) returns(Closed) {}
 }

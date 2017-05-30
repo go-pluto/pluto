@@ -279,7 +279,7 @@ func (recv *Receiver) IncVClockEntry() {
 
 					// If it does, increment its vector clock
 					// value by one.
-					recv.vclock[entry] += 1
+					recv.vclock[entry]++
 
 					// Make a deep copy of current vector clock
 					// map to pass back via channel to sender.
@@ -377,6 +377,57 @@ func (recv *Receiver) TriggerMsgApplier() {
 
 			// Renew timer.
 			triggerT.Reset(triggerD)
+		}
+	}
+}
+
+func (recv *Receiver) Incoming(stream Receiver_IncomingServer) error {
+
+	for {
+
+		// Receive next incoming ProtoBuf message.
+		msg, err := stream.Recv()
+		if err == io.EOF {
+
+			// If stream was closed, send a (useless)
+			// Closed response indicating success (status 0).
+			return stream.SendAndClose(&Closed{
+				Status: 0,
+			})
+		}
+		if err != nil {
+			return err
+		}
+		stdlog.Printf("msg: '%#v'\n", msg)
+
+		// Lock mutex.
+		recv.lock.Lock()
+
+		// Write it to message log file.
+		_, err = recv.writeLog.WriteString(msg.String())
+		if err != nil {
+			return err
+		}
+
+		// Append a newline symbol to just written line.
+		_, err = recv.writeLog.Write([]byte("\n"))
+		if err != nil {
+			return err
+		}
+
+		// Save to stable storage.
+		err = recv.writeLog.Sync()
+		if err != nil {
+			return err
+		}
+
+		// Unlock mutex.
+		recv.lock.Unlock()
+
+		// Indicate to applying routine that a new message
+		// is available to process.
+		if len(recv.msgInLog) < 1 {
+			recv.msgInLog <- struct{}{}
 		}
 	}
 }
