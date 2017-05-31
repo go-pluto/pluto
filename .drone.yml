@@ -1,0 +1,16 @@
+workspace:
+  base: /go
+  path: src/github.com/numbleroot/pluto
+
+pipeline:
+  build:
+    image: golang:1.8
+    commands:
+      - make build
+
+  test:
+    image: golang:1.8
+    commands:
+      - make test-pki
+      - make test-public
+      - make test
