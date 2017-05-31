@@ -110,6 +110,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	plutoMetrics := NewPlutoMetrics(conf.Distributor.PrometheusAddr)
+
 	intConnectioner, err := NewInternalConnection(
 		conf.Distributor.InternalTLS.CertLoc,
 		conf.Distributor.InternalTLS.KeyLoc,
@@ -126,6 +128,9 @@ func main() {
 	// Initialize and run a node of the pluto
 	// system based on passed command line flag.
 	if *distributorFlag {
+
+		// Run a http server in a goroutine to expose this distributor's metrics.
+		go runPromHTTP(conf.Distributor.PrometheusAddr)
 
 		authenticator, err := initAuthenticator(conf)
 		if err != nil {
@@ -149,6 +154,7 @@ func main() {
 		var distrS distributor.Service
 		distrS = distributor.NewService(authenticator, intConnectioner, conf.Workers)
 		distrS = distributor.NewLoggingService(distrS, logger)
+		distrS = distributor.NewMetricsService(distrS, plutoMetrics.Distributor.Logins, plutoMetrics.Distributor.Logouts)
 
 		if err := distrS.Run(conn, conf.IMAP.Greeting); err != nil {
 			level.Error(logger).Log(
