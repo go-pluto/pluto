@@ -32,8 +32,6 @@ type Service interface {
 	// incoming requests against this storage node have to go through.
 	HandleConnection(net.Conn) error
 
-	// TODO: Maybe make the following an interface on its own.
-
 	// Select sets the current mailbox based on supplied payload to user-instructed value.
 	Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
 

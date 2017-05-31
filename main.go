@@ -148,7 +148,7 @@ func main() {
 
 		var distrS distributor.Service
 		distrS = distributor.NewService(authenticator, intConnectioner, conf.Workers)
-		distrS = distributor.NewLoggingService(logger, distrS)
+		distrS = distributor.NewLoggingService(distrS, logger)
 
 		if err := distrS.Run(conn, conf.IMAP.Greeting); err != nil {
 			level.Error(logger).Log(
@@ -176,7 +176,7 @@ func main() {
 
 		var workerS worker.Service
 		workerS = worker.NewService(intConnectioner, workerConfig, *workerFlag)
-		workerS = worker.NewLoggingService(logger, workerS)
+		workerS = worker.NewLoggingService(workerS, logger)
 
 		if err := workerS.Run(); err != nil {
 			level.Error(logger).Log(
@@ -188,7 +188,7 @@ func main() {
 
 		var storageS storage.Service
 		storageS = storage.NewService(intConnectioner, conf.Storage, conf.Workers)
-		storageS = storage.NewLoggingService(logger, storageS)
+		storageS = storage.NewLoggingService(storageS, logger)
 
 		if err := storageS.Run(); err != nil {
 			level.Error(logger).Log(

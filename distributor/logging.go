@@ -15,7 +15,7 @@ type loggingService struct {
 
 // NewLoggingService wraps a provided existing
 // service with the provided logger.
-func NewLoggingService(logger log.Logger, s Service) Service {
+func NewLoggingService(s Service, logger log.Logger) Service {
 	return &loggingService{logger, s}
 }
 
