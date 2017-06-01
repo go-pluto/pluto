@@ -23,6 +23,7 @@ pipeline:
   docker:
     image: plugins/docker
     repo: numbleroot/pluto
+    context: .
     secrets: [ docker_username, docker_password ]
     tag: [ latest ]
     when:
@@ -32,6 +33,7 @@ pipeline:
   docker:
     image: plugins/docker
     repo: numbleroot/pluto
+    context: .
     secrets: [ docker_username, docker_password ]
     tag: [ "${DRONE_TAG}" ]
     when:
