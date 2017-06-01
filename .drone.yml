@@ -14,3 +14,31 @@ pipeline:
       - make test-pki
       - make test-public
       - make test
+
+  #codecov:
+  #  image: alpine:latest
+  #  commands:
+  #    - bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
+
+  docker:
+    image: plugins/docker
+    repo: numbleroot/pluto
+    secrets: [ docker_username, docker_password ]
+    tag: [ latest ]
+    when:
+      branch: master
+      event: push
+
+  docker:
+    image: plugins/docker
+    repo: numbleroot/pluto
+    secrets: [ docker_username, docker_password ]
+    tag: [ "${DRONE_TAG}" ]
+    when:
+      event: tag
+
+  github-release:
+    image: plugins/github-release
+    files: pluto
+    when:
+      event: tag

@@ -1,43 +1,16 @@
-sudo: required
-
 language: go
-
-services:
-  - docker
 
 go:
   - 1.8
 
-before_install:
+script:
   - make test-pki
   - make test-public
-
-script:
   - make build
   - make test
 
 after_success:
   - bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
-  - 'if [ ${TRAVIS_EVENT_TYPE} = "push" ] && [ ${TRAVIS_BRANCH} = "master" ]; then
-      docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}" || travis_terminate 1;
-      docker build -t numbleroot/pluto:latest . || travis_terminate 1;
-      docker push numbleroot/pluto:latest || travis_terminate 1;
-    fi'
-
-before_deploy:
-  - docker build -t numbleroot/pluto:${TRAVIS_TAG} .
-
-deploy:
-  provider: releases
-  api_key:
-    secure: "dhg4OqrQG5vwOWpuJOR3solMHkNHRLT0dUfjVCI4Ryd0Umk5U1d1elxelhxajp/HzBbNQx1QR+QV/ulKyy5J7/cU63G7sYvfQga1rU664yuoRu32gQQZKgjRFYOWpzaF1DEQRX/Uq2xWpw1QzpawBHr+3SqK9JXFROEZmt3X1+HkPwMDNwMEtiXGNFIUMgE8c3on2Wo6oAeXMKWQ50weCrMRmyGYrPW3kHOq2RjnHbh5cPC9gHdjeYuMJuGd840KTL3+6Ngub44twUP5W5KKfeLtvvB610wpV8iMeHpx+ZSQtau9zQ4mluu1XkyouK/jETspWRYdi1cVSXjnlOrLe8fe6dlaQ7a7mvcQzzRWAqnAbtMYHCq29XORvBDTjZXgaUksuUyXvMmwsBam59gU6e8iV6fsfGZC5ok1/n13ZQDjsqYp2ca3XDW7vkbmbL6rc/Rj4VfbBeMjHwCCJYvKlJQvxPBsPNzpirMbYg/ztskSPZHW9Pn25D1r/nIoEXwwQ5c9+qSTz75iPsQrfM4dYjlphPQNdEvwPmAKMxtoiidOYZpRAidoZ16sUTrShGhqQ+0s9ctzIScAKhCCHgOu6YAZHy45j7xr0k7jKWnDDbZHoGCjrWOhfWhKGcdute7x0K+HF2pWqxdTNtZfvP047vB47rZkpPM1uUK9ue+Re7k="
-  file: "pluto"
-  skip_cleanup: true
-  on:
-    tags: true
-
-after_deploy:
-  - docker push numbleroot/pluto:${TRAVIS_TAG};
 
 notifications:
   email:
