@@ -2,13 +2,14 @@ package distributor
 
 import (
 	"bufio"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"strconv"
 	"strings"
+
+	"crypto/tls"
 
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/imap"
@@ -31,7 +32,7 @@ type Authenticator interface {
 	AuthenticatePlain(username string, password string, clientAddr string) (int, string, error)
 }
 
-// InternalConnection knows how to create internal tls connections
+// InternalConnection knows how to create internal TLS connections.
 type InternalConnection interface {
 	ReliableConnect(addr string) (*tls.Conn, error)
 }
@@ -84,6 +85,9 @@ func NewService(authenticator Authenticator, internalConnection InternalConnecti
 	}
 }
 
+// Run loops over incoming requests at distributor and
+// dispatches each one to a goroutine taking care of
+// the commands supplied.
 func (s *service) Run(listener net.Listener, greeting string) error {
 
 	for {
@@ -205,6 +209,8 @@ func (s *service) handleConnection(conn net.Conn, greeting string) error {
 	return c.Terminate()
 }
 
+// Capability handles the IMAP CAPABILITY command.
+// It outputs the supported actions in the current state.
 func (s *service) Capability(c *imap.Connection, req *imap.Request) bool {
 
 	if len(req.Payload) > 0 {
@@ -236,6 +242,9 @@ func (s *service) Capability(c *imap.Connection, req *imap.Request) bool {
 	return true
 }
 
+// Logout correctly ends a connection with a client.
+// Also necessarily created management structures will
+// get shut down gracefully.
 func (s *service) Logout(c *imap.Connection, req *imap.Request) bool {
 
 	if len(req.Payload) > 0 {
@@ -272,6 +281,8 @@ func (s *service) Logout(c *imap.Connection, req *imap.Request) bool {
 	return true
 }
 
+// Login performs the authentication mechanism specified
+// as part of the distributor config.
 func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
 
 	if c.OutConn != nil {
@@ -361,6 +372,8 @@ func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
 	return true
 }
 
+// StartTLS states on IMAP STARTTLS command
+// that current connection is already encrypted.
 func (s *service) StartTLS(c *imap.Connection, req *imap.Request) bool {
 
 	if len(req.Payload) > 0 {
@@ -387,6 +400,8 @@ func (s *service) StartTLS(c *imap.Connection, req *imap.Request) bool {
 	return true
 }
 
+// Proxy forwards one request between the distributor
+// node and the responsible worker node.
 func (s *service) Proxy(c *imap.Connection, rawReq string) bool {
 
 	// TODO

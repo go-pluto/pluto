@@ -30,6 +30,7 @@ func (s *metricsService) Capability(c *imap.Connection, req *imap.Request) bool 
 }
 
 func (s *metricsService) Logout(c *imap.Connection, req *imap.Request) bool {
+
 	ok := s.service.Logout(c, req)
 
 	if ok {
@@ -40,6 +41,7 @@ func (s *metricsService) Logout(c *imap.Connection, req *imap.Request) bool {
 }
 
 func (s *metricsService) Login(c *imap.Connection, req *imap.Request) bool {
+
 	ok := s.service.Login(c, req)
 
 	if ok {

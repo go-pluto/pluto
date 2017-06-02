@@ -32,10 +32,12 @@ type Service interface {
 	// incoming requests against this storage node have to go through.
 	HandleConnection(net.Conn) error
 
-	// Select sets the current mailbox based on supplied payload to user-instructed value.
+	// Select sets the current mailbox based on supplied
+	// payload to user-instructed value.
 	Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
 
-	// Create attempts to create a mailbox with name taken from payload of request.
+	// Create attempts to create a mailbox with
+	// name taken from payload of request.
 	Create(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
 
 	// Delete an existing mailbox with all included content.
@@ -215,6 +217,9 @@ func (s *service) findFiles() error {
 	return nil
 }
 
+// Run loops over incoming requests at storage and
+// dispatches each one to a goroutine taking care of
+// the commands supplied.
 func (s *service) Run() error {
 
 	for {
@@ -230,6 +235,8 @@ func (s *service) Run() error {
 	}
 }
 
+// HandleConnection is the main storage routine where all
+// incoming requests against this storage node have to go through.
 func (s *service) HandleConnection(conn net.Conn) error {
 
 	// Assert we are talking via a TLS connection.
@@ -362,6 +369,8 @@ func (s *service) HandleConnection(conn net.Conn) error {
 	return nil
 }
 
+// Select sets the current mailbox based on supplied
+// payload to user-instructed value.
 func (s *service) Select(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
 	ok := s.imapNode.Select(c, req, workerSyncChan)
@@ -378,6 +387,8 @@ func (s *service) Select(c *imap.IMAPConnection, req *imap.Request, workerSyncCh
 	return ok
 }
 
+// Create attempts to create a mailbox with
+// name taken from payload of request.
 func (s *service) Create(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
 	ok := s.imapNode.Create(c, req, workerSyncChan)
@@ -394,6 +405,7 @@ func (s *service) Create(c *imap.IMAPConnection, req *imap.Request, workerSyncCh
 	return ok
 }
 
+// Delete an existing mailbox with all included content.
 func (s *service) Delete(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
 	ok := s.imapNode.Delete(c, req, workerSyncChan)
@@ -410,6 +422,8 @@ func (s *service) Delete(c *imap.IMAPConnection, req *imap.Request, workerSyncCh
 	return ok
 }
 
+// List allows clients to learn about the mailboxes
+// available and also returns the hierarchy delimiter.
 func (s *service) List(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
 	ok := s.imapNode.List(c, req, workerSyncChan)
@@ -426,6 +440,7 @@ func (s *service) List(c *imap.IMAPConnection, req *imap.Request, workerSyncChan
 	return ok
 }
 
+// Append puts supplied message into specified mailbox.
 func (s *service) Append(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
 	ok := s.imapNode.Append(c, req, workerSyncChan)
@@ -442,6 +457,9 @@ func (s *service) Append(c *imap.IMAPConnection, req *imap.Request, workerSyncCh
 	return ok
 }
 
+// Expunge deletes messages permanently from currently
+// selected mailbox that have been flagged as Deleted
+// prior to calling this function.
 func (s *service) Expunge(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
 	ok := s.imapNode.Expunge(c, req, workerSyncChan)
@@ -458,6 +476,9 @@ func (s *service) Expunge(c *imap.IMAPConnection, req *imap.Request, workerSyncC
 	return ok
 }
 
+// Store takes in message sequence numbers and some set
+// of flags to change in those messages and changes the
+// attributes for these mails throughout the system.
 func (s *service) Store(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan string) bool {
 
 	ok := s.imapNode.Store(c, req, workerSyncChan)
