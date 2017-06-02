@@ -6,14 +6,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kit/kit/log"
-	"github.com/numbleroot/pluto/imap"
+	"github.com/numbleroot/pluto/distributor"
+	"github.com/numbleroot/pluto/storage"
 	"github.com/numbleroot/pluto/utils"
+	"github.com/numbleroot/pluto/worker"
 )
 
 // Functions
 
-// TestMain executes initilization and teardown
+// TestMain executes initialization and teardown
 // code needed for all tests in package main.
 func TestMain(m *testing.M) {
 
@@ -47,13 +48,15 @@ func TestMain(m *testing.M) {
 // nodes when appropriate signals are received.
 func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
+	intConn, err := NewInternalConnection(testEnv.Config.Distributor.InternalTLS.CertLoc, testEnv.Config.Distributor.InternalTLS.KeyLoc, testEnv.Config.RootCertLoc, testEnv.Config.IntlConnRetry)
+	if err != nil {
+		stdlog.Fatal(err)
+	}
+
 	go func() {
 
-		// Initialize storage node.
-		storage, err := imap.InitStorage(testEnv.Config)
-		if err != nil {
-			stdlog.Fatal(err)
-		}
+		var storageS storage.Service
+		storageS = storage.NewService(intConn, testEnv.Config.Storage, testEnv.Config.Workers)
 
 		go func() {
 
@@ -62,16 +65,18 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
 			stdlog.Printf("[utils.RunAllNodes] Closing storage socket")
 
-			// Shut down storage node.
-			storage.MailSocket.Close()
-			storage.SyncSocket.Close()
+			//// Shut down storage node.
+			//storage.MailSocket.Close()
+			//storage.SyncSocket.Close()
 
 			// Signal back successful shutdown.
 			testEnv.DoneStorage <- struct{}{}
 		}()
 
 		// Run the storage node.
-		_ = storage.Run()
+		if err := storageS.Run(); err != nil {
+			stdlog.Fatal(err)
+		}
 	}()
 
 	// Wait shortly for storage node to have started.
@@ -79,11 +84,13 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
 	go func() {
 
-		// Initialize workerName worker node.
-		worker, err := imap.InitWorker(log.NewNopLogger(), testEnv.Config, workerName)
-		if err != nil {
-			stdlog.Fatal(err)
+		workerConfig, ok := testEnv.Config.Workers[workerName]
+		if !ok {
+			stdlog.Fatal("can't find correct worker config")
 		}
+
+		var workerS worker.Service
+		workerS = worker.NewService(intConn, workerConfig, workerName)
 
 		go func() {
 
@@ -92,16 +99,18 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
 			stdlog.Printf("[utils.RunAllNodes] Closing %s socket", workerName)
 
-			// Shut down worker node.
-			worker.MailSocket.Close()
-			worker.SyncSocket.Close()
+			//// Shut down worker node.
+			//worker.MailSocket.Close()
+			//worker.SyncSocket.Close()
 
 			// Signal back successful shutdown.
 			testEnv.DoneWorker <- struct{}{}
 		}()
 
 		// Run the worker node.
-		_ = worker.Run()
+		if err := workerS.Run(); err != nil {
+			stdlog.Fatal(err)
+		}
 	}()
 
 	// Wait shortly for worker node to have started.
@@ -114,11 +123,13 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			stdlog.Fatal(err)
 		}
 
-		// Initialize distributor node.
-		distr, err := imap.InitDistributor(log.NewNopLogger(), testEnv.Config, authenticator)
+		conn, err := publicDistributorConn(testEnv.Config.Distributor)
 		if err != nil {
 			stdlog.Fatal(err)
 		}
+		defer conn.Close()
+
+		distr := distributor.NewService(authenticator, intConn, testEnv.Config.Workers)
 
 		go func() {
 
@@ -127,15 +138,14 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
 			stdlog.Printf("[utils.RunAllNodes] Closing distributor socket")
 
-			// Shut down distributor node.
-			distr.Socket.Close()
-
 			// Signal back successful shutdown.
 			testEnv.DoneDistr <- struct{}{}
 		}()
 
 		// Run the distributor node.
-		_ = distr.Run()
+		if err := distr.Run(conn, testEnv.Config.IMAP.Greeting); err != nil {
+			stdlog.Fatal(err)
+		}
 	}()
 
 	// Wait shortly for worker node to have started.

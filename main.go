@@ -2,22 +2,29 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"net"
 	"os"
 	"runtime"
 	"strings"
+
+	"crypto/tls"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/numbleroot/pluto/auth"
 	"github.com/numbleroot/pluto/config"
-	"github.com/numbleroot/pluto/imap"
+	"github.com/numbleroot/pluto/crypto"
+	"github.com/numbleroot/pluto/distributor"
+	"github.com/numbleroot/pluto/storage"
+	"github.com/numbleroot/pluto/worker"
 )
 
 // Functions
 
-// initAuthenticator of the correct implementation specified in the config
-// to be used in the imap.Distributor.
-func initAuthenticator(config *config.Config) (imap.PlainAuthenticator, error) {
+// initAuthenticator of the correct implementation specified
+// in the config to be used in the imap.Distributor.
+func initAuthenticator(config *config.Config) (distributor.Authenticator, error) {
 
 	switch config.Distributor.AuthAdapter {
 	case "AuthPostgres":
@@ -63,6 +70,19 @@ func initLogger(loglevel string) log.Logger {
 	return logger
 }
 
+// publicDistributorConn listens on config supplied socket
+// for incoming public TLS connections to the distributor.
+func publicDistributorConn(conf config.Distributor) (net.Listener, error) {
+
+	// Load public TLS config based on config values.
+	tlsConfig, err := crypto.NewPublicTLSConfig(conf.PublicTLS.CertLoc, conf.PublicTLS.KeyLoc)
+	if err != nil {
+		return nil, err
+	}
+
+	return tls.Listen("tcp", fmt.Sprintf("%s:%s", conf.ListenIP, conf.Port), tlsConfig)
+}
+
 func main() {
 
 	var err error
@@ -72,10 +92,10 @@ func main() {
 
 	// Parse command-line flag that defines a config path.
 	configFlag := flag.String("config", "config.toml", "Provide path to configuration file in TOML syntax.")
+	loglevelFlag := flag.String("loglevel", "debug", "This flag sets the default logging level.")
 	distributorFlag := flag.Bool("distributor", false, "Append this flag to indicate that this process should take the role of the distributor.")
 	workerFlag := flag.String("worker", "", "If this process is intended to run as one of the IMAP worker nodes, specify which of the ones defined in your config file this should be.")
 	storageFlag := flag.Bool("storage", false, "Append this flag to indicate that this process should take the role of the storage node.")
-	loglevelFlag := flag.String("loglevel", "debug", "This flag sets the default logging level.")
 	flag.Parse()
 
 	logger := initLogger(*loglevelFlag)
@@ -84,14 +104,33 @@ func main() {
 	conf, err := config.LoadConfig(*configFlag)
 	if err != nil {
 		level.Error(logger).Log(
-			"msg", "failed to load the config", "err", err,
+			"msg", "failed to load config",
+			"err", err,
 		)
 		os.Exit(1)
+	}
+
+	plutoMetrics := NewPlutoMetrics(conf.Distributor.PrometheusAddr)
+
+	intConnectioner, err := NewInternalConnection(
+		conf.Distributor.InternalTLS.CertLoc,
+		conf.Distributor.InternalTLS.KeyLoc,
+		conf.RootCertLoc,
+		conf.IntlConnRetry,
+	)
+	if err != nil {
+		level.Error(logger).Log(
+			"msg", "failed to initialize internal connectioner",
+			"err", err,
+		)
 	}
 
 	// Initialize and run a node of the pluto
 	// system based on passed command line flag.
 	if *distributorFlag {
+
+		// Run a http server in a goroutine to expose this distributor's metrics.
+		go runPromHTTP(conf.Distributor.PrometheusAddr)
 
 		authenticator, err := initAuthenticator(conf)
 		if err != nil {
@@ -99,78 +138,75 @@ func main() {
 				"msg", "failed to initialize an authenticator",
 				"err", err,
 			)
-			os.Exit(2)
+			os.Exit(1)
 		}
 
-		// Initialize distributor.
-		distr, err := imap.InitDistributor(logger, conf, authenticator)
+		conn, err := publicDistributorConn(conf.Distributor)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to initialize imap distributor",
+				"msg", "failed to create public distributor connection",
 				"err", err,
 			)
-			os.Exit(3)
+			os.Exit(1)
 		}
-		defer distr.Socket.Close()
+		defer conn.Close()
 
-		// Loop on incoming requests.
-		if err = distr.Run(); err != nil {
+		var distrS distributor.Service
+		distrS = distributor.NewService(authenticator, intConnectioner, conf.Workers)
+		distrS = distributor.NewLoggingService(distrS, logger)
+		distrS = distributor.NewMetricsService(distrS, plutoMetrics.Distributor.Logins, plutoMetrics.Distributor.Logouts)
+
+		if err := distrS.Run(conn, conf.IMAP.Greeting); err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to initialize imap distributor",
+				"msg", "failed to run distributor",
 				"err", err,
 			)
-			os.Exit(4)
 		}
 	} else if *workerFlag != "" {
 
-		// Initialize a worker.
-		worker, err := imap.InitWorker(logger, conf, *workerFlag)
-		if err != nil {
-			level.Error(logger).Log(
-				"msg", "failed to initialize imap worker",
-				"err", err,
-			)
-			os.Exit(5)
-		}
-		defer worker.MailSocket.Close()
-		defer worker.SyncSocket.Close()
+		// Check if supplied worker with workerName actually is configured.
+		workerConfig, ok := conf.Workers[*workerFlag]
+		if !ok {
 
-		// Loop on incoming requests.
-		err = worker.Run()
-		if err != nil {
+			// Retrieve first valid worker ID to provide feedback.
+			var workerID string
+			for workerID = range conf.Workers {
+				break
+			}
+
 			level.Error(logger).Log(
-				"msg", "failed to start the initialized worker node",
+				"msg", fmt.Sprintf("specified worker ID does not exist in config file, use for example '%s'", workerID),
+			)
+			os.Exit(1)
+		}
+
+		var workerS worker.Service
+		workerS = worker.NewService(intConnectioner, workerConfig, *workerFlag)
+		workerS = worker.NewLoggingService(workerS, logger)
+
+		if err := workerS.Run(); err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to run worker",
 				"err", err,
 			)
-			os.Exit(6)
 		}
 	} else if *storageFlag {
 
-		// Initialize storage.
-		storage, err := imap.InitStorage(conf)
-		if err != nil {
-			level.Error(logger).Log(
-				"msg", "failed to initialize imap storage node",
-				"err", err,
-			)
-			os.Exit(7)
-		}
-		defer storage.MailSocket.Close()
-		defer storage.SyncSocket.Close()
+		var storageS storage.Service
+		storageS = storage.NewService(intConnectioner, conf.Storage, conf.Workers)
+		storageS = storage.NewLoggingService(storageS, logger)
 
-		// Loop on incoming requests.
-		err = storage.Run()
-		if err != nil {
+		if err := storageS.Run(); err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to start the initialized storage node",
+				"msg", "failed to run storage",
 				"err", err,
 			)
-			os.Exit(8)
 		}
 	} else {
+
 		// If no flags were specified, print usage
 		// and return with failure value.
 		flag.Usage()
-		os.Exit(9)
+		os.Exit(1)
 	}
 }
