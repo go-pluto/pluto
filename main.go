@@ -112,19 +112,6 @@ func main() {
 
 	plutoMetrics := NewPlutoMetrics(conf.Distributor.PrometheusAddr)
 
-	intConnectioner, err := NewInternalConnection(
-		conf.Distributor.InternalTLS.CertLoc,
-		conf.Distributor.InternalTLS.KeyLoc,
-		conf.RootCertLoc,
-		conf.IntlConnRetry,
-	)
-	if err != nil {
-		level.Error(logger).Log(
-			"msg", "failed to initialize internal connectioner",
-			"err", err,
-		)
-	}
-
 	// Initialize and run a node of the pluto
 	// system based on passed command line flag.
 	if *distributorFlag {
@@ -132,7 +119,7 @@ func main() {
 		// Run a http server in a goroutine to expose this distributor's metrics.
 		go runPromHTTP(conf.Distributor.PrometheusAddr)
 
-		authenticator, err := initAuthenticator(conf)
+		auther, err := initAuthenticator(conf)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to initialize an authenticator",
@@ -151,8 +138,16 @@ func main() {
 		}
 		defer conn.Close()
 
+		tlsConfig, err := crypto.NewInternalTLSConfig(conf.Distributor.InternalTLS.CertLoc, conf.Distributor.InternalTLS.KeyLoc, conf.RootCertLoc)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to create internal TLS config for distributor",
+				"err", err,
+			)
+		}
+
 		var distrS distributor.Service
-		distrS = distributor.NewService(authenticator, intConnectioner, conf.Workers)
+		distrS = distributor.NewService(auther, &intlConn{tlsConfig, conf.IntlConnRetry}, conf.Workers)
 		distrS = distributor.NewLoggingService(distrS, logger)
 		distrS = distributor.NewMetricsService(distrS, plutoMetrics.Distributor.Logins, plutoMetrics.Distributor.Logouts)
 
@@ -180,8 +175,47 @@ func main() {
 			os.Exit(1)
 		}
 
+		tlsConfig, err := crypto.NewInternalTLSConfig(workerConfig.TLS.CertLoc, workerConfig.TLS.KeyLoc, conf.RootCertLoc)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", fmt.Sprintf("failed to create internal TLS config for %s", *workerFlag),
+				"err", err,
+			)
+		}
+
+		// Create needed sockets. First, mail socket.
+		mailSocket, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", workerConfig.ListenIP, workerConfig.MailPort), tlsConfig)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", fmt.Sprintf("failed to listen for mail TLS connections on %s", *workerFlag),
+				"err", err,
+			)
+		}
+
+		level.Info(logger).Log(
+			"msg", fmt.Sprintf("%s is accepting mail connections at %s", *workerFlag, fmt.Sprintf("%s:%s", workerConfig.ListenIP, workerConfig.MailPort)),
+		)
+
+		// Second, synchronization socket later used by gRPC.
+		syncSocket, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", workerConfig.ListenIP, workerConfig.SyncPort), tlsConfig)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", fmt.Sprintf("failed to listen for synchronization TLS connections on %s", *workerFlag),
+				"err", err,
+			)
+		}
+
 		var workerS worker.Service
-		workerS = worker.NewService(intConnectioner, workerConfig, *workerFlag)
+		workerS = worker.NewService(&intlConn{tlsConfig, conf.IntlConnRetry}, mailSocket, syncSocket, workerConfig, *workerFlag)
+
+		err = workerS.InitService()
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", fmt.Sprintf("failed to initilize service of %s", *workerFlag),
+				"err", err,
+			)
+		}
+
 		workerS = worker.NewLoggingService(workerS, logger)
 
 		if err := workerS.Run(); err != nil {
@@ -192,8 +226,16 @@ func main() {
 		}
 	} else if *storageFlag {
 
+		tlsConfig, err := crypto.NewInternalTLSConfig(conf.Storage.TLS.CertLoc, conf.Storage.TLS.KeyLoc, conf.RootCertLoc)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to create internal TLS config for storage",
+				"err", err,
+			)
+		}
+
 		var storageS storage.Service
-		storageS = storage.NewService(intConnectioner, conf.Storage, conf.Workers)
+		storageS = storage.NewService(&intlConn{tlsConfig, conf.IntlConnRetry}, conf.Storage, conf.Workers)
 		storageS = storage.NewLoggingService(storageS, logger)
 
 		if err := storageS.Run(); err != nil {

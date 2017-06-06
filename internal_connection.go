@@ -5,35 +5,16 @@ import (
 	"time"
 
 	"crypto/tls"
-
-	"github.com/numbleroot/pluto/crypto"
 )
 
-type internalConnection struct {
+type intlConn struct {
 	config *tls.Config
 	retry  int
 }
 
-// NewInternalConnection returns a configuration object
-// containing relevant parts for secure connections in
-// pluto's internal network.
-func NewInternalConnection(certLoc string, keyLoc string, rootCertPath string, retry int) (*internalConnection, error) {
-
-	// Load internal TLS config.
-	tlsConfig, err := crypto.NewInternalTLSConfig(certLoc, keyLoc, rootCertPath)
-	if err != nil {
-		return nil, err
-	}
-
-	return &internalConnection{
-		config: tlsConfig,
-		retry:  retry,
-	}, nil
-}
-
 // ReliableConnect provides a mechanism for nodes in
 // pluto's internal network to reliably contact one another.
-func (c *internalConnection) ReliableConnect(addr string) (*tls.Conn, error) {
+func (c *intlConn) ReliableConnect(addr string) (*tls.Conn, error) {
 
 	var err error
 	var conn *tls.Conn

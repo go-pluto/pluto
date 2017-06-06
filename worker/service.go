@@ -12,9 +12,10 @@ import (
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crdt"
 	"github.com/numbleroot/pluto/imap"
+	"github.com/pkg/errors"
 )
 
-// InternalConnection knows how to create internal tls connections
+// InternalConnection knows how to create internal TLS connections.
 type InternalConnection interface {
 	ReliableConnect(addr string) (*tls.Conn, error)
 }
@@ -22,6 +23,9 @@ type InternalConnection interface {
 // Service defines the interface a worker node
 // in a pluto network provides.
 type Service interface {
+
+	// InitService initializes node-type specific fields.
+	InitService() error
 
 	// Run loops over incoming requests at worker and
 	// dispatches each one to a goroutine taking care of
@@ -62,63 +66,46 @@ type Service interface {
 }
 
 type service struct {
-	imapNode           *imap.IMAPNode
-	Name               string
-	SyncSendChan       chan string
-	internalConnection InternalConnection
-	config             config.Worker
+	imapNode     *imap.IMAPNode
+	Name         string
+	SyncSendChan chan string
+	intlConn     InternalConnection
+	config       config.Worker
 }
 
 // NewService takes in all required parameters for spinning
 // up a new worker node, runs initialization code, and returns
 // a service struct for this node type wrapping all information.
-func NewService(internalConnection InternalConnection, config config.Worker, name string) Service {
+func NewService(intlConn InternalConnection, mailSocket net.Listener, syncSocket net.Listener, config config.Worker, name string) Service {
 
 	s := &service{
 		imapNode: &imap.IMAPNode{
-			//lock:             new(sync.RWMutex), // TODO: should work without
+			// TODO: should work without following line
+			// lock:           new(sync.RWMutex),
+			MailSocket:       mailSocket,
+			SyncSocket:       syncSocket,
 			Connections:      make(map[string]*tls.Conn),
 			MailboxStructure: make(map[string]map[string]*crdt.ORSet),
 			MailboxContents:  make(map[string]map[string][]string),
+			CRDTLayerRoot:    config.CRDTLayerRoot,
+			MaildirRoot:      config.MaildirRoot,
 		},
-		Name:               name,
-		SyncSendChan:       make(chan string),
-		internalConnection: internalConnection,
-		config:             config,
+		Name:         name,
+		SyncSendChan: make(chan string),
+		intlConn:     intlConn,
+		config:       config,
 	}
 
-	// TODO: Probably better to move initializing into its own method, so we can check errors.
+	return s
+}
 
-	if err := s.findFiles(); err != nil {
-		return nil
+func (s *service) InitService() error {
+
+	var err error
+
+	if err = s.findFiles(); err != nil {
+		return errors.Wrap(err, "failed to initilize worker")
 	}
-
-	// Set correct paths.
-	s.imapNode.CRDTLayerRoot = config.CRDTLayerRoot
-	s.imapNode.MaildirRoot = config.MaildirRoot
-
-	// TODO: Move this out and inject from the outside
-	//// Load internal TLS config.
-	//internalTLSConfig, err := crypto.NewInternalTLSConfig(config.Workers[worker.Name].TLS.CertLoc, config.Workers[worker.Name].TLS.KeyLoc, config.RootCertLoc)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//// Start to listen for incoming internal connections on defined IP and sync port.
-	//worker.SyncSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].ListenIP, config.Workers[worker.Name].SyncPort), internalTLSConfig)
-	//if err != nil {
-	//	return nil, fmt.Errorf("[imap.InitWorker] Listening for internal sync TLS connections failed with: %v", err)
-	//}
-	//
-	//stdlog.Printf("[imap.InitWorker] Listening for incoming sync requests on %s.\n", worker.SyncSocket.Addr())
-	//
-	//// Start to listen for incoming internal connections on defined IP and mail port.
-	//worker.MailSocket, err = tls.Listen("tcp", fmt.Sprintf("%s:%s", config.Workers[worker.Name].ListenIP, config.Workers[worker.Name].MailPort), internalTLSConfig)
-	//if err != nil {
-	//	return nil, fmt.Errorf("[imap.InitWorker] Listening for internal IMAP TLS connections failed with: %v", err)
-	//}
-	//
-	//stdlog.Printf("[imap.InitWorker] Listening for incoming IMAP requests on %s.\n", worker.MailSocket.Addr())
 
 	// Initialize channels for this node.
 	applyCRDTUpdChan := make(chan string)
@@ -151,7 +138,7 @@ func NewService(internalConnection InternalConnection, config config.Worker, nam
 	// Apply received CRDT messages in background.
 	go s.imapNode.ApplyCRDTUpd(applyCRDTUpdChan, doneCRDTUpdChan)
 
-	return s
+	return err
 }
 
 // findFiles below this node's CRDT root layer.
@@ -160,7 +147,7 @@ func (s *service) findFiles() error {
 	// Find all files below this node's CRDT root layer.
 	userFolders, err := filepath.Glob(filepath.Join(s.imapNode.CRDTLayerRoot, "*"))
 	if err != nil {
-		return fmt.Errorf("[imap.InitWorker] Globbing for CRDT folders of users failed with: %v", err)
+		return fmt.Errorf("[imap.initWorker] Globbing for CRDT folders of users failed with: %v", err)
 	}
 
 	for _, folder := range userFolders {
@@ -168,7 +155,7 @@ func (s *service) findFiles() error {
 		// Retrieve information about accessed file.
 		folderInfo, err := os.Stat(folder)
 		if err != nil {
-			return fmt.Errorf("[imap.InitWorker] Error during stat'ing possible user CRDT folder: %v", err)
+			return fmt.Errorf("[imap.initWorker] Error during stat'ing possible user CRDT folder: %v", err)
 		}
 
 		// Only consider folders for building up CRDT map.
@@ -180,7 +167,7 @@ func (s *service) findFiles() error {
 			// Read in mailbox structure CRDT from file.
 			userMainCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, "mailbox-structure.log"))
 			if err != nil {
-				return fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %v", err)
+				return fmt.Errorf("[imap.initWorker] Reading CRDT failed: %v", err)
 			}
 
 			// Store main CRDT in designated map for user name.
@@ -199,7 +186,7 @@ func (s *service) findFiles() error {
 				// Read in each mailbox CRDT from file.
 				userMailboxCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, fmt.Sprintf("%s.log", userMailbox)))
 				if err != nil {
-					return fmt.Errorf("[imap.InitWorker] Reading CRDT failed: %v", err)
+					return fmt.Errorf("[imap.initWorker] Reading CRDT failed: %v", err)
 				}
 
 				// Store each read-in CRDT in map under the respective

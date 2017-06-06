@@ -69,19 +69,20 @@ type Service interface {
 }
 
 type service struct {
-	authenticator      Authenticator
-	internalConnection InternalConnection
-	workers            map[string]config.Worker
+	auther   Authenticator
+	intlConn InternalConnection
+	workers  map[string]config.Worker
 }
 
 // NewService takes in all required parameters for spinning
 // up a new distributor node and returns a service struct for
 // this node type wrapping all information.
-func NewService(authenticator Authenticator, internalConnection InternalConnection, workers map[string]config.Worker) Service {
+func NewService(auther Authenticator, intlConn InternalConnection, workers map[string]config.Worker) Service {
+
 	return &service{
-		authenticator:      authenticator,
-		internalConnection: internalConnection,
-		workers:            workers,
+		auther:   auther,
+		intlConn: intlConn,
+		workers:  workers,
 	}
 }
 
@@ -315,7 +316,7 @@ func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
 		return true
 	}
 
-	id, clientID, err := s.authenticator.AuthenticatePlain(userCredentials[0], userCredentials[1], c.IncConn.RemoteAddr().String())
+	id, clientID, err := s.auther.AuthenticatePlain(userCredentials[0], userCredentials[1], c.IncConn.RemoteAddr().String())
 	if err != nil {
 
 		// If supplied credentials failed to authenticate client,
@@ -330,7 +331,7 @@ func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
 	}
 
 	// Find worker node responsible for this connection.
-	respWorker, err := s.authenticator.GetWorkerForUser(s.workers, id)
+	respWorker, err := s.auther.GetWorkerForUser(s.workers, id)
 	if err != nil {
 		c.Error("Authentication error", err)
 		return false
@@ -341,7 +342,7 @@ func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
 	workerPort := s.workers[respWorker].MailPort
 
 	outAddr := fmt.Sprintf("%s:%s", workerIP, workerPort)
-	conn, err := s.internalConnection.ReliableConnect(outAddr)
+	conn, err := s.intlConn.ReliableConnect(outAddr)
 
 	if err != nil {
 		c.Error("Internal connection failure", err)
