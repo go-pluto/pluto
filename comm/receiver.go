@@ -13,7 +13,10 @@ import (
 	"sync"
 	"time"
 
+	"crypto/tls"
 	"io/ioutil"
+
+	"google.golang.org/grpc"
 )
 
 // Structs
@@ -25,6 +28,7 @@ type Receiver struct {
 	name             string
 	msgInLog         chan struct{}
 	socket           net.Listener
+	tlsConfig        *tls.Config
 	writeLog         *os.File
 	updLog           *os.File
 	incVClock        chan string
@@ -43,7 +47,7 @@ type Receiver struct {
 // InitReceiver initializes above struct and sets
 // default values. It starts involved background
 // routines and send initial channel trigger.
-func InitReceiver(name string, logFilePath string, vclockLogPath string, socket net.Listener, applyCRDTUpdChan chan string, doneCRDTUpdChan chan struct{}, downRecv chan struct{}, nodes []string) (chan string, chan map[string]int, error) {
+func InitReceiver(name string, logFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan string, doneCRDTUpdChan chan struct{}, downRecv chan struct{}, nodes []string) (chan string, chan map[string]int, error) {
 
 	// Create and initialize new struct.
 	recv := &Receiver{
@@ -51,6 +55,7 @@ func InitReceiver(name string, logFilePath string, vclockLogPath string, socket 
 		name:             name,
 		msgInLog:         make(chan struct{}, 1),
 		socket:           socket,
+		tlsConfig:        tlsConfig,
 		incVClock:        make(chan string),
 		updVClock:        make(chan map[string]int),
 		vclock:           make(map[string]int),
@@ -115,6 +120,10 @@ func InitReceiver(name string, logFilePath string, vclockLogPath string, socket 
 	// vector clock increments.
 	recv.wg.Add(1)
 	go recv.IncVClockEntry()
+
+	// Initialize and run a new gRPC server with appropriate
+	// options set to send and receive CRDT updates.
+	go recv.StartGRPCRecv()
 
 	// Apply received messages in background.
 	recv.wg.Add(1)
@@ -304,6 +313,21 @@ func (recv *Receiver) IncVClockEntry() {
 			}
 		}
 	}
+}
+
+// StartGRPCRecv initializes and runs a configured
+// gRPC receiver for pluto-internal communication.
+func (recv *Receiver) StartGRPCRecv() error {
+
+	// Define options for an empty gRPC server.
+	options := ReceiverOptions(recv.tlsConfig)
+	grpcRecv := grpc.NewServer(options...)
+
+	// Register the empty server on fulfilling interface.
+	RegisterReceiverServer(grpcRecv, recv)
+
+	// Run server.
+	return grpcRecv.Serve(recv.socket)
 }
 
 // AcceptIncMsgs runs in background and waits for

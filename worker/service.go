@@ -133,7 +133,7 @@ func NewService(internalConnection InternalConnection, config config.Worker, nam
 	//vclockLog := filepath.Join(s.imapNode.CRDTLayerRoot, "vclock.log")
 	//
 	//// Initialize receiving goroutine for sync operations.
-	//chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(s.Name, recvCRDTLog, vclockLog, s.SyncSocket, applyCRDTUpdChan, doneCRDTUpdChan, downRecv, []string{"storage"})
+	// chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(worker.Name, recvCRDTLog, vclockLog, worker.SyncSocket, internalTLSConfig, applyCRDTUpdChan, doneCRDTUpdChan, downRecv, []string{"storage"})
 	//if err != nil {
 	//	return nil
 	//}

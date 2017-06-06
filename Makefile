@@ -14,7 +14,7 @@ clean:
 proto:
 	 protoc -I comm/ comm/receiver.proto --go_out=plugins=grpc:comm
 
-build: proto
+build:
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'
 
 docker: build
