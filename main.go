@@ -3,15 +3,18 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"runtime"
 	"strings"
 
 	"crypto/tls"
+	"io/ioutil"
 	"path/filepath"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/numbleroot/maildir"
 	"github.com/numbleroot/pluto/auth"
 	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
@@ -19,6 +22,7 @@ import (
 	"github.com/numbleroot/pluto/distributor"
 	"github.com/numbleroot/pluto/storage"
 	"github.com/numbleroot/pluto/worker"
+	"github.com/satori/go.uuid"
 )
 
 // Functions
@@ -69,6 +73,75 @@ func initLogger(loglevel string) log.Logger {
 	}
 
 	return logger
+}
+
+// publicDistributorConn listens on config supplied socket
+// for incoming public TLS connections to the distributor.
+func publicDistributorConn(conf config.Distributor) (net.Listener, error) {
+
+	// Load public TLS config based on config values.
+	tlsConfig, err := crypto.NewPublicTLSConfig(conf.PublicTLS.CertLoc, conf.PublicTLS.KeyLoc)
+	if err != nil {
+		return nil, err
+	}
+
+	return tls.Listen("tcp", fmt.Sprintf("%s:%s", conf.ListenIP, conf.Port), tlsConfig)
+}
+
+func createUserFiles(crdtLayerRoot string, maildirRoot string, start int, end int) error {
+
+	if err := os.MkdirAll(maildirRoot, 0755); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(crdtLayerRoot, 0755); err != nil {
+		return err
+	}
+
+	for i := start; i <= end; i++ {
+
+		mail := maildir.Dir(filepath.Join(maildirRoot, fmt.Sprintf("user%d", i)))
+		err := mail.Create()
+		if err != nil && os.IsNotExist(err) {
+			return err
+		}
+
+		crdtFolder := filepath.Join(crdtLayerRoot, fmt.Sprintf("user%d", i))
+		if err := os.MkdirAll(crdtFolder, 0755); err != nil {
+			return err
+		}
+
+		inboxLog := filepath.Join(crdtFolder, "INBOX.log")
+		mailboxStructureLog := filepath.Join(crdtFolder, "mailbox-structure.log")
+
+		if !exists(inboxLog) {
+			if err := ioutil.WriteFile(inboxLog, nil, 0644); err != nil {
+				return err
+			}
+		}
+
+		if !exists(mailboxStructureLog) {
+			data := "SU5CT1g=;" + uuid.NewV4().String() + "\n"
+			if err := ioutil.WriteFile(mailboxStructureLog, []byte(data), 0644); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// exists returns true if a file exists
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// not found
+			return false
+		}
+		return false
+	}
+	return true
 }
 
 func main() {
@@ -174,6 +247,14 @@ func main() {
 
 			level.Error(logger).Log(
 				"msg", fmt.Sprintf("specified worker ID does not exist in config file, use for example '%s'", workerID),
+			)
+			os.Exit(1)
+		}
+
+		if err := createUserFiles(workerConfig.CRDTLayerRoot, workerConfig.MaildirRoot, workerConfig.UserStart, workerConfig.UserEnd); err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to create user files",
+				"err", err,
 			)
 			os.Exit(1)
 		}
