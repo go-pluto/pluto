@@ -24,8 +24,8 @@ type InternalConnection interface {
 // in a pluto network provides.
 type Service interface {
 
-	// InitService initializes node-type specific fields.
-	InitService() error
+	// Init initializes node-type specific fields.
+	Init() error
 
 	// Run loops over incoming requests at worker and
 	// dispatches each one to a goroutine taking care of
@@ -78,7 +78,7 @@ type service struct {
 // a service struct for this node type wrapping all information.
 func NewService(intlConn InternalConnection, mailSocket net.Listener, syncSocket net.Listener, config config.Worker, name string) Service {
 
-	s := &service{
+	return &service{
 		imapNode: &imap.IMAPNode{
 			// TODO: should work without following line
 			// lock:           new(sync.RWMutex),
@@ -95,11 +95,9 @@ func NewService(intlConn InternalConnection, mailSocket net.Listener, syncSocket
 		intlConn:     intlConn,
 		config:       config,
 	}
-
-	return s
 }
 
-func (s *service) InitService() error {
+func (s *service) Init() error {
 
 	var err error
 

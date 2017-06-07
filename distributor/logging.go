@@ -9,8 +9,8 @@ import (
 )
 
 type loggingService struct {
-	logger log.Logger
-	Service
+	logger  log.Logger
+	service Service
 }
 
 // NewLoggingService wraps a provided existing
@@ -23,7 +23,7 @@ func NewLoggingService(s Service, logger log.Logger) Service {
 // added logging capabilities.
 func (s *loggingService) Run(listener net.Listener, greeting string) error {
 
-	err := s.Service.Run(listener, greeting)
+	err := s.service.Run(listener, greeting)
 
 	level.Warn(s.logger).Log(
 		"msg", "failed to run distributor service",
@@ -37,7 +37,7 @@ func (s *loggingService) Run(listener net.Listener, greeting string) error {
 // method with added logging capabilities.
 func (s *loggingService) Capability(c *imap.Connection, req *imap.Request) bool {
 
-	ok := s.Service.Capability(c, req)
+	ok := s.service.Capability(c, req)
 
 	logger := log.With(s.logger,
 		"method", "CAPABILITY",
@@ -58,7 +58,7 @@ func (s *loggingService) Capability(c *imap.Connection, req *imap.Request) bool 
 // with added logging capabilities.
 func (s *loggingService) Logout(c *imap.Connection, req *imap.Request) bool {
 
-	ok := s.Service.Logout(c, req)
+	ok := s.service.Logout(c, req)
 
 	logger := log.With(s.logger,
 		"method", "LOGOUT",
@@ -79,7 +79,7 @@ func (s *loggingService) Logout(c *imap.Connection, req *imap.Request) bool {
 // with added logging capabilities.
 func (s *loggingService) Login(c *imap.Connection, req *imap.Request) bool {
 
-	ok := s.Service.Login(c, req)
+	ok := s.service.Login(c, req)
 
 	logger := log.With(s.logger,
 		"method", "LOGIN",
@@ -100,7 +100,7 @@ func (s *loggingService) Login(c *imap.Connection, req *imap.Request) bool {
 // method with added logging capabilities.
 func (s *loggingService) StartTLS(c *imap.Connection, req *imap.Request) bool {
 
-	ok := s.Service.StartTLS(c, req)
+	ok := s.service.StartTLS(c, req)
 
 	logger := log.With(s.logger,
 		"method", "STARTTLS",
@@ -121,7 +121,7 @@ func (s *loggingService) StartTLS(c *imap.Connection, req *imap.Request) bool {
 // with added logging capabilities.
 func (s *loggingService) Proxy(c *imap.Connection, rawReq string) bool {
 
-	ok := s.Service.Proxy(c, rawReq)
+	ok := s.service.Proxy(c, rawReq)
 
 	logger := log.With(s.logger,
 		"method", "Proxy",

@@ -207,16 +207,15 @@ func main() {
 
 		var workerS worker.Service
 		workerS = worker.NewService(&intlConn{tlsConfig, conf.IntlConnRetry}, mailSocket, syncSocket, workerConfig, *workerFlag)
+		workerS = worker.NewLoggingService(workerS, logger)
 
-		err = workerS.InitService()
+		err = workerS.Init()
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", fmt.Sprintf("failed to initilize service of %s", *workerFlag),
 				"err", err,
 			)
 		}
-
-		workerS = worker.NewLoggingService(workerS, logger)
 
 		if err := workerS.Run(); err != nil {
 			level.Error(logger).Log(

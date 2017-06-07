@@ -9,8 +9,8 @@ import (
 )
 
 type loggingService struct {
-	logger log.Logger
-	Service
+	logger  log.Logger
+	service Service
 }
 
 // NewLoggingService wraps a provided existing
@@ -23,7 +23,7 @@ func NewLoggingService(s Service, logger log.Logger) Service {
 // added logging capabilities.
 func (s *loggingService) Run() error {
 
-	err := s.Service.Run()
+	err := s.service.Run()
 
 	level.Warn(s.logger).Log(
 		"msg", "failed to run storage service",
@@ -37,7 +37,7 @@ func (s *loggingService) Run() error {
 // method with added logging capabilities.
 func (s *loggingService) HandleConnection(conn net.Conn) error {
 
-	err := s.Service.HandleConnection(conn)
+	err := s.service.HandleConnection(conn)
 
 	level.Info(s.logger).Log(
 		"msg", "failed to handle connection",
@@ -51,7 +51,7 @@ func (s *loggingService) HandleConnection(conn net.Conn) error {
 // with added logging capabilities.
 func (s *loggingService) Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
 
-	ok := s.Service.Select(c, req, syncChan)
+	ok := s.service.Select(c, req, syncChan)
 
 	logger := log.With(s.logger,
 		"method", "SELECT",
@@ -72,7 +72,7 @@ func (s *loggingService) Select(c *imap.IMAPConnection, req *imap.Request, syncC
 // with added logging capabilities.
 func (s *loggingService) Create(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
 
-	ok := s.Service.Create(c, req, syncChan)
+	ok := s.service.Create(c, req, syncChan)
 
 	logger := log.With(s.logger,
 		"method", "CREATE",
@@ -93,7 +93,7 @@ func (s *loggingService) Create(c *imap.IMAPConnection, req *imap.Request, syncC
 // with added logging capabilities.
 func (s *loggingService) Delete(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
 
-	ok := s.Service.Delete(c, req, syncChan)
+	ok := s.service.Delete(c, req, syncChan)
 
 	logger := log.With(s.logger,
 		"method", "DELETE",
@@ -114,7 +114,7 @@ func (s *loggingService) Delete(c *imap.IMAPConnection, req *imap.Request, syncC
 // with added logging capabilities.
 func (s *loggingService) List(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
 
-	ok := s.Service.List(c, req, syncChan)
+	ok := s.service.List(c, req, syncChan)
 
 	logger := log.With(s.logger,
 		"method", "LIST",
@@ -135,7 +135,7 @@ func (s *loggingService) List(c *imap.IMAPConnection, req *imap.Request, syncCha
 // with added logging capabilities.
 func (s *loggingService) Append(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
 
-	ok := s.Service.Append(c, req, syncChan)
+	ok := s.service.Append(c, req, syncChan)
 
 	logger := log.With(s.logger,
 		"method", "APPEND",
@@ -156,7 +156,7 @@ func (s *loggingService) Append(c *imap.IMAPConnection, req *imap.Request, syncC
 // with added logging capabilities.
 func (s *loggingService) Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
 
-	ok := s.Service.Expunge(c, req, syncChan)
+	ok := s.service.Expunge(c, req, syncChan)
 
 	logger := log.With(s.logger,
 		"method", "EXPUNGE",
@@ -177,7 +177,7 @@ func (s *loggingService) Expunge(c *imap.IMAPConnection, req *imap.Request, sync
 // with added logging capabilities.
 func (s *loggingService) Store(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
 
-	ok := s.Service.Store(c, req, syncChan)
+	ok := s.service.Store(c, req, syncChan)
 
 	logger := log.With(s.logger,
 		"method", "STORE",
