@@ -337,11 +337,7 @@ func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
 		return false
 	}
 
-	// Store worker connection information.
-	workerIP := s.workers[respWorker].PublicIP
-	workerPort := s.workers[respWorker].MailPort
-
-	outAddr := fmt.Sprintf("%s:%s", workerIP, workerPort)
+	outAddr := s.workers[respWorker].PublicMailAddr
 	conn, err := s.intlConn.ReliableConnect(outAddr)
 
 	if err != nil {
@@ -407,7 +403,7 @@ func (s *service) Proxy(c *imap.Connection, rawReq string) bool {
 
 	// TODO
 	// Pass message to worker node.
-	//err := c.InternalSend(false, rawReq, true, fmt.Sprintf("%s:%s", distr.Config.Storage.PublicIP, distr.Config.Storage.MailPort))
+	//err := c.InternalSend(false, rawReq, true, distr.Config.Storage.PublicMailAddr)
 	//if err != nil {
 	//	c.Error("Could not proxy request to worker", err)
 	//	return false

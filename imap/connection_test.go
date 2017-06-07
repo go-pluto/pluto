@@ -28,11 +28,11 @@ func TestInternalConnectAndSend(t *testing.T) {
 
 	// Shortcut for config values for "worker-1".
 	cWorker := config.Workers["worker-1"]
-	addrWorker := fmt.Sprintf("%s:%s", cWorker.ListenIP, cWorker.SyncPort)
+	addrWorker := cWorker.ListenSyncAddr
 
 	// Shortcut for config values for "storage".
 	cStorage := config.Storage
-	addrStorage := fmt.Sprintf("%s:%s", cStorage.ListenIP, cStorage.SyncPort)
+	addrStorage := cStorage.ListenSyncAddr
 
 	// Load internal TLS config for distributor.
 	// This will be used as the connecting TLS config.

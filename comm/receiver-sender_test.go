@@ -52,13 +52,13 @@ func TestSenderReceiver(t *testing.T) {
 	}
 
 	// Listen on defined worker-1 socket for TLS connections.
-	socketN1, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", testEnv.Config.Workers[n1].ListenIP, testEnv.Config.Workers[n1].SyncPort), internalTLSConfigN1)
+	socketN1, err := tls.Listen("tcp", testEnv.Config.Workers[n1].ListenSyncAddr, internalTLSConfigN1)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected TLS listen for worker-1 not to fail but received: %s\n", err.Error())
 	}
 
 	// Listen on defined storage socket for TLS connections.
-	socketN2, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", testEnv.Config.Storage.ListenIP, testEnv.Config.Storage.SyncPort), internalTLSConfigN2)
+	socketN2, err := tls.Listen("tcp", testEnv.Config.Storage.ListenSyncAddr, internalTLSConfigN2)
 	if err != nil {
 		t.Fatalf("[comm_test.TestSenderReceiver] Expected TLS listen for storage not to fail but received: %s\n", err.Error())
 	}
@@ -114,11 +114,11 @@ func TestSenderReceiver(t *testing.T) {
 
 	// Create map of connections for worker-1.
 	connsN1 := make(map[string]string)
-	connsN1[n2] = fmt.Sprintf("%s:%s", testEnv.Config.Storage.PublicIP, testEnv.Config.Storage.SyncPort)
+	connsN1[n2] = testEnv.Config.Storage.PublicSyncAddr
 
 	// Create map of connections for storage.
 	connsN2 := make(map[string]string)
-	connsN2[n1] = fmt.Sprintf("%s:%s", testEnv.Config.Workers[n1].PublicIP, testEnv.Config.Workers[n1].SyncPort)
+	connsN2[n1] = testEnv.Config.Workers[n1].PublicSyncAddr
 
 	// Initialize sending interface for worker-1.
 	chan1, err := comm.InitSender(n1, "../test-comm-sending-worker-1.log", internalTLSConfigN1, testEnv.Config.IntlConnTimeout, testEnv.Config.IntlConnRetry, chanIncN1, chanUpdN1, n1DownSender, connsN1)

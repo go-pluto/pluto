@@ -66,7 +66,7 @@ func CreateTestEnv(configFilePath string) (*TestEnv, error) {
 	return &TestEnv{
 		Config:      config,
 		TLSConfig:   tlsConfig,
-		Addr:        fmt.Sprintf("%s:%s", config.Distributor.PublicIP, config.Distributor.Port),
+		Addr:        config.Distributor.PublicMailAddr,
 		DownDistr:   make(chan struct{}),
 		DownWorker:  make(chan struct{}),
 		DownStorage: make(chan struct{}),

@@ -21,13 +21,12 @@ Greeting = "Pluto ready."
 HierarchySeparator = "."
 
 [Distributor]
-# PublicIP denotes the Internet-facing IP address
+# PublicMailAddr denotes the Internet-facing address
 # this pluto node is supposed to be reachable via.
-PublicIP = "127.0.0.1"
-# ListenIP in turn is used by this pluto process to
+PublicMailAddr = "127.0.0.1:993"
+# ListenMailAddr in turn is used by this pluto process to
 # bind locally to and listen for incoming requests.
-ListenIP = "127.0.0.1"
-Port = "993"
+ListenMailAddr = "127.0.0.1:993"
 AuthAdapter = "AuthPostgres"
 
     [Distributor.PublicTLS]
@@ -56,14 +55,12 @@ AuthAdapter = "AuthPostgres"
 [Workers]
 
     [Workers.worker-1]
-    PublicIP = "127.0.0.1"
-    ListenIP = "127.0.0.1"
-    # MailPort specifies the port for connections
-    # concerning the IMAP protocol.
-    MailPort = "20001"
-    # SyncPort is used internally in the pluto system
-    # to synchronize user mailbox state via CRDTs.
-    SyncPort = "30001"
+    # Public and local address for handling mail connections.
+    PublicMailAddr = "127.0.0.1:20001"
+    ListenMailAddr = "127.0.0.1:20001"
+    # Public and local address for CRDT synchronization.
+    PublicSyncAddr = "127.0.0.1:30001"
+    ListenSyncAddr = "127.0.0.1:30001"
     # The first ID of the user database table entry
     # that this worker node is responsible for.
     UserStart = 1
@@ -82,10 +79,10 @@ AuthAdapter = "AuthPostgres"
         KeyLoc = "/very/complicated/and/long/path/to/your/internal-worker-1-key.pem"
 
     [Workers.worker-2]
-    PublicIP = "127.0.0.1"
-    ListenIP = "127.0.0.1"
-    MailPort = "20002"
-    SyncPort = "30002"
+    PublicMailAddr = "127.0.0.1:20002"
+    ListenMailAddr = "127.0.0.1:20002"
+    PublicSyncAddr = "127.0.0.1:30002"
+    ListenSyncAddr = "127.0.0.1:30002"
     UserStart = 11
     UserEnd = 20
     MaildirRoot = "/for/example/var/mail/Maildir/"
@@ -96,10 +93,10 @@ AuthAdapter = "AuthPostgres"
         KeyLoc = "/very/complicated/and/long/path/to/your/internal-worker-2-key.pem"
 
     [Workers.worker-3]
-    PublicIP = "127.0.0.1"
-    ListenIP = "127.0.0.1"
-    MailPort = "20003"
-    SyncPort = "30003"
+    PublicMailAddr = "127.0.0.1:20003"
+    ListenMailAddr = "127.0.0.1:20003"
+    PublicSyncAddr = "127.0.0.1:30003"
+    ListenSyncAddr = "127.0.0.1:30003"
     UserStart = 21
     UserEnd = 30
     MaildirRoot = "/for/example/some/very/unique/path/Maildir/"
@@ -111,10 +108,10 @@ AuthAdapter = "AuthPostgres"
 
 
 [Storage]
-PublicIP = "127.0.0.1"
-ListenIP = "127.0.0.1"
-MailPort = "21000"
-SyncPort = "31000"
+PublicMailAddr = "127.0.0.1:21000"
+ListenMailAddr = "127.0.0.1:21000"
+PublicSyncAddr = "127.0.0.1:31000"
+ListenSyncAddr = "127.0.0.1:31000"
 MaildirRoot = "/for/example/some/very/unique/path/Maildir/"
 CRDTLayerRoot = "/for/example/some/very/unique/path/crdt-layer/"
 

@@ -125,7 +125,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		mailSocket, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", conf.Distributor.ListenIP, conf.Distributor.Port), publicTLSConfig)
+		mailSocket, err := tls.Listen("tcp", conf.Distributor.ListenMailAddr, publicTLSConfig)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to listen for public mail TLS connections on distributor",
@@ -136,7 +136,7 @@ func main() {
 		defer mailSocket.Close()
 
 		level.Info(logger).Log(
-			"msg", fmt.Sprintf("distributor is accepting public mail connections at %s", fmt.Sprintf("%s:%s", conf.Distributor.ListenIP, conf.Distributor.Port)),
+			"msg", fmt.Sprintf("distributor (%s) is accepting public mail connections at %s", conf.Distributor.ListenMailAddr, conf.Distributor.PublicMailAddr),
 		)
 
 		intlTLSConfig, err := crypto.NewInternalTLSConfig(conf.Distributor.InternalTLS.CertLoc, conf.Distributor.InternalTLS.KeyLoc, conf.RootCertLoc)
@@ -188,7 +188,7 @@ func main() {
 		}
 
 		// Create needed sockets. First, mail socket.
-		mailSocket, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", workerConfig.ListenIP, workerConfig.MailPort), tlsConfig)
+		mailSocket, err := tls.Listen("tcp", workerConfig.ListenMailAddr, tlsConfig)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", fmt.Sprintf("failed to listen for mail TLS connections on %s", *workerFlag),
@@ -199,11 +199,11 @@ func main() {
 		defer mailSocket.Close()
 
 		level.Info(logger).Log(
-			"msg", fmt.Sprintf("%s is accepting mail connections at %s", *workerFlag, fmt.Sprintf("%s:%s", workerConfig.ListenIP, workerConfig.MailPort)),
+			"msg", fmt.Sprintf("%s (%s) is accepting mail connections at %s", *workerFlag, workerConfig.ListenMailAddr, workerConfig.PublicMailAddr),
 		)
 
 		// Second, synchronization socket later used by gRPC.
-		syncSocket, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", workerConfig.ListenIP, workerConfig.SyncPort), tlsConfig)
+		syncSocket, err := tls.Listen("tcp", workerConfig.ListenSyncAddr, tlsConfig)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", fmt.Sprintf("failed to listen for synchronization TLS connections on %s", *workerFlag),
@@ -240,7 +240,7 @@ func main() {
 
 		// Create subnet to distribute CRDT changes in.
 		curCRDTSubnet := make(map[string]string)
-		curCRDTSubnet["storage"] = fmt.Sprintf("%s:%s", conf.Storage.PublicIP, conf.Storage.SyncPort)
+		curCRDTSubnet["storage"] = conf.Storage.PublicSyncAddr
 
 		// Init sending part of CRDT communication and send messages in background.
 		syncSendChan, err := comm.InitSender(*workerFlag, sendCRDTLog, tlsConfig, conf.IntlConnTimeout, conf.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
@@ -282,7 +282,7 @@ func main() {
 		}
 
 		// Create needed sockets. First, mail socket.
-		mailSocket, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", conf.Storage.ListenIP, conf.Storage.MailPort), tlsConfig)
+		mailSocket, err := tls.Listen("tcp", conf.Storage.ListenMailAddr, tlsConfig)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to listen for mail TLS connections on storage",
@@ -293,11 +293,11 @@ func main() {
 		defer mailSocket.Close()
 
 		level.Info(logger).Log(
-			"msg", fmt.Sprintf("storage is accepting mail connections at %s", fmt.Sprintf("%s:%s", conf.Storage.ListenIP, conf.Storage.MailPort)),
+			"msg", fmt.Sprintf("storage (%s) is accepting mail connections at %s", conf.Storage.ListenMailAddr, conf.Storage.PublicMailAddr),
 		)
 
 		// Second, synchronization socket later used by gRPC.
-		syncSocket, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", conf.Storage.ListenIP, conf.Storage.SyncPort), tlsConfig)
+		syncSocket, err := tls.Listen("tcp", conf.Storage.ListenSyncAddr, tlsConfig)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to listen for synchronization TLS connections on storage",
@@ -340,7 +340,7 @@ func main() {
 
 			// Create subnet to distribute CRDT changes in.
 			curCRDTSubnet := make(map[string]string)
-			curCRDTSubnet[name] = fmt.Sprintf("%s:%s", worker.PublicIP, worker.SyncPort)
+			curCRDTSubnet[name] = worker.PublicSyncAddr
 
 			// Init sending part of CRDT communication and send messages in background.
 			syncSendChans[name], err = comm.InitSender("storage", sendCRDTLog, tlsConfig, conf.IntlConnTimeout, conf.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
