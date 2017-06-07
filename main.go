@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/numbleroot/pluto/auth"
+	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crypto"
 	"github.com/numbleroot/pluto/distributor"
@@ -144,6 +146,7 @@ func main() {
 				"msg", "failed to create internal TLS config for distributor",
 				"err", err,
 			)
+			os.Exit(1)
 		}
 
 		var distrS distributor.Service
@@ -156,6 +159,7 @@ func main() {
 				"msg", "failed to run distributor",
 				"err", err,
 			)
+			os.Exit(1)
 		}
 	} else if *workerFlag != "" {
 
@@ -181,6 +185,7 @@ func main() {
 				"msg", fmt.Sprintf("failed to create internal TLS config for %s", *workerFlag),
 				"err", err,
 			)
+			os.Exit(1)
 		}
 
 		// Create needed sockets. First, mail socket.
@@ -190,6 +195,7 @@ func main() {
 				"msg", fmt.Sprintf("failed to listen for mail TLS connections on %s", *workerFlag),
 				"err", err,
 			)
+			os.Exit(1)
 		}
 
 		level.Info(logger).Log(
@@ -203,19 +209,59 @@ func main() {
 				"msg", fmt.Sprintf("failed to listen for synchronization TLS connections on %s", *workerFlag),
 				"err", err,
 			)
+			os.Exit(1)
 		}
 
 		var workerS worker.Service
 		workerS = worker.NewService(&intlConn{tlsConfig, conf.IntlConnRetry}, mailSocket, syncSocket, workerConfig, *workerFlag)
 		workerS = worker.NewLoggingService(workerS, logger)
 
-		err = workerS.Init()
+		// Initialize channels for this node.
+		applyCRDTUpd := make(chan string)
+		doneCRDTUpd := make(chan struct{})
+		downRecv := make(chan struct{})
+		downSender := make(chan struct{})
+
+		// Construct path to receiving and sending CRDT logs for storage node.
+		recvCRDTLog := filepath.Join(workerConfig.CRDTLayerRoot, "receiving.log")
+		sendCRDTLog := filepath.Join(workerConfig.CRDTLayerRoot, "sending.log")
+		vclockLog := filepath.Join(workerConfig.CRDTLayerRoot, "vclock.log")
+
+		// Initialize receiving goroutine for sync operations.
+		chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(*workerFlag, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, downRecv, []string{"storage"})
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to initialize receiver for worker",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+
+		// Create subnet to distribute CRDT changes in.
+		curCRDTSubnet := make(map[string]string)
+		curCRDTSubnet["storage"] = fmt.Sprintf("%s:%s", conf.Storage.PublicIP, conf.Storage.SyncPort)
+
+		// Init sending part of CRDT communication and send messages in background.
+		syncSendChan, err := comm.InitSender(*workerFlag, sendCRDTLog, tlsConfig, conf.IntlConnTimeout, conf.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to initialize sender for worker",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+
+		err = workerS.Init(syncSendChan)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", fmt.Sprintf("failed to initilize service of %s", *workerFlag),
 				"err", err,
 			)
+			os.Exit(1)
 		}
+
+		// Apply CRDT Updates in the background
+		go workerS.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
 
 		if err := workerS.Run(); err != nil {
 			level.Error(logger).Log(
@@ -231,6 +277,7 @@ func main() {
 				"msg", "failed to create internal TLS config for storage",
 				"err", err,
 			)
+			os.Exit(1)
 		}
 
 		var storageS storage.Service

@@ -25,7 +25,11 @@ type InternalConnection interface {
 type Service interface {
 
 	// Init initializes node-type specific fields.
-	Init() error
+	Init(syncSendChan chan string) error
+
+	// ApplyCRDTUpd receives strings representing CRDT
+	// update operations from receiver and executes them.
+	ApplyCRDTUpd(applyCRDTUpd chan string, doneCRDTUpd chan struct{})
 
 	// Run loops over incoming requests at worker and
 	// dispatches each one to a goroutine taking care of
@@ -90,14 +94,13 @@ func NewService(intlConn InternalConnection, mailSocket net.Listener, syncSocket
 			CRDTLayerRoot:    config.CRDTLayerRoot,
 			MaildirRoot:      config.MaildirRoot,
 		},
-		Name:         name,
-		SyncSendChan: make(chan string),
-		intlConn:     intlConn,
-		config:       config,
+		Name:     name,
+		intlConn: intlConn,
+		config:   config,
 	}
 }
 
-func (s *service) Init() error {
+func (s *service) Init(syncSendChan chan string) error {
 
 	var err error
 
@@ -105,36 +108,7 @@ func (s *service) Init() error {
 		return errors.Wrap(err, "failed to initilize worker")
 	}
 
-	// Initialize channels for this node.
-	applyCRDTUpdChan := make(chan string)
-	doneCRDTUpdChan := make(chan struct{})
-	//downRecv := make(chan struct{})
-	//downSender := make(chan struct{})
-
-	// TODO: Probably inject as dependency from the outside too
-	//// Construct path to receiving and sending CRDT logs for storage node.
-	//recvCRDTLog := filepath.Join(s.imapNode.CRDTLayerRoot, "receiving.log")
-	//sendCRDTLog := filepath.Join(s.imapNode.CRDTLayerRoot, "sending.log")
-	//vclockLog := filepath.Join(s.imapNode.CRDTLayerRoot, "vclock.log")
-	//
-	//// Initialize receiving goroutine for sync operations.
-	// chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(worker.Name, recvCRDTLog, vclockLog, worker.SyncSocket, internalTLSConfig, applyCRDTUpdChan, doneCRDTUpdChan, downRecv, []string{"storage"})
-	//if err != nil {
-	//	return nil
-	//}
-	//
-	//// Create subnet to distribute CRDT changes in.
-	//curCRDTSubnet := make(map[string]string)
-	//curCRDTSubnet["storage"] = fmt.Sprintf("%s:%s", config.Storage.PublicIP, config.Storage.SyncPort)
-	//
-	//// Init sending part of CRDT communication and send messages in background.
-	//s.SyncSendChan, err = comm.InitSender(s.Name, sendCRDTLog, internalTLSConfig, config.IntlConnTimeout, config.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
-	//if err != nil {
-	//	return nil
-	//}
-
-	// Apply received CRDT messages in background.
-	go s.imapNode.ApplyCRDTUpd(applyCRDTUpdChan, doneCRDTUpdChan)
+	s.SyncSendChan = syncSendChan
 
 	return err
 }
@@ -199,6 +173,12 @@ func (s *service) findFiles() error {
 	}
 
 	return nil
+}
+
+func (s *service) ApplyCRDTUpd(applyCRDTUpd chan string, doneCRDTUpd chan struct{}) {
+
+	// Apply received CRDT messages in background.
+	s.imapNode.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
 }
 
 // Run loops over incoming requests at worker and
