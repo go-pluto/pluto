@@ -19,6 +19,14 @@ func NewLoggingService(s Service, logger log.Logger) Service {
 	return &loggingService{logger, s}
 }
 
+func (s *loggingService) Init(syncSendChans map[string]chan string) error {
+	return s.service.Init(syncSendChans)
+}
+
+func (s *loggingService) ApplyCRDTUpd(applyCRDTUpd chan string, doneCRDTUpd chan struct{}) {
+	s.service.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
+}
+
 // Run wraps this service's Run method with
 // added logging capabilities.
 func (s *loggingService) Run() error {

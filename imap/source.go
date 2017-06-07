@@ -31,7 +31,6 @@ type IMAPNode struct {
 	lock             *sync.RWMutex
 	logger           log.Logger
 	MailSocket       net.Listener
-	SyncSocket       net.Listener
 	Connections      map[string]*tls.Conn
 	MailboxStructure map[string]map[string]*crdt.ORSet
 	MailboxContents  map[string]map[string][]string

@@ -12,7 +12,6 @@ import (
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crdt"
 	"github.com/numbleroot/pluto/imap"
-	"github.com/pkg/errors"
 )
 
 // InternalConnection knows how to create internal TLS connections.
@@ -80,14 +79,13 @@ type service struct {
 // NewService takes in all required parameters for spinning
 // up a new worker node, runs initialization code, and returns
 // a service struct for this node type wrapping all information.
-func NewService(intlConn InternalConnection, mailSocket net.Listener, syncSocket net.Listener, config config.Worker, name string) Service {
+func NewService(intlConn InternalConnection, mailSocket net.Listener, config config.Worker, name string) Service {
 
 	return &service{
 		imapNode: &imap.IMAPNode{
 			// TODO: should work without following line
 			// lock:           new(sync.RWMutex),
 			MailSocket:       mailSocket,
-			SyncSocket:       syncSocket,
 			Connections:      make(map[string]*tls.Conn),
 			MailboxStructure: make(map[string]map[string]*crdt.ORSet),
 			MailboxContents:  make(map[string]map[string][]string),
@@ -102,10 +100,9 @@ func NewService(intlConn InternalConnection, mailSocket net.Listener, syncSocket
 
 func (s *service) Init(syncSendChan chan string) error {
 
-	var err error
-
-	if err = s.findFiles(); err != nil {
-		return errors.Wrap(err, "failed to initilize worker")
+	err := s.findFiles()
+	if err != nil {
+		return err
 	}
 
 	s.SyncSendChan = syncSendChan

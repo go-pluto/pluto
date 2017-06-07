@@ -3,13 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 
 	"crypto/tls"
+	"path/filepath"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -72,19 +71,6 @@ func initLogger(loglevel string) log.Logger {
 	return logger
 }
 
-// publicDistributorConn listens on config supplied socket
-// for incoming public TLS connections to the distributor.
-func publicDistributorConn(conf config.Distributor) (net.Listener, error) {
-
-	// Load public TLS config based on config values.
-	tlsConfig, err := crypto.NewPublicTLSConfig(conf.PublicTLS.CertLoc, conf.PublicTLS.KeyLoc)
-	if err != nil {
-		return nil, err
-	}
-
-	return tls.Listen("tcp", fmt.Sprintf("%s:%s", conf.ListenIP, conf.Port), tlsConfig)
-}
-
 func main() {
 
 	var err error
@@ -118,7 +104,7 @@ func main() {
 	// system based on passed command line flag.
 	if *distributorFlag {
 
-		// Run a http server in a goroutine to expose this distributor's metrics.
+		// Run an HTTP server in a goroutine to expose this distributor's metrics.
 		go runPromHTTP(conf.Distributor.PrometheusAddr)
 
 		auther, err := initAuthenticator(conf)
@@ -130,17 +116,30 @@ func main() {
 			os.Exit(1)
 		}
 
-		conn, err := publicDistributorConn(conf.Distributor)
+		publicTLSConfig, err := crypto.NewPublicTLSConfig(conf.Distributor.PublicTLS.CertLoc, conf.Distributor.PublicTLS.KeyLoc)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to create public distributor connection",
+				"msg", "failed to create public TLS config for distributor",
 				"err", err,
 			)
 			os.Exit(1)
 		}
-		defer conn.Close()
 
-		tlsConfig, err := crypto.NewInternalTLSConfig(conf.Distributor.InternalTLS.CertLoc, conf.Distributor.InternalTLS.KeyLoc, conf.RootCertLoc)
+		mailSocket, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", conf.Distributor.ListenIP, conf.Distributor.Port), publicTLSConfig)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to listen for public mail TLS connections on distributor",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+		defer mailSocket.Close()
+
+		level.Info(logger).Log(
+			"msg", fmt.Sprintf("distributor is accepting public mail connections at %s", fmt.Sprintf("%s:%s", conf.Distributor.ListenIP, conf.Distributor.Port)),
+		)
+
+		intlTLSConfig, err := crypto.NewInternalTLSConfig(conf.Distributor.InternalTLS.CertLoc, conf.Distributor.InternalTLS.KeyLoc, conf.RootCertLoc)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to create internal TLS config for distributor",
@@ -150,11 +149,11 @@ func main() {
 		}
 
 		var distrS distributor.Service
-		distrS = distributor.NewService(auther, &intlConn{tlsConfig, conf.IntlConnRetry}, conf.Workers)
+		distrS = distributor.NewService(auther, &intlConn{intlTLSConfig, conf.IntlConnRetry}, conf.Workers)
 		distrS = distributor.NewLoggingService(distrS, logger)
 		distrS = distributor.NewMetricsService(distrS, plutoMetrics.Distributor.Logins, plutoMetrics.Distributor.Logouts)
 
-		if err := distrS.Run(conn, conf.IMAP.Greeting); err != nil {
+		if err := distrS.Run(mailSocket, conf.IMAP.Greeting); err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to run distributor",
 				"err", err,
@@ -197,6 +196,7 @@ func main() {
 			)
 			os.Exit(1)
 		}
+		defer mailSocket.Close()
 
 		level.Info(logger).Log(
 			"msg", fmt.Sprintf("%s is accepting mail connections at %s", *workerFlag, fmt.Sprintf("%s:%s", workerConfig.ListenIP, workerConfig.MailPort)),
@@ -211,9 +211,10 @@ func main() {
 			)
 			os.Exit(1)
 		}
+		defer syncSocket.Close()
 
 		var workerS worker.Service
-		workerS = worker.NewService(&intlConn{tlsConfig, conf.IntlConnRetry}, mailSocket, syncSocket, workerConfig, *workerFlag)
+		workerS = worker.NewService(&intlConn{tlsConfig, conf.IntlConnRetry}, mailSocket, workerConfig, *workerFlag)
 		workerS = worker.NewLoggingService(workerS, logger)
 
 		// Initialize channels for this node.
@@ -231,7 +232,7 @@ func main() {
 		chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver(*workerFlag, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, downRecv, []string{"storage"})
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to initialize receiver for worker",
+				"msg", fmt.Sprintf("failed to initialize receiver for %s", *workerFlag),
 				"err", err,
 			)
 			os.Exit(1)
@@ -245,7 +246,7 @@ func main() {
 		syncSendChan, err := comm.InitSender(*workerFlag, sendCRDTLog, tlsConfig, conf.IntlConnTimeout, conf.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to initialize sender for worker",
+				"msg", fmt.Sprintf("failed to initialize sender for %s", *workerFlag),
 				"err", err,
 			)
 			os.Exit(1)
@@ -260,7 +261,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Apply CRDT Updates in the background
+		// Apply CRDT updates in background.
 		go workerS.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
 
 		if err := workerS.Run(); err != nil {
@@ -280,9 +281,89 @@ func main() {
 			os.Exit(1)
 		}
 
+		// Create needed sockets. First, mail socket.
+		mailSocket, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", conf.Storage.ListenIP, conf.Storage.MailPort), tlsConfig)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to listen for mail TLS connections on storage",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+		defer mailSocket.Close()
+
+		level.Info(logger).Log(
+			"msg", fmt.Sprintf("storage is accepting mail connections at %s", fmt.Sprintf("%s:%s", conf.Storage.ListenIP, conf.Storage.MailPort)),
+		)
+
+		// Second, synchronization socket later used by gRPC.
+		syncSocket, err := tls.Listen("tcp", fmt.Sprintf("%s:%s", conf.Storage.ListenIP, conf.Storage.SyncPort), tlsConfig)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to listen for synchronization TLS connections on storage",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+		defer syncSocket.Close()
+
 		var storageS storage.Service
-		storageS = storage.NewService(&intlConn{tlsConfig, conf.IntlConnRetry}, conf.Storage, conf.Workers)
+		storageS = storage.NewService(&intlConn{tlsConfig, conf.IntlConnRetry}, mailSocket, conf.Storage, conf.Workers)
 		storageS = storage.NewLoggingService(storageS, logger)
+
+		syncSendChans := make(map[string]chan string)
+
+		for name, worker := range conf.Workers {
+
+			// Initialize channels for this node.
+			applyCRDTUpd := make(chan string)
+			doneCRDTUpd := make(chan struct{})
+			downRecv := make(chan struct{})
+			downSender := make(chan struct{})
+
+			// Construct path to receiving and sending CRDT logs for
+			// current worker node.
+			recvCRDTLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("receiving-%s.log", name))
+			sendCRDTLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("sending-%s.log", name))
+			vclockLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("vclock-%s.log", name))
+
+			// Initialize a receiving goroutine for sync operations
+			// for each worker node.
+			chanIncVClockWorker, chanUpdVClockWorker, err := comm.InitReceiver("storage", recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, downRecv, []string{name})
+			if err != nil {
+				level.Error(logger).Log(
+					"msg", "failed to initialize receiver for storage",
+					"err", err,
+				)
+				os.Exit(1)
+			}
+
+			// Create subnet to distribute CRDT changes in.
+			curCRDTSubnet := make(map[string]string)
+			curCRDTSubnet[name] = fmt.Sprintf("%s:%s", worker.PublicIP, worker.SyncPort)
+
+			// Init sending part of CRDT communication and send messages in background.
+			syncSendChans[name], err = comm.InitSender("storage", sendCRDTLog, tlsConfig, conf.IntlConnTimeout, conf.IntlConnRetry, chanIncVClockWorker, chanUpdVClockWorker, downSender, curCRDTSubnet)
+			if err != nil {
+				level.Error(logger).Log(
+					"msg", "failed to initialize sender for storage",
+					"err", err,
+				)
+				os.Exit(1)
+			}
+
+			err = storageS.Init(syncSendChans)
+			if err != nil {
+				level.Error(logger).Log(
+					"msg", "failed to initilize service of storage",
+					"err", err,
+				)
+				os.Exit(1)
+			}
+
+			// Apply CRDT updates in background.
+			go storageS.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
+		}
 
 		if err := storageS.Run(); err != nil {
 			level.Error(logger).Log(
