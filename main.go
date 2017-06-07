@@ -75,19 +75,6 @@ func initLogger(loglevel string) log.Logger {
 	return logger
 }
 
-// publicDistributorConn listens on config supplied socket
-// for incoming public TLS connections to the distributor.
-func publicDistributorConn(conf config.Distributor) (net.Listener, error) {
-
-	// Load public TLS config based on config values.
-	tlsConfig, err := crypto.NewPublicTLSConfig(conf.PublicTLS.CertLoc, conf.PublicTLS.KeyLoc)
-	if err != nil {
-		return nil, err
-	}
-
-	return tls.Listen("tcp", fmt.Sprintf("%s:%s", conf.ListenIP, conf.Port), tlsConfig)
-}
-
 func createUserFiles(crdtLayerRoot string, maildirRoot string, start int, end int) error {
 
 	if err := os.MkdirAll(maildirRoot, 0755); err != nil {
@@ -133,14 +120,18 @@ func createUserFiles(crdtLayerRoot string, maildirRoot string, start int, end in
 
 // exists returns true if a file exists
 func exists(path string) bool {
+
 	_, err := os.Stat(path)
 	if err != nil {
+
 		if os.IsNotExist(err) {
 			// not found
 			return false
 		}
+
 		return false
 	}
+
 	return true
 }
 
