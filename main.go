@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"runtime"
 	"strings"
@@ -242,9 +241,11 @@ func main() {
 			os.Exit(1)
 		}
 
+		// Create all non-existent files and folders for
+		// all users this worker is responsible for.
 		if err := createUserFiles(workerConfig.CRDTLayerRoot, workerConfig.MaildirRoot, workerConfig.UserStart, workerConfig.UserEnd); err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to create user files",
+				"msg", fmt.Sprintf("failed to create user files on %s", *workerFlag),
 				"err", err,
 			)
 			os.Exit(1)
@@ -386,6 +387,17 @@ func main() {
 		syncSendChans := make(map[string]chan string)
 
 		for name, worker := range conf.Workers {
+
+			// Create all non-existent files and folders on
+			// storage for all users the currently examined
+			// worker is responsible for.
+			if err := createUserFiles(conf.Storage.CRDTLayerRoot, conf.Storage.MaildirRoot, worker.UserStart, worker.UserEnd); err != nil {
+				level.Error(logger).Log(
+					"msg", fmt.Sprintf("failed to create user files for %s on storage", name),
+					"err", err,
+				)
+				os.Exit(1)
+			}
 
 			// Initialize channels for this node.
 			applyCRDTUpd := make(chan string)
