@@ -244,7 +244,7 @@ func (recv *Receiver) Shutdown(downRecv chan struct{}) {
 	close(recv.updVClock)
 	close(recv.msgInLog)
 
-	// Wait for both to indicate finish.
+	// Wait for all routines to indicate finish.
 	recv.wg.Wait()
 
 	// Close receiving socket.

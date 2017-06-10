@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	"crypto/tls"
+
+	"google.golang.org/grpc"
 )
 
 // Structs
@@ -20,6 +22,7 @@ type Sender struct {
 	lock            *sync.Mutex
 	name            string
 	tlsConfig       *tls.Config
+	gRPCOptions     []grpc.DialOption
 	intlConnTimeout int
 	intlConnRetry   int
 	inc             chan string
@@ -75,6 +78,9 @@ func InitSender(name string, logFilePath string, tlsConfig *tls.Config, timeout 
 
 	// Start eventual shutdown routine in background.
 	go sender.Shutdown(downSender)
+
+	// Prepare gRPC call options for later use.
+	sender.gRPCOptions = SenderOptions(sender.tlsConfig)
 
 	// Start brokering routine in background.
 	sender.wg.Add(1)

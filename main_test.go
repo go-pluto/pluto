@@ -62,7 +62,6 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 		if err != nil {
 			stdlog.Fatal(err)
 		}
-		defer mailSocket.Close()
 
 		var storageS storage.Service
 		storageS = storage.NewService(&intlConn{intlTLSConfig, testEnv.Config.IntlConnRetry}, mailSocket, testEnv.Config.Storage, testEnv.Config.Workers)
@@ -74,9 +73,8 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
 			stdlog.Printf("[utils.RunAllNodes] Closing storage socket")
 
-			//// Shut down storage node.
-			//storage.MailSocket.Close()
-			//storage.SyncSocket.Close()
+			// Shut down storage node.
+			mailSocket.Close()
 
 			// Signal back successful shutdown.
 			testEnv.DoneStorage <- struct{}{}
@@ -108,7 +106,6 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 		if err != nil {
 			stdlog.Fatal(err)
 		}
-		defer mailSocket.Close()
 
 		var workerS worker.Service
 		workerS = worker.NewService(&intlConn{intlTLSConfig, testEnv.Config.IntlConnRetry}, mailSocket, workerConfig, workerName)
@@ -120,9 +117,8 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
 			stdlog.Printf("[utils.RunAllNodes] Closing %s socket", workerName)
 
-			//// Shut down worker node.
-			//worker.MailSocket.Close()
-			//worker.SyncSocket.Close()
+			// Shut down worker node.
+			mailSocket.Close()
 
 			// Signal back successful shutdown.
 			testEnv.DoneWorker <- struct{}{}

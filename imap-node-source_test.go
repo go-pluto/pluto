@@ -28,7 +28,7 @@ var selectTests = []struct {
 	in  string
 	out string
 }{
-	{"a LOGIN user0 password0", "a OK LOGIN completed"},
+	{"a LOGIN user10 password10", "a OK LOGIN completed"},
 	{"b SELECT INBOX", "* 0 EXISTS\r\n* 0 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\nb OK [READ-WRITE] SELECT completed"},
 	{"c SELECT", "c BAD Command SELECT was sent without a mailbox to select"},
 	{"d SELECT lol rofl nope", "d BAD Command SELECT was sent with multiple mailbox names instead of only one"},

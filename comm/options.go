@@ -10,6 +10,11 @@ import (
 	"google.golang.org/grpc/keepalive"
 )
 
+// Set the maximum number of bytes a message is allowed to
+// carry to (256 * 1024 * 1024 B) + 2048 B (buffer) > 256 MiB.
+// Symmetric - send and receive option.
+var maxMsgSize int = 268437504
+
 // ReceiverOptions returns a list of gRPC server
 // options that the internal receiver uses for RPCs.
 func ReceiverOptions(tlsConfig *tls.Config) []grpc.ServerOption {
@@ -48,11 +53,6 @@ func ReceiverOptions(tlsConfig *tls.Config) []grpc.ServerOption {
 	// TODO: Think about clever stats handler. Prometheus-exposed?
 	// stats := grpc.StatsHandler(h)
 
-	// Set the maximum number of bytes a message is allowed to
-	// carry to (256 * 1024 * 1024 B) + 2048 B (buffer) > 256 MiB.
-	// Symmetric - send and receive option.
-	maxMsgSize := 268437504
-
 	return []grpc.ServerOption{
 		grpc.Creds(creds),
 		grpc.CustomCodec(codec),
@@ -62,5 +62,65 @@ func ReceiverOptions(tlsConfig *tls.Config) []grpc.ServerOption {
 		grpc.MaxSendMsgSize(maxMsgSize),
 		grpc.KeepaliveParams(kaParams),
 		grpc.KeepaliveEnforcementPolicy(enfPolicy),
+		// grpc.StatsHandler(stats),
+	}
+}
+
+func SenderOptions(tlsConfig *tls.Config) []grpc.DialOption {
+
+	// Use the custom NoOp codec that simply passes
+	// through received binary messages.
+	codec := NoOpCodec{}
+
+	// Use GZIP for compression and decompression.
+	comp := grpc.NewGZIPCompressor()
+	decomp := grpc.NewGZIPDecompressor()
+
+	// TODO: Think about well functioning backoff
+	//       strategy to use in clients.
+	// boff := grpc.BackoffConfig{}
+
+	// Set the dial timeout to quit trying after exceeded.
+	timeout := 20 * time.Second
+
+	// These call options will be used for every call
+	// via this connection.
+	callOpts := []grpc.CallOption{
+		// Fail immediately if connection is closed.
+		grpc.FailFast(true),
+		// Set maximum receive and send sizes.
+		grpc.MaxCallRecvMsgSize(maxMsgSize),
+		grpc.MaxCallSendMsgSize(maxMsgSize),
+	}
+
+	kaParams := keepalive.ClientParameters{
+		// The client will ping the other node after
+		// 1 minute of inactivity for keepalive.
+		Time: 1 * time.Minute,
+		// If no response to such keepalive ping is received
+		// after 30 seconds, the connection is closed.
+		Timeout: 30 * time.Second,
+		// Expect keepalives even when no streams are active.
+		PermitWithoutStream: true,
+	}
+
+	// TODO: Think about clever stats handler. Prometheus-exposed?
+	// stats := grpc.StatsHandler(h)
+
+	// Use pluto-internal TLS config for credentials.
+	creds := credentials.NewTLS(tlsConfig)
+
+	return []grpc.DialOption{
+		grpc.WithCodec(codec),
+		grpc.WithCompressor(comp),
+		grpc.WithDecompressor(decomp),
+		// grpc.WithBackoffConfig(boff),
+		grpc.WithBlock(),
+		grpc.WithTimeout(timeout),
+		grpc.FailOnNonTempDialError(true),
+		grpc.WithDefaultCallOptions(callOpts...),
+		grpc.WithKeepaliveParams(kaParams),
+		// grpc.WithStatsHandler(stats),
+		grpc.WithTransportCredentials(creds),
 	}
 }
