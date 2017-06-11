@@ -25,7 +25,7 @@ type ORSet struct {
 // sendFunc is used as a parameter to below defined
 // AddSendDownstream function that broadcasts an update
 // payload to all other replicas.
-type sendFunc func(string)
+type sendFunc func(...string)
 
 // Functions
 
@@ -264,7 +264,7 @@ func (s *ORSet) Add(e string, send sendFunc) error {
 	}
 
 	// Send to other involved nodes.
-	send(fmt.Sprintf("%v;%s", base64.StdEncoding.EncodeToString([]byte(e)), tag))
+	send(e, tag)
 
 	return nil
 }
@@ -319,8 +319,8 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 		return fmt.Errorf("element to be removed not found in set")
 	}
 
-	// Initialize string to send out.
-	var msg string
+	// Initialize list of arguments to send out.
+	args := make([]string, 0, 8)
 
 	// Initialize set of elements to remove.
 	rmElements := make(map[string]string)
@@ -334,13 +334,10 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 			// the associated tag into our prepared remove set.
 			rmElements[tag] = e
 
-			// And we also append it to the message that will
-			// be sent out to other replicas.
-			if msg == "" {
-				msg = fmt.Sprintf("%v;%s", base64.StdEncoding.EncodeToString([]byte(e)), tag)
-			} else {
-				msg = fmt.Sprintf("%s;%v;%s", msg, base64.StdEncoding.EncodeToString([]byte(e)), tag)
-			}
+			// And we also append it to the list of arguments
+			// that will be sent out to other replicas.
+			args = append(args, e)
+			args = append(args, tag)
 		}
 	}
 
@@ -350,8 +347,8 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 		return err
 	}
 
-	// Send message to other replicas.
-	send(msg)
+	// Send arguments to other replicas.
+	send(args...)
 
 	return nil
 }

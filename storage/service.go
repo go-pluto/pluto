@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"path/filepath"
 
+	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crdt"
 	"github.com/numbleroot/pluto/imap"
@@ -24,11 +25,11 @@ type InternalConnection interface {
 type Service interface {
 
 	// Init initializes node-type specific fields.
-	Init(syncSendChans map[string]chan string) error
+	Init(syncSendChans map[string]chan comm.Msg) error
 
 	// ApplyCRDTUpd receives strings representing CRDT
 	// update operations from receiver and executes them.
-	ApplyCRDTUpd(applyCRDTUpd chan string, doneCRDTUpd chan struct{})
+	ApplyCRDTUpd(applyCRDTUpd chan comm.Msg, doneCRDTUpd chan struct{})
 
 	// Run loops over incoming requests at storage and
 	// dispatches each one to a goroutine taking care of
@@ -70,7 +71,7 @@ type Service interface {
 
 type service struct {
 	imapNode      *imap.IMAPNode
-	SyncSendChans map[string]chan string
+	SyncSendChans map[string]chan comm.Msg
 	intlConn      InternalConnection
 	config        config.Storage
 }
@@ -91,13 +92,13 @@ func NewService(intlConn InternalConnection, mailSocket net.Listener, config con
 			CRDTLayerRoot:    config.CRDTLayerRoot,
 			MaildirRoot:      config.MaildirRoot,
 		},
-		SyncSendChans: make(map[string]chan string),
+		SyncSendChans: make(map[string]chan comm.Msg),
 		intlConn:      intlConn,
 		config:        config,
 	}
 }
 
-func (s *service) Init(syncSendChans map[string]chan string) error {
+func (s *service) Init(syncSendChans map[string]chan comm.Msg) error {
 
 	err := s.findFiles()
 	if err != nil {
@@ -173,7 +174,7 @@ func (s *service) findFiles() error {
 	return nil
 }
 
-func (s *service) ApplyCRDTUpd(applyCRDTUpd chan string, doneCRDTUpd chan struct{}) {
+func (s *service) ApplyCRDTUpd(applyCRDTUpd chan comm.Msg, doneCRDTUpd chan struct{}) {
 
 	// Apply received CRDT messages in background.
 	s.imapNode.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)

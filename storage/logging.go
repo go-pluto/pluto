@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/imap"
 )
 
@@ -19,11 +20,11 @@ func NewLoggingService(s Service, logger log.Logger) Service {
 	return &loggingService{logger, s}
 }
 
-func (s *loggingService) Init(syncSendChans map[string]chan string) error {
+func (s *loggingService) Init(syncSendChans map[string]chan comm.Msg) error {
 	return s.service.Init(syncSendChans)
 }
 
-func (s *loggingService) ApplyCRDTUpd(applyCRDTUpd chan string, doneCRDTUpd chan struct{}) {
+func (s *loggingService) ApplyCRDTUpd(applyCRDTUpd chan comm.Msg, doneCRDTUpd chan struct{}) {
 	s.service.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
 }
 

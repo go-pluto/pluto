@@ -14,13 +14,9 @@ import (
 
 // ApplyCreate performs the downstream part
 // of a CREATE operation.
-func (node *IMAPNode) ApplyCreate(opPayload string) {
+func (node *IMAPNode) ApplyCreate(msg comm.Msg) {
 
-	// Parse received payload message into create message struct.
-	createUpd, err := comm.ParseCreate(opPayload)
-	if err != nil {
-		stdlog.Fatalf("[imap.ApplyCreate] Error while parsing CREATE update from sync message: %v", err)
-	}
+	createUpd := msg.Create
 
 	// Build up paths before entering critical section.
 	posMaildir := filepath.Join(node.MaildirRoot, createUpd.User, createUpd.Mailbox)
@@ -43,7 +39,7 @@ func (node *IMAPNode) ApplyCreate(opPayload string) {
 
 	// Only attempt to create the corresponding
 	// Maildir if it does not already exist.
-	_, err = os.Stat(posMaildir)
+	_, err := os.Stat(posMaildir)
 	if os.IsNotExist(err) {
 
 		maildirExisted = false
@@ -154,13 +150,9 @@ func (node *IMAPNode) ApplyCreate(opPayload string) {
 
 // ApplyDelete performs the downstream part
 // of a DELETE operation.
-func (node *IMAPNode) ApplyDelete(opPayload string) {
+func (node *IMAPNode) ApplyDelete(msg comm.Msg) {
 
-	// Parse received payload message into delete message struct.
-	deleteUpd, err := comm.ParseDelete(opPayload)
-	if err != nil {
-		stdlog.Fatalf("[imap.ApplyDelete] Error while parsing DELETE update from sync message: %v", err)
-	}
+	deleteUpd := msg.Delete
 
 	// Build up paths before entering critical section.
 	delMailboxCRDTPath := filepath.Join(node.CRDTLayerRoot, deleteUpd.User, fmt.Sprintf("%s.log", deleteUpd.Mailbox))
@@ -181,7 +173,7 @@ func (node *IMAPNode) ApplyDelete(opPayload string) {
 	userMainCRDT := node.MailboxStructure[deleteUpd.User]["Structure"]
 
 	// Remove received pairs from user's main CRDT.
-	err = userMainCRDT.RemoveEffect(rmElements, true)
+	err := userMainCRDT.RemoveEffect(rmElements, true)
 	if err != nil {
 		stdlog.Fatalf("[imap.ApplyDelete] Failed to remove elements from user's main CRDT: %v", err)
 	}
@@ -221,13 +213,9 @@ func (node *IMAPNode) ApplyDelete(opPayload string) {
 
 // ApplyAppend performs the downstream part
 // of an APPEND operation.
-func (node *IMAPNode) ApplyAppend(opPayload string) {
+func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 
-	// Parse received payload message into append message struct.
-	appendUpd, err := comm.ParseAppend(opPayload)
-	if err != nil {
-		stdlog.Fatalf("[imap.ApplyAppend] Error while parsing APPEND update from sync message: %v", err)
-	}
+	appendUpd := msg.Append
 
 	// Construct path to potential new file.
 	var appendFileName string
@@ -316,7 +304,7 @@ func (node *IMAPNode) ApplyAppend(opPayload string) {
 		} else {
 
 			// Add new mail to mailbox' CRDT.
-			err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true)
+			err := userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true)
 			if err != nil {
 				stdlog.Fatalf("[imap.ApplyAppend] APPEND fail: %v", err)
 			}
@@ -326,13 +314,9 @@ func (node *IMAPNode) ApplyAppend(opPayload string) {
 
 // ApplyExpunge performs the downstream part
 // of an EXPUNGE operation.
-func (node *IMAPNode) ApplyExpunge(opPayload string) {
+func (node *IMAPNode) ApplyExpunge(msg comm.Msg) {
 
-	// Parse received payload message into expunge message struct.
-	expungeUpd, err := comm.ParseExpunge(opPayload)
-	if err != nil {
-		stdlog.Fatalf("[imap.ApplyExpunge] Error while parsing EXPUNGE update from sync message: %v", err)
-	}
+	expungeUpd := msg.Expunge
 
 	// Construct remove set from received values.
 	rmElements := make(map[string]string)
@@ -395,13 +379,9 @@ func (node *IMAPNode) ApplyExpunge(opPayload string) {
 
 // ApplyStore performs the downstream part
 // of a STORE operation.
-func (node *IMAPNode) ApplyStore(opPayload string) {
+func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 
-	// Parse received payload message into store message struct.
-	storeUpd, err := comm.ParseStore(opPayload)
-	if err != nil {
-		stdlog.Fatalf("[imap.ApplyStore] Error while parsing STORE update from sync message: %v", err)
-	}
+	storeUpd := msg.Store
 
 	// Construct remove set from received values.
 	rmElements := make(map[string]string)
@@ -540,38 +520,32 @@ func (node *IMAPNode) ApplyStore(opPayload string) {
 
 // ApplyCRDTUpd receives strings representing CRDT
 // update operations from receiver and executes them.
-func (node *IMAPNode) ApplyCRDTUpd(applyChan chan string, doneChan chan struct{}) {
+func (node *IMAPNode) ApplyCRDTUpd(applyChan chan comm.Msg, doneChan chan struct{}) {
 
 	for {
 
 		// Receive update message from receiver
 		// via channel.
-		updMsg := <-applyChan
-
-		// Parse operation that payload specifies.
-		op, opPayload, err := comm.ParseOp(updMsg)
-		if err != nil {
-			stdlog.Fatalf("[imap.ApplyCRDTUpd] Error while parsing operation from sync message: %v", err)
-		}
+		msg := <-applyChan
 
 		// Depending on received operation,
 		// parse remaining payload further.
-		switch op {
+		switch msg.Operation {
 
 		case "create":
-			node.ApplyCreate(opPayload)
+			node.ApplyCreate(msg)
 
 		case "delete":
-			node.ApplyDelete(opPayload)
+			node.ApplyDelete(msg)
 
 		case "append":
-			node.ApplyAppend(opPayload)
+			node.ApplyAppend(msg)
 
 		case "expunge":
-			node.ApplyExpunge(opPayload)
+			node.ApplyExpunge(msg)
 
 		case "store":
-			node.ApplyStore(opPayload)
+			node.ApplyStore(msg)
 		}
 
 		// Signal receiver that update was performed.
