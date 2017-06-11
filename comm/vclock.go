@@ -76,11 +76,12 @@ func (recv *Receiver) SetVClockEntries() error {
 		// Split pairs at colon.
 		entry := strings.Split(pair, ":")
 
-		// Convert entry string to int.
-		entryNumber, err := strconv.Atoi(entry[1])
+		// Convert entry string to uint32.
+		entryNumberBig, err := strconv.ParseUint(entry[1], 10, 32)
 		if err != nil {
 			return err
 		}
+		entryNumber := uint32(entryNumberBig)
 
 		// Set elements in vector clock of receiver.
 		recv.vclock[entry[0]] = entryNumber
@@ -97,54 +98,41 @@ func (recv *Receiver) IncVClockEntry() {
 
 	for {
 
-		select {
+		// Wait for name of node on channel.
+		entry, ok := <-recv.incVClock
 
-		// Check if a shutdown signal was sent.
-		case <-recv.shutdown:
+		if ok {
 
-			// Call done handler of wait group for this
-			// routine on exiting this function.
-			defer recv.wg.Done()
-			return
+			// Lock receiver struct.
+			recv.lock.Lock()
 
-		default:
+			// Check if received node name exists in map.
+			if _, exists := recv.vclock[entry]; exists {
 
-			// Wait for name of node on channel.
-			entry, ok := <-recv.incVClock
+				// If it does, increment its vector clock
+				// value by one.
+				recv.vclock[entry]++
 
-			if ok {
-
-				// Lock receiver struct.
-				recv.lock.Lock()
-
-				// Check if received node name exists in map.
-				if _, exists := recv.vclock[entry]; exists {
-
-					// If it does, increment its vector clock
-					// value by one.
-					recv.vclock[entry]++
-
-					// Make a deep copy of current vector clock
-					// map to pass back via channel to sender.
-					updatedVClock := make(map[string]int)
-					for node, value := range recv.vclock {
-						updatedVClock[node] = value
-					}
-
-					// Save updated vector clock to log file.
-					err := recv.SaveVClockEntries()
-					if err != nil {
-						stdlog.Fatalf("[comm.IncVClockEntry] Saving updated vector clock to file failed: %s\n", err.Error())
-					}
-
-					// Send back the updated vector clock on other
-					// defined channel to sender.
-					recv.updVClock <- updatedVClock
+				// Make a deep copy of current vector clock
+				// map to pass back via channel to sender.
+				updatedVClock := make(map[string]uint32)
+				for node, value := range recv.vclock {
+					updatedVClock[node] = value
 				}
 
-				// Unlock struct.
-				recv.lock.Unlock()
+				// Save updated vector clock to log file.
+				err := recv.SaveVClockEntries()
+				if err != nil {
+					stdlog.Fatalf("[comm.IncVClockEntry] Saving updated vector clock to file failed: %s\n", err.Error())
+				}
+
+				// Send back the updated vector clock on other
+				// defined channel to sender.
+				recv.updVClock <- updatedVClock
 			}
+
+			// Unlock struct.
+			recv.lock.Unlock()
 		}
 	}
 }

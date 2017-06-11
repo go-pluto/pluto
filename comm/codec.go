@@ -4,7 +4,6 @@ import (
 	stdlog "log"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 )
 
 type NoOpCodec struct{}
@@ -13,23 +12,18 @@ type NoOpCodec struct{}
 // for of a custom codec (NoOp).
 func (noOpC NoOpCodec) Marshal(v interface{}) ([]byte, error) {
 
-	pb := proto.Buffer{}
-	protoMsg := v.(proto.Message)
+	stdlog.Printf("[CODEC] Incoming to outgoing: '%#v'", v)
+	data, err := proto.Marshal(v.(proto.Message))
+	stdlog.Printf("[CODEC] Outgoing to outgoing: '%#v'", data)
 
-	if err := pb.Marshal(protoMsg); err != nil {
-		return nil, errors.Wrap(err, "ProtoBuf marshalling failed")
-	}
-
-	stdlog.Printf("Marshal returns '%#v'", pb.Bytes())
-
-	return pb.Bytes(), nil
+	return data, err
 }
 
 // Unmarshal fulfills the Unmarshal() ProtoBuf
 // interface for of a custom codec (NoOp).
 func (noOpC NoOpCodec) Unmarshal(data []byte, v interface{}) error {
 
-	stdlog.Printf("Unmarshal returns '%#v'", data)
+	stdlog.Printf("[CODEC] Unmarshal returns '%#v'", data)
 	v = data
 
 	return nil

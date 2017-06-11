@@ -17,7 +17,7 @@ var maxMsgSize int = 268437504
 
 // ReceiverOptions returns a list of gRPC server
 // options that the internal receiver uses for RPCs.
-func ReceiverOptions(tlsConfig *tls.Config) []grpc.ServerOption {
+func ReceiverOptions(tlsConfig *tls.Config, interceptor grpc.UnaryServerInterceptor) []grpc.ServerOption {
 
 	// Use pluto-internal TLS config for credentials.
 	creds := credentials.NewTLS(tlsConfig)
@@ -25,6 +25,10 @@ func ReceiverOptions(tlsConfig *tls.Config) []grpc.ServerOption {
 	// Use the custom NoOp codec that simply passes
 	// through received binary messages.
 	codec := NoOpCodec{}
+
+	// Use GZIP for compression and decompression.
+	comp := grpc.NewGZIPCompressor()
+	decomp := grpc.NewGZIPDecompressor()
 
 	kaParams := keepalive.ServerParameters{
 		// Any internal connection will be closed after
@@ -46,10 +50,6 @@ func ReceiverOptions(tlsConfig *tls.Config) []grpc.ServerOption {
 		PermitWithoutStream: true,
 	}
 
-	// Use GZIP for compression and decompression.
-	comp := grpc.NewGZIPCompressor()
-	decomp := grpc.NewGZIPDecompressor()
-
 	// TODO: Think about clever stats handler. Prometheus-exposed?
 	// stats := grpc.StatsHandler(h)
 
@@ -58,6 +58,7 @@ func ReceiverOptions(tlsConfig *tls.Config) []grpc.ServerOption {
 		grpc.CustomCodec(codec),
 		grpc.RPCCompressor(comp),
 		grpc.RPCDecompressor(decomp),
+		grpc.UnaryInterceptor(interceptor),
 		grpc.MaxRecvMsgSize(maxMsgSize),
 		grpc.MaxSendMsgSize(maxMsgSize),
 		grpc.KeepaliveParams(kaParams),
