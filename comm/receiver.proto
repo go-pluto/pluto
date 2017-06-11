@@ -73,5 +73,5 @@ message Closed {
 }
 
 service Receiver {
-    rpc Incoming(stream Msg) returns(Closed) {}
+    rpc Incoming(Msg) returns(Closed) {}
 }
