@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	stdlog "log"
 	"os"
 	"sync"
 
 	"crypto/tls"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -22,6 +23,7 @@ import (
 // out sync messages via CRDTs.
 type Sender struct {
 	lock        *sync.Mutex
+	logger      log.Logger
 	name        string
 	tlsConfig   *tls.Config
 	gRPCOptions []grpc.DialOption
@@ -41,12 +43,13 @@ type Sender struct {
 // with. It returns a channel local processes can put
 // CRDT changes into, so that those changes will be
 // communicated to connected nodes.
-func InitSender(name string, logFilePath string, tlsConfig *tls.Config, incVClock chan string, updVClock chan map[string]uint32, downSender chan struct{}, nodes map[string]string) (chan Msg, error) {
+func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *tls.Config, incVClock chan string, updVClock chan map[string]uint32, downSender chan struct{}, nodes map[string]string) (chan Msg, error) {
 
 	// Create and initialize what we need for
 	// a CRDT sender routine.
 	sender := &Sender{
-		lock:      new(sync.Mutex),
+		lock:      &sync.Mutex{},
+		logger:    logger,
 		name:      name,
 		tlsConfig: tlsConfig,
 		inc:       make(chan Msg),
@@ -59,14 +62,14 @@ func InitSender(name string, logFilePath string, tlsConfig *tls.Config, incVCloc
 	// Open log file descriptor for writing.
 	write, err := os.OpenFile(logFilePath, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
 	if err != nil {
-		return nil, fmt.Errorf("[comm.InitSender] Opening CRDT log file for writing failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[comm.InitSender] Opening CRDT log file for writing failed with: %v", err)
 	}
 	sender.writeLog = write
 
 	// Open log file descriptor for updating.
 	upd, err := os.OpenFile(logFilePath, os.O_RDWR, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("[comm.InitSender] Opening CRDT log file for updating failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[comm.InitSender] Opening CRDT log file for updating failed with: %v", err)
 	}
 	sender.updLog = upd
 
@@ -78,7 +81,8 @@ func InitSender(name string, logFilePath string, tlsConfig *tls.Config, incVCloc
 		if err := sender.TestGRPC(&Msg{
 			Operation: "ROFL",
 		}); err != nil {
-			stdlog.Fatalf("gRPC test failed: '%#v'", err)
+			sender.logger.Log("msg", fmt.Sprintf("gRPC test failed: '%#v'", err))
+			os.Exit(1)
 		}
 	}
 
@@ -111,7 +115,7 @@ func (sender *Sender) TestGRPC(msg *Msg) error {
 		return errors.Wrap(err, "[TEST 2]")
 	}
 
-	stdlog.Printf("Stream to server closed with: '%#v'", closed)
+	sender.logger.Log("msg", fmt.Sprintf("connection to server closed with: '%#v'", closed))
 
 	return nil
 }
@@ -146,22 +150,25 @@ func (sender *Sender) BrokerMsgs() {
 			// and add a trailing newline symbol.
 			data, err := proto.Marshal(&payload)
 			if err != nil {
-				stdlog.Fatal("REPLACE ME WITH CORRECT FATAL LOGGER")
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("failed to marshal enriched downstream Msg to ProtoBuf: %v", err))
+				os.Exit(1)
 			}
 			data = append(data, '\n')
 
-			stdlog.Printf("[BROKER] All bytes of marshalled msg: '%#v' (last: '%#v')\n\tString representation: '%s'", data, data[:(len(data)-1)], data)
+			sender.logger.Log("msg", fmt.Sprintf("[TODO] all bytes of marshalled msg: '%#v' (last: '%#v')\n\tString representation: '%s'", data, data[:(len(data)-1)], data))
 
 			// Write it to message log file.
 			_, err = sender.writeLog.Write(data)
 			if err != nil {
-				stdlog.Fatalf("[comm.BrokerMsgs] Writing to CRDT log file failed with: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("writing to CRDT log file failed with: %v", err))
+				os.Exit(1)
 			}
 
 			// Save to stable storage.
 			err = sender.writeLog.Sync()
 			if err != nil {
-				stdlog.Fatalf("[comm.BrokerMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("syncing CRDT log file to stable storage failed with: %v", err))
+				os.Exit(1)
 			}
 
 			// Unlock mutex.
@@ -198,7 +205,8 @@ func (sender *Sender) SendMsgs() {
 			// http://stackoverflow.com/a/30948278
 			info, err := sender.updLog.Stat()
 			if err != nil {
-				stdlog.Fatalf("[comm.SendMsgs] Could not get CRDT log file information: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not get CRDT log file information: %v", err))
+				os.Exit(1)
 			}
 
 			// Check if log file is empty and continue at next
@@ -214,47 +222,54 @@ func (sender *Sender) SendMsgs() {
 			// Reset position to beginning of file.
 			_, err = sender.updLog.Seek(0, os.SEEK_SET)
 			if err != nil {
-				stdlog.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				os.Exit(1)
 			}
 
 			// Copy contents of log file to prepared buffer.
 			_, err = io.Copy(buf, sender.updLog)
 			if err != nil {
-				stdlog.Fatalf("[comm.SendMsgs] Could not copy CRDT log file contents to buffer: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not copy CRDT log file contents to buffer: %v", err))
+				os.Exit(1)
 			}
 
 			// Read oldest message from log file.
 			payload, err := buf.ReadBytes('\n')
 			if (err != nil) && (err != io.EOF) {
-				stdlog.Fatalf("[comm.SendMsgs] Error during extraction of first line in CRDT log file: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("error during extraction of first line in CRDT log file: %v", err))
+				os.Exit(1)
 			}
 
 			// Reset position to beginning of file.
 			_, err = sender.updLog.Seek(0, os.SEEK_SET)
 			if err != nil {
-				stdlog.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				os.Exit(1)
 			}
 
 			// Unlock mutex.
 			sender.lock.Unlock()
 
-			stdlog.Printf("BEFORE NEWLINE REMOVE: '%#v'", payload)
+			sender.logger.Log("msg", fmt.Sprintf("[TODO] BEFORE newline remove: '%#v'", payload))
 			// Remove trailing newline symbol from payload.
 			payload = payload[:(len(payload) - 1)]
-			stdlog.Printf("AFTER NEWLINE REMOVE: '%#v'", payload)
+			sender.logger.Log("msg", fmt.Sprintf("[TODO] AFTER newline remove: '%#v'", payload))
 
+			// Unmarshal stored ProtoBuf Msg into Msg struct.
 			msg := &Msg{}
 			if err := proto.Unmarshal(payload, msg); err != nil {
-				stdlog.Fatal("REPLACE ME WITH CORRECT FATAL LOGGER")
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("failed to unmarshal stored ProtoBuf Msg into Msg struct: %v", err))
+				os.Exit(1)
 			}
 
 			// TODO: Parallelize this loop?
-			for _, nodeAddr := range sender.nodes {
+			for node, addr := range sender.nodes {
 
 				// Connect to downstream replica.
-				conn, err := grpc.Dial(nodeAddr, sender.gRPCOptions...)
+				conn, err := grpc.Dial(addr, sender.gRPCOptions...)
 				if err != nil {
-					stdlog.Fatalf("REPLACE ME")
+					level.Error(sender.logger).Log("msg", fmt.Sprintf("could not connect to downstream replica %s: %v", node, err))
+					os.Exit(1)
 				}
 				defer conn.Close()
 
@@ -264,7 +279,8 @@ func (sender *Sender) SendMsgs() {
 				// Send msg to downstream replica.
 				_, err = client.Incoming(context.Background(), msg)
 				if err != nil {
-					stdlog.Fatalf("REPLACE ME")
+					level.Error(sender.logger).Log("msg", fmt.Sprintf("could not send downstream message to replica %s: %v", node, err))
+					os.Exit(1)
 				}
 			}
 
@@ -274,7 +290,8 @@ func (sender *Sender) SendMsgs() {
 			// Retrieve file information.
 			info, err = sender.updLog.Stat()
 			if err != nil {
-				stdlog.Fatalf("[comm.SendMsgs] Could not get CRDT log file information: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not get CRDT log file information: %v", err))
+				os.Exit(1)
 			}
 
 			// Create a buffer of capacity of read file size.
@@ -283,51 +300,59 @@ func (sender *Sender) SendMsgs() {
 			// Reset position to beginning of file.
 			_, err = sender.updLog.Seek(0, os.SEEK_SET)
 			if err != nil {
-				stdlog.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				os.Exit(1)
 			}
 
 			// Copy contents of log file to prepared buffer.
 			_, err = io.Copy(buf, sender.updLog)
 			if err != nil {
-				stdlog.Fatalf("[comm.SendMsgs] Could not copy CRDT log file contents to buffer: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not copy CRDT log file contents to buffer: %v", err))
+				os.Exit(1)
 			}
 
 			// Read oldest message from log file.
 			_, err = buf.ReadString('\n')
 			if (err != nil) && (err != io.EOF) {
-				stdlog.Fatalf("[comm.SendMsgs] Error during extraction of first line in CRDT log file: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("error during extraction of first line in CRDT log file: %v", err))
+				os.Exit(1)
 			}
 
 			// Reset position to beginning of file.
 			_, err = sender.updLog.Seek(0, os.SEEK_SET)
 			if err != nil {
-				stdlog.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				os.Exit(1)
 			}
 
 			// Copy reduced buffer contents back to beginning
 			// of CRDT log file, effectively deleting the first line.
 			newNumOfBytes, err := io.Copy(sender.updLog, buf)
 			if err != nil {
-				stdlog.Fatalf("[comm.SendMsgs] Error during copying buffer contents back to CRDT log file: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("error during copying buffer contents back to CRDT log file: %v", err))
+				os.Exit(1)
 			}
 
 			// Now, truncate log file size to exact amount
 			// of bytes copied from buffer.
 			err = sender.updLog.Truncate(newNumOfBytes)
 			if err != nil {
-				stdlog.Fatalf("[comm.SendMsgs] Could not truncate CRDT log file: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not truncate CRDT log file: %v", err))
+				os.Exit(1)
 			}
 
 			// Sync changes to stable storage.
 			err = sender.updLog.Sync()
 			if err != nil {
-				stdlog.Fatalf("[comm.SendMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("syncing CRDT log file to stable storage failed with: %v", err))
+				os.Exit(1)
 			}
 
 			// Reset position to beginning of file.
 			_, err = sender.updLog.Seek(0, os.SEEK_SET)
 			if err != nil {
-				stdlog.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				os.Exit(1)
 			}
 
 			// Unlock mutex.

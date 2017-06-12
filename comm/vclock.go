@@ -2,12 +2,13 @@ package comm
 
 import (
 	"fmt"
-	stdlog "log"
 	"os"
 	"strconv"
 	"strings"
 
 	"io/ioutil"
+
+	"github.com/go-kit/kit/log/level"
 )
 
 // SaveVClockEntries writes current status of vector
@@ -123,7 +124,8 @@ func (recv *Receiver) IncVClockEntry() {
 				// Save updated vector clock to log file.
 				err := recv.SaveVClockEntries()
 				if err != nil {
-					stdlog.Fatalf("[comm.IncVClockEntry] Saving updated vector clock to file failed: %s\n", err.Error())
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("saving updated vector clock to file failed: %v", err))
+					os.Exit(1)
 				}
 
 				// Send back the updated vector clock on other

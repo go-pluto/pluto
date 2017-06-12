@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	stdlog "log"
 	"net"
 	"os"
 	"sync"
@@ -12,6 +11,8 @@ import (
 
 	"crypto/tls"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -23,6 +24,7 @@ import (
 // and process incoming CRDT downstream messages.
 type Receiver struct {
 	lock             *sync.Mutex
+	logger           log.Logger
 	name             string
 	msgInLog         chan struct{}
 	socket           net.Listener
@@ -43,11 +45,12 @@ type Receiver struct {
 // InitReceiver initializes above struct and sets
 // default values. It starts involved background
 // routines and send initial channel trigger.
-func InitReceiver(name string, logFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan Msg, doneCRDTUpdChan chan struct{}, downRecv chan struct{}, nodes []string) (chan string, chan map[string]uint32, error) {
+func InitReceiver(logger log.Logger, name string, logFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan Msg, doneCRDTUpdChan chan struct{}, downRecv chan struct{}, nodes []string) (chan string, chan map[string]uint32, error) {
 
 	// Create and initialize new struct.
 	recv := &Receiver{
-		lock:             new(sync.Mutex),
+		lock:             &sync.Mutex{},
+		logger:           logger,
 		name:             name,
 		msgInLog:         make(chan struct{}, 1),
 		socket:           socket,
@@ -63,21 +66,21 @@ func InitReceiver(name string, logFilePath string, vclockLogPath string, socket 
 	// Open log file descriptor for writing.
 	write, err := os.OpenFile(logFilePath, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
 	if err != nil {
-		return nil, nil, fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for writing failed with: %s\n", err.Error())
+		return nil, nil, fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for writing failed with: %v", err)
 	}
 	recv.writeLog = write
 
 	// Open log file descriptor for updating.
 	upd, err := os.OpenFile(logFilePath, os.O_RDWR, 0600)
 	if err != nil {
-		return nil, nil, fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for updating failed with: %s\n", err.Error())
+		return nil, nil, fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for updating failed with: %v", err)
 	}
 	recv.updLog = upd
 
 	// Initially, reset position in update file to beginning.
 	_, err = recv.updLog.Seek(0, os.SEEK_SET)
 	if err != nil {
-		return nil, nil, fmt.Errorf("[comm.InitReceiver] Could not reset position in update CRDT log file: %s\n", err.Error())
+		return nil, nil, fmt.Errorf("[comm.InitReceiver] Could not reset position in update CRDT log file: %v", err)
 	}
 
 	// Initially set vector clock entries to 0.
@@ -91,20 +94,20 @@ func InitReceiver(name string, logFilePath string, vclockLogPath string, socket 
 	// Open log file of last known vector clock values.
 	vclockLog, err := os.OpenFile(vclockLogPath, (os.O_CREATE | os.O_RDWR), 0600)
 	if err != nil {
-		return nil, nil, fmt.Errorf("[comm.InitReceiver] Opening vector clock log failed with: %s\n", err.Error())
+		return nil, nil, fmt.Errorf("[comm.InitReceiver] Opening vector clock log failed with: %v", err)
 	}
 	recv.vclockLog = vclockLog
 
 	// Initially, reset position in vector clock file to beginning.
 	_, err = recv.vclockLog.Seek(0, os.SEEK_SET)
 	if err != nil {
-		return nil, nil, fmt.Errorf("[comm.InitReceiver] Could not reset position in vector clock log: %s\n", err.Error())
+		return nil, nil, fmt.Errorf("[comm.InitReceiver] Could not reset position in vector clock log: %v", err)
 	}
 
 	// If vector clock entries were preserved, set them.
 	err = recv.SetVClockEntries()
 	if err != nil {
-		return nil, nil, fmt.Errorf("[comm.InitReceiver] Reading in stored vector clock entries failed: %s\n", err.Error())
+		return nil, nil, fmt.Errorf("[comm.InitReceiver] Reading in stored vector clock entries failed: %v", err)
 	}
 
 	// Start routine in background that takes care of
@@ -138,6 +141,10 @@ func (recv *Receiver) StartGRPCRecv() error {
 
 	// Register the empty server on fulfilling interface.
 	RegisterReceiverServer(grpcRecv, recv)
+
+	level.Info(recv.logger).Log(
+		"msg", fmt.Sprintf("receiver is accepting CRDT sync connections at %s", recv.socket.Addr()),
+	)
 
 	// Run server.
 	return grpcRecv.Serve(recv.socket)
@@ -175,18 +182,17 @@ func (recv *Receiver) TriggerMsgApplier() {
 
 func (recv *Receiver) IncomingInt(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, noOpHdlr grpc.UnaryHandler) (interface{}, error) {
 
-	stdlog.Println("IN.... IN... IN.. INTERCEPTING!!")
-
+	recv.logger.Log("msg", "[TODO] intercepting message...")
+	// Make sure we are receiving a slice of bytes.
 	msg, ok := req.([]byte)
 	if !ok {
-		stdlog.Fatal("[RECEIVER] No bytes slice")
+		return nil, fmt.Errorf("incoming gRPC message could not asserted to be []byte")
 	}
+	recv.logger.Log("msg", fmt.Sprintf("[TODO] intercepted msg: '%#v'", msg))
 
-	stdlog.Printf("[RECEIVER] msg: '%#v'", msg)
-
-	stdlog.Printf("BEFORE INCOMING WITH NEWLINE: len: %d, '%#v', lastbyte: '%#v'", len(msg), msg, msg[(len(msg)-1)])
+	recv.logger.Log("msg", fmt.Sprintf("[TODO] BEFORE incoming with newline: len: %d, '%#v', lastbyte: '%#v'", len(msg), msg, msg[(len(msg)-1)]))
 	msg = append(msg, '\n')
-	stdlog.Printf("AFTER INCOMING WITH NEWLINE: len: %d, '%#v', lastbyte: '%#v'", len(msg), msg, msg[(len(msg)-1)])
+	recv.logger.Log("msg", fmt.Sprintf("[TODO] AFTER incoming with newline: len: %d, '%#v', lastbyte: '%#v'", len(msg), msg, msg[(len(msg)-1)]))
 
 	// Lock mutex.
 	recv.lock.Lock()
@@ -217,7 +223,7 @@ func (recv *Receiver) IncomingInt(ctx context.Context, req interface{}, info *gr
 
 func (recv *Receiver) Incoming(ctx context.Context, msg *Msg) (*Closed, error) {
 
-	stdlog.Println("UNARY HANDLER CALLED YAY")
+	recv.logger.Log("msg", "[TODO] unary gRPC handler on Incoming() called")
 
 	return nil, nil
 }
@@ -245,7 +251,8 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			// http://stackoverflow.com/a/30948278
 			info, err := recv.updLog.Stat()
 			if err != nil {
-				stdlog.Fatalf("[comm.ApplyStoredMsgs] Could not get CRDT log file information: %s\n", err.Error())
+				level.Error(recv.logger).Log("msg", fmt.Sprintf("could not get CRDT log file information: %v", err))
+				os.Exit(1)
 			}
 
 			// Store accessed file size for multiple use.
@@ -261,7 +268,8 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			// Save current position of head for later use.
 			curOffset, err := recv.updLog.Seek(0, os.SEEK_CUR)
 			if err != nil {
-				stdlog.Fatalf("[comm.ApplyStoredMsgs] Error while retrieving current head position in CRDT log file: %s\n", err.Error())
+				level.Error(recv.logger).Log("msg", fmt.Sprintf("error while retrieving current head position in CRDT log file: %v", err))
+				os.Exit(1)
 			}
 
 			// Calculate size of needed buffer.
@@ -275,7 +283,8 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// Reset position to beginning of file.
 				_, err = recv.updLog.Seek(0, os.SEEK_SET)
 				if err != nil {
-					stdlog.Fatalf("[comm.ApplyStoredMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+					os.Exit(1)
 				}
 
 				// Unlock log file mutex.
@@ -297,22 +306,26 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			// Copy contents of log file to prepared buffer.
 			_, err = io.Copy(buf, recv.updLog)
 			if err != nil {
-				stdlog.Fatalf("[comm.ApplyStoredMsgs] Could not copy CRDT log file contents to buffer: %s\n", err.Error())
+				level.Error(recv.logger).Log("msg", fmt.Sprintf("could not copy CRDT log file contents to buffer: %v", err))
+				os.Exit(1)
 			}
 
 			// Read current message at head position from log file.
 			msgRaw, err := buf.ReadBytes('\n')
 			if (err != nil) && (err != io.EOF) {
-				stdlog.Fatalf("[comm.ApplyStoredMsgs] Error during extraction of first line in CRDT log file: %s\n", err.Error())
+				level.Error(recv.logger).Log("msg", fmt.Sprintf("error during extraction of first line in CRDT log file: %v", err))
+				os.Exit(1)
 			}
 
 			// Save length of just read message for later use.
 			msgRawLength := int64(len(msgRaw))
 
+			// Unmarshal read ProtoBuf into defined Msg struct.
 			msg := &Msg{}
 			err = proto.Unmarshal(msgRaw, msg)
 			if err != nil {
-				stdlog.Fatalf("[APPLIER] REPLACE ME WITH CORRECT FATAL LOGGER")
+				level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to unmarshal read ProtoBuf into defined Msg struct: %v", err))
+				os.Exit(1)
 			}
 
 			// Initially, set apply indicator to true. This means,
@@ -371,33 +384,38 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// Save updated vector clock to log file.
 				err := recv.SaveVClockEntries()
 				if err != nil {
-					stdlog.Fatalf("[comm.ApplyStoredMsgs] Saving updated vector clock to file failed: %s\n", err.Error())
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("saving updated vector clock to file failed: %v", err))
+					os.Exit(1)
 				}
 
 				// Reset head position to curOffset saved at beginning of loop.
 				_, err = recv.updLog.Seek(curOffset, os.SEEK_SET)
 				if err != nil {
-					stdlog.Fatal(err)
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to reset updLog head to saved position: %v", err))
+					os.Exit(1)
 				}
 
 				// Copy reduced buffer contents back to current position
 				// of CRDT log file, effectively deleting the read line.
 				newNumOfBytes, err := io.Copy(recv.updLog, buf)
 				if err != nil {
-					stdlog.Fatalf("[comm.ApplyStoredMsgs] Error during copying buffer contents back to CRDT log file: %s\n", err.Error())
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("error during copying buffer contents back to CRDT log file: %v", err))
+					os.Exit(1)
 				}
 
 				// Now, truncate log file size to (curOffset + newNumOfBytes),
 				// reducing the file size by length of handled message.
 				err = recv.updLog.Truncate((curOffset + newNumOfBytes))
 				if err != nil {
-					stdlog.Fatalf("[comm.ApplyStoredMsgs] Could not truncate CRDT log file: %s\n", err.Error())
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("could not truncate CRDT log file: %v", err))
+					os.Exit(1)
 				}
 
 				// Sync changes to stable storage.
 				err = recv.updLog.Sync()
 				if err != nil {
-					stdlog.Fatalf("[comm.ApplyStoredMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("syncing CRDT log file to stable storage failed with: %v", err))
+					os.Exit(1)
 				}
 
 				// Reset position to beginning of file because the
@@ -405,17 +423,19 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// of CRDT message log file.
 				_, err = recv.updLog.Seek(0, os.SEEK_SET)
 				if err != nil {
-					stdlog.Fatalf("[comm.ApplyStoredMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+					os.Exit(1)
 				}
 			} else {
 
-				stdlog.Printf("[comm.ApplyStoredMsgs] Message was out of order. Next.\n")
+				level.Warn(recv.logger).Log("msg", "message was out of order, taking next one")
 
 				// Set position of head to byte after just read message,
 				// effectively delaying execution of that message.
 				_, err = recv.updLog.Seek((curOffset + msgRawLength), os.SEEK_SET)
 				if err != nil {
-					stdlog.Fatalf("[comm.ApplyStoredMsgs] Error while moving position in CRDT log file to next line: %s\n", err.Error())
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("error while moving position in CRDT log file to next line: %v", err))
+					os.Exit(1)
 				}
 			}
 

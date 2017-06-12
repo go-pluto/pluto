@@ -302,7 +302,7 @@ func main() {
 		vclockLog := filepath.Join(workerConfig.CRDTLayerRoot, "vclock.log")
 
 		// Initialize receiving goroutine for sync operations.
-		incVClock, updVClock, err := comm.InitReceiver(*workerFlag, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, downRecv, []string{"storage"})
+		incVClock, updVClock, err := comm.InitReceiver(logger, *workerFlag, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, downRecv, []string{"storage"})
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", fmt.Sprintf("failed to initialize receiver for %s", *workerFlag),
@@ -316,7 +316,7 @@ func main() {
 		curCRDTSubnet["storage"] = conf.Storage.PublicSyncAddr
 
 		// Init sending part of CRDT communication and send messages in background.
-		syncSendChan, err := comm.InitSender(*workerFlag, sendCRDTLog, tlsConfig, incVClock, updVClock, downSender, curCRDTSubnet)
+		syncSendChan, err := comm.InitSender(logger, *workerFlag, sendCRDTLog, tlsConfig, incVClock, updVClock, downSender, curCRDTSubnet)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", fmt.Sprintf("failed to initialize sender for %s", *workerFlag),
@@ -413,7 +413,7 @@ func main() {
 
 			// Initialize a receiving goroutine for sync operations
 			// for each worker node.
-			incVClock, updVClock, err := comm.InitReceiver("storage", recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, downRecv, []string{name})
+			incVClock, updVClock, err := comm.InitReceiver(logger, "storage", recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, downRecv, []string{name})
 			if err != nil {
 				level.Error(logger).Log(
 					"msg", "failed to initialize receiver for storage",
@@ -427,7 +427,7 @@ func main() {
 			curCRDTSubnet[name] = worker.PublicSyncAddr
 
 			// Init sending part of CRDT communication and send messages in background.
-			syncSendChans[name], err = comm.InitSender("storage", sendCRDTLog, tlsConfig, incVClock, updVClock, downSender, curCRDTSubnet)
+			syncSendChans[name], err = comm.InitSender(logger, "storage", sendCRDTLog, tlsConfig, incVClock, updVClock, downSender, curCRDTSubnet)
 			if err != nil {
 				level.Error(logger).Log(
 					"msg", "failed to initialize sender for storage",
