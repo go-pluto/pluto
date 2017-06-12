@@ -7,7 +7,7 @@ message Msg {
     message Element {
         string value = 1;
         string tag = 2;
-        string contents = 3;
+        bytes contents = 3;
     }
 
     message CREATE {
