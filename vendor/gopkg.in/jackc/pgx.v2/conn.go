@@ -458,7 +458,9 @@ func ParseURI(uri string) (ConnConfig, error) {
 
 		cp.RuntimeParams[k] = v[0]
 	}
-
+	if cp.Password == "" {
+		pgpass(&cp)
+	}
 	return cp, nil
 }
 
@@ -511,8 +513,19 @@ func ParseDSN(s string) (ConnConfig, error) {
 	if err != nil {
 		return cp, err
 	}
-
+	if cp.Password == "" {
+		pgpass(&cp)
+	}
 	return cp, nil
+}
+
+// ParseConnectionString parses either a URI or a DSN connection string.
+// see ParseURI and ParseDSN for details.
+func ParseConnectionString(s string) (ConnConfig, error) {
+	if strings.HasPrefix(s, "postgres://") || strings.HasPrefix(s, "postgresql://") {
+		return ParseURI(s)
+	}
+	return ParseDSN(s)
 }
 
 // ParseEnvLibpq parses the environment like libpq does into a ConnConfig
@@ -574,7 +587,9 @@ func ParseEnvLibpq() (ConnConfig, error) {
 	if appname := os.Getenv("PGAPPNAME"); appname != "" {
 		cc.RuntimeParams["application_name"] = appname
 	}
-
+	if cc.Password == "" {
+		pgpass(&cc)
+	}
 	return cc, nil
 }
 
