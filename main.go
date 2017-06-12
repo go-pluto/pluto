@@ -74,6 +74,9 @@ func initLogger(loglevel string) log.Logger {
 	return logger
 }
 
+// createUserFiles adds the required files and folders
+// for the number of test users we make use of in our tests.
+// This concerns Maildir and CRDT files and folders.
 func createUserFiles(crdtLayerRoot string, maildirRoot string, start int, end int) error {
 
 	if err := os.MkdirAll(maildirRoot, 0755); err != nil {
@@ -117,14 +120,12 @@ func createUserFiles(crdtLayerRoot string, maildirRoot string, start int, end in
 	return nil
 }
 
-// exists returns true if a file exists
+// exists returns true if a file exists.
 func exists(path string) bool {
 
-	_, err := os.Stat(path)
-	if err != nil {
+	if _, err := os.Stat(path); err != nil {
 
 		if os.IsNotExist(err) {
-			// not found
 			return false
 		}
 
