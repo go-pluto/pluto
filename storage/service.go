@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync"
 
 	"crypto/tls"
 	"path/filepath"
@@ -83,8 +84,7 @@ func NewService(intlConn InternalConnection, mailSocket net.Listener, config con
 
 	return &service{
 		imapNode: &imap.IMAPNode{
-			// TODO: should work without following line
-			// lock:           new(sync.RWMutex),
+			Lock:             &sync.RWMutex{},
 			MailSocket:       mailSocket,
 			Connections:      make(map[string]*tls.Conn),
 			MailboxStructure: make(map[string]map[string]*crdt.ORSet),

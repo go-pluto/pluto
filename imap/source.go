@@ -14,7 +14,6 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
-	"github.com/go-kit/kit/log"
 	"github.com/numbleroot/maildir"
 	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
@@ -28,8 +27,7 @@ import (
 // for one single place to define behaviour of
 // handling IMAP as well as CRDT update requests.
 type IMAPNode struct {
-	lock             *sync.RWMutex
-	logger           log.Logger
+	Lock             *sync.RWMutex
 	MailSocket       net.Listener
 	Connections      map[string]*tls.Conn
 	MailboxStructure map[string]map[string]*crdt.ORSet
@@ -128,8 +126,8 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan comm
 	c.State = Mailbox
 	c.SelectedMailbox = mailboxes[0]
 
-	node.lock.RLock()
-	defer node.lock.RUnlock()
+	node.Lock.RLock()
+	defer node.Lock.RUnlock()
 
 	// Store contents structure of selected mailbox
 	// for later convenient use.
@@ -222,8 +220,8 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan comm
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
-	node.lock.Lock()
-	defer node.lock.Unlock()
+	node.Lock.Lock()
+	defer node.Lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
@@ -383,8 +381,8 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan comm
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
-	node.lock.Lock()
-	defer node.lock.Unlock()
+	node.Lock.Lock()
+	defer node.Lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
@@ -520,7 +518,7 @@ func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan comm.M
 		return true
 	}
 
-	node.lock.RLock()
+	node.Lock.RLock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
@@ -547,7 +545,7 @@ func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan comm.M
 		}
 	}
 
-	node.lock.RUnlock()
+	node.Lock.RUnlock()
 
 	// Send out LIST response lines.
 	for _, listAnswerLine := range listAnswerLines {
@@ -687,8 +685,8 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan comm
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
-	node.lock.Lock()
-	defer node.lock.Unlock()
+	node.Lock.Lock()
+	defer node.Lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
@@ -866,7 +864,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan com
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
-	node.lock.Lock()
+	node.Lock.Lock()
 
 	// Save all mails possibly to delete and
 	// number of these files.
@@ -884,7 +882,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan com
 			mailFlags, err := expMaildir.Flags(expMails[i], false)
 			if err != nil {
 				c.Error("Encountered error while retrieving flags for expunging mails", err)
-				node.lock.Unlock()
+				node.Lock.Unlock()
 				return false
 			}
 
@@ -932,7 +930,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan com
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
 				stdlog.Printf("[imap.Expunge] Failed to remove mails from user's selected mailbox CRDT: %v", err)
-				node.lock.Unlock()
+				node.Lock.Unlock()
 				os.Exit(1)
 			}
 
@@ -943,7 +941,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan com
 			err = os.Remove(expMailPath)
 			if err != nil {
 				c.Error("Error while removing expunged mail file from stable storage", err)
-				node.lock.Unlock()
+				node.Lock.Unlock()
 				return false
 			}
 
@@ -955,7 +953,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan com
 			expAnswerLines = append(expAnswerLines, fmt.Sprintf("* %d EXPUNGE", realMsgNum))
 		}
 
-		node.lock.Unlock()
+		node.Lock.Unlock()
 
 		// Send out FETCH part with new flags.
 		for _, expAnswerLine := range expAnswerLines {
@@ -1072,7 +1070,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
-	node.lock.Lock()
+	node.Lock.Lock()
 
 	// Retrieve number of messages in mailbox.
 	lenMailboxContents := len(node.MailboxContents[c.UserName][c.SelectedMailbox])
@@ -1089,11 +1087,11 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), false, "")
 		if err != nil {
 			c.Error("Encountered send error", err)
-			node.lock.Unlock()
+			node.Lock.Unlock()
 			return false
 		}
 
-		node.lock.Unlock()
+		node.Lock.Unlock()
 
 		return true
 	}
@@ -1136,7 +1134,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 		mailFileContent, err := ioutil.ReadFile(filepath.Join(selectedMailbox, "cur", mailFileName))
 		if err != nil {
 			c.Error("Error while reading in mail file content in STORE operation", err)
-			node.lock.Unlock()
+			node.Lock.Unlock()
 			return false
 		}
 
@@ -1144,7 +1142,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 		mailFlags, err := mailMaildir.Flags(mailFileName, false)
 		if err != nil {
 			c.Error("Error while retrieving flags from mail file", err)
-			node.lock.Unlock()
+			node.Lock.Unlock()
 			return false
 		}
 
@@ -1195,7 +1193,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 			newMailFileName, err := mailMaildir.SetFlags(mailFileName, string(newMailFlags), false)
 			if err != nil {
 				c.Error("Error renaming mail file in STORE operation", err)
-				node.lock.Unlock()
+				node.Lock.Unlock()
 				return false
 			}
 
@@ -1225,7 +1223,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
 				stdlog.Printf("[imap.Store] Failed to remove old mail name from selected mailbox CRDT: %v", err)
-				node.lock.Unlock()
+				node.Lock.Unlock()
 				os.Exit(1)
 			}
 
@@ -1252,7 +1250,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
 				stdlog.Printf("[imap.Store] Failed to add renamed mail name to selected mailbox CRDT: %v", err)
-				node.lock.Unlock()
+				node.Lock.Unlock()
 				os.Exit(1)
 			}
 
@@ -1321,7 +1319,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 		}
 	}
 
-	node.lock.Unlock()
+	node.Lock.Unlock()
 
 	// Check if client requested update information.
 	if silent != true {

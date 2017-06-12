@@ -21,19 +21,17 @@ import (
 // Sender bundles information needed for sending
 // out sync messages via CRDTs.
 type Sender struct {
-	lock            *sync.Mutex
-	name            string
-	tlsConfig       *tls.Config
-	gRPCOptions     []grpc.DialOption
-	intlConnTimeout int
-	intlConnRetry   int
-	inc             chan Msg
-	msgInLog        chan struct{}
-	writeLog        *os.File
-	updLog          *os.File
-	incVClock       chan string
-	updVClock       chan map[string]uint32
-	nodes           map[string]string
+	lock        *sync.Mutex
+	name        string
+	tlsConfig   *tls.Config
+	gRPCOptions []grpc.DialOption
+	inc         chan Msg
+	msgInLog    chan struct{}
+	writeLog    *os.File
+	updLog      *os.File
+	incVClock   chan string
+	updVClock   chan map[string]uint32
+	nodes       map[string]string
 }
 
 // Functions
@@ -43,21 +41,19 @@ type Sender struct {
 // with. It returns a channel local processes can put
 // CRDT changes into, so that those changes will be
 // communicated to connected nodes.
-func InitSender(name string, logFilePath string, tlsConfig *tls.Config, timeout int, retry int, incVClock chan string, updVClock chan map[string]uint32, downSender chan struct{}, nodes map[string]string) (chan Msg, error) {
+func InitSender(name string, logFilePath string, tlsConfig *tls.Config, incVClock chan string, updVClock chan map[string]uint32, downSender chan struct{}, nodes map[string]string) (chan Msg, error) {
 
 	// Create and initialize what we need for
 	// a CRDT sender routine.
 	sender := &Sender{
-		lock:            new(sync.Mutex),
-		name:            name,
-		tlsConfig:       tlsConfig,
-		intlConnTimeout: timeout,
-		intlConnRetry:   retry,
-		inc:             make(chan Msg),
-		msgInLog:        make(chan struct{}, 1),
-		incVClock:       incVClock,
-		updVClock:       updVClock,
-		nodes:           nodes,
+		lock:      new(sync.Mutex),
+		name:      name,
+		tlsConfig: tlsConfig,
+		inc:       make(chan Msg),
+		msgInLog:  make(chan struct{}, 1),
+		incVClock: incVClock,
+		updVClock: updVClock,
+		nodes:     nodes,
 	}
 
 	// Open log file descriptor for writing.

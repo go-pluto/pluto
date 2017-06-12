@@ -30,8 +30,8 @@ func (node *IMAPNode) ApplyCreate(msg comm.Msg) {
 	contentsExisted := true
 
 	// Lock node exclusively.
-	node.lock.Lock()
-	defer node.lock.Unlock()
+	node.Lock.Lock()
+	defer node.Lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
@@ -165,8 +165,8 @@ func (node *IMAPNode) ApplyDelete(msg comm.Msg) {
 	}
 
 	// Lock node exclusively.
-	node.lock.Lock()
-	defer node.lock.Unlock()
+	node.Lock.Lock()
+	defer node.Lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
@@ -226,8 +226,8 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 	}
 
 	// Lock node exclusively.
-	node.lock.Lock()
-	defer node.lock.Unlock()
+	node.Lock.Lock()
+	defer node.Lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
@@ -333,8 +333,8 @@ func (node *IMAPNode) ApplyExpunge(msg comm.Msg) {
 	}
 
 	// Lock node exclusively.
-	node.lock.Lock()
-	defer node.lock.Unlock()
+	node.Lock.Lock()
+	defer node.Lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
@@ -406,8 +406,8 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 	}
 
 	// Lock node exclusively.
-	node.lock.Lock()
-	defer node.lock.Unlock()
+	node.Lock.Lock()
+	defer node.Lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
