@@ -249,7 +249,7 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 				stdlog.Fatalf("[imap.ApplyAppend] Failed to create file for mail to append: %v", err)
 			}
 
-			_, err = appendFile.WriteString(appendUpd.AddMail.Contents)
+			_, err = appendFile.Write(appendUpd.AddMail.Contents)
 			if err != nil {
 
 				// Perform clean up.
@@ -448,7 +448,7 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 				stdlog.Fatalf("[imap.ApplyStore] Failed to create file for mail of STORE operation: %v", err)
 			}
 
-			_, err = storeFile.WriteString(storeUpd.AddMail.Contents)
+			_, err = storeFile.Write(storeUpd.AddMail.Contents)
 			if err != nil {
 
 				// Perform clean up.

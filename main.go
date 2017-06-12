@@ -291,7 +291,7 @@ func main() {
 		workerS = worker.NewLoggingService(workerS, logger)
 
 		// Initialize channels for this node.
-		applyCRDTUpd := make(chan string)
+		applyCRDTUpd := make(chan comm.Msg)
 		doneCRDTUpd := make(chan struct{})
 		downRecv := make(chan struct{})
 		downSender := make(chan struct{})
@@ -384,7 +384,7 @@ func main() {
 		storageS = storage.NewService(&intlConn{tlsConfig, conf.IntlConnRetry}, mailSocket, conf.Storage, conf.Workers)
 		storageS = storage.NewLoggingService(storageS, logger)
 
-		syncSendChans := make(map[string]chan string)
+		syncSendChans := make(map[string]chan comm.Msg)
 
 		for name, worker := range conf.Workers {
 
@@ -400,7 +400,7 @@ func main() {
 			}
 
 			// Initialize channels for this node.
-			applyCRDTUpd := make(chan string)
+			applyCRDTUpd := make(chan comm.Msg)
 			doneCRDTUpd := make(chan struct{})
 			downRecv := make(chan struct{})
 			downSender := make(chan struct{})

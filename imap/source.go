@@ -11,12 +11,12 @@ import (
 	"sync"
 
 	"crypto/tls"
-	"encoding/base64"
 	"io/ioutil"
 	"path/filepath"
 
 	"github.com/go-kit/kit/log"
 	"github.com/numbleroot/maildir"
+	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crdt"
 )
@@ -51,7 +51,7 @@ type IMAPNode struct {
 // (e.g. a missing mailbox to select) but otherwise correct
 // handling, this function would send a useful message to
 // the client and still return true.
-func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan string) bool {
+func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
 
 	if (c.State != Authenticated) && (c.State != Mailbox) {
 
@@ -167,7 +167,7 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan stri
 
 // Create attempts to create a mailbox with name
 // taken from payload of request.
-func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan string) bool {
+func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
 
 	if (c.State != Authenticated) && (c.State != Mailbox) {
 
@@ -278,8 +278,18 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 
 	// If succeeded, add a new folder in user's main CRDT
 	// and synchronise it to other replicas.
-	err = userMainCRDT.Add(posMailbox, func(payload string) {
-		syncChan <- fmt.Sprintf("create|%s|%s|%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(posMailbox)), payload)
+	err = userMainCRDT.Add(posMailbox, func(args ...string) {
+		syncChan <- comm.Msg{
+			Operation: "create",
+			Create: &comm.Msg_CREATE{
+				User:    c.UserName,
+				Mailbox: posMailbox,
+				AddMailbox: &comm.Msg_Element{
+					Value: args[0],
+					Tag:   args[1],
+				},
+			},
+		}
 	})
 	if err != nil {
 
@@ -318,7 +328,7 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan stri
 
 // Delete attempts to remove an existing mailbox with
 // all included content in CRDT as well as file system.
-func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan string) bool {
+func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
 
 	if (c.State != Authenticated) && (c.State != Mailbox) {
 
@@ -385,8 +395,28 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 
 	// Remove element from user's main CRDT and send out
 	// remove update operations to all other replicas.
-	err := userMainCRDT.Remove(delMailbox, func(payload string) {
-		syncChan <- fmt.Sprintf("delete|%s|%s|%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(delMailbox)), payload)
+	err := userMainCRDT.Remove(delMailbox, func(args ...string) {
+
+		// Prepare slice of Element structs to capture
+		// all value-tag-pairs to remove.
+		rmvMailbox := make([]*comm.Msg_Element, (len(args) / 2))
+
+		for i := 0; i < (len(args) / 2); i++ {
+
+			rmvMailbox[i] = &comm.Msg_Element{
+				Value: args[(2 * i)],
+				Tag:   args[((2 * i) + 1)],
+			}
+		}
+
+		syncChan <- comm.Msg{
+			Operation: "delete",
+			Delete: &comm.Msg_DELETE{
+				User:       c.UserName,
+				Mailbox:    delMailbox,
+				RmvMailbox: rmvMailbox,
+			},
+		}
 	})
 	if err != nil {
 
@@ -445,7 +475,7 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan stri
 
 // List allows clients to learn about the mailboxes
 // available and also returns the hierarchy delimiter.
-func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan string) bool {
+func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
 
 	if (c.State != Authenticated) && (c.State != Mailbox) {
 
@@ -540,7 +570,7 @@ func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan string
 }
 
 // Append puts supplied message into specified mailbox.
-func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan string) bool {
+func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
 
 	var mailbox string
 	var flagsRaw string
@@ -746,8 +776,19 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 
 	// Add new mail to mailbox' CRDT and send update
 	// message to other replicas.
-	err = appMailboxCRDT.Add(mailFileName, func(payload string) {
-		syncChan <- fmt.Sprintf("append|%s|%s|%s;%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(mailbox)), payload, base64.StdEncoding.EncodeToString(msgBuffer))
+	err = appMailboxCRDT.Add(mailFileName, func(args ...string) {
+		syncChan <- comm.Msg{
+			Operation: "append",
+			Append: &comm.Msg_APPEND{
+				User:    c.UserName,
+				Mailbox: mailbox,
+				AddMail: &comm.Msg_Element{
+					Value:    args[0],
+					Tag:      args[1],
+					Contents: msgBuffer,
+				},
+			},
+		}
 	})
 	if err != nil {
 
@@ -779,7 +820,7 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan stri
 // Expunge deletes messages permanently from currently
 // selected mailbox that have been flagged as Deleted
 // prior to calling this function.
-func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan string) bool {
+func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
 
 	if c.State != Mailbox {
 
@@ -863,8 +904,28 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan str
 		for _, msgNum := range expMailNums {
 
 			// Remove each mail to expunge from mailbox CRDT.
-			err := expMailboxCRDT.Remove(expMails[msgNum], func(payload string) {
-				syncChan <- fmt.Sprintf("expunge|%s|%s|%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(c.SelectedMailbox)), payload)
+			err := expMailboxCRDT.Remove(expMails[msgNum], func(args ...string) {
+
+				// Prepare slice of Element structs to capture
+				// all value-tag-pairs to remove.
+				rmvMails := make([]*comm.Msg_Element, (len(args) / 2))
+
+				for i := 0; i < (len(args) / 2); i++ {
+
+					rmvMails[i] = &comm.Msg_Element{
+						Value: args[(2 * i)],
+						Tag:   args[((2 * i) + 1)],
+					}
+				}
+
+				syncChan <- comm.Msg{
+					Operation: "expunge",
+					Expunge: &comm.Msg_EXPUNGE{
+						User:    c.UserName,
+						Mailbox: c.SelectedMailbox,
+						RmvMail: rmvMails,
+					},
+				}
 			})
 			if err != nil {
 
@@ -920,7 +981,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan str
 // Store takes in message sequence numbers and some set
 // of flags to change in those messages and changes the
 // attributes for these mails throughout the system.
-func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan string) bool {
+func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
 
 	// Set updated flags list indicator
 	// initially to false.
@@ -1042,8 +1103,6 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 
 	for _, msgNum := range msgNums {
 
-		var rmvElements string
-
 		// Initialize runes slice for new flags of mail.
 		newMailFlags := make([]rune, 0, 5)
 
@@ -1143,10 +1202,23 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 			// Save CRDT of mailbox.
 			storeMailboxCRDT := node.MailboxStructure[c.UserName][c.SelectedMailbox]
 
+			var rmvMails []*comm.Msg_Element
+
 			// First, remove the former name of the mail file
 			// but do not yet send out an update operation.
-			err = storeMailboxCRDT.Remove(mailFileName, func(payload string) {
-				rmvElements = payload
+			err = storeMailboxCRDT.Remove(mailFileName, func(args ...string) {
+
+				// Prepare slice of Element structs to capture
+				// all value-tag-pairs to remove.
+				rmvMails = make([]*comm.Msg_Element, (len(args) / 2))
+
+				for i := 0; i < (len(args) / 2); i++ {
+
+					rmvMails[i] = &comm.Msg_Element{
+						Value: args[(2 * i)],
+						Tag:   args[((2 * i) + 1)],
+					}
+				}
 			})
 			if err != nil {
 
@@ -1159,8 +1231,21 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan strin
 
 			// Second, add the new mail file's name and finally
 			// instruct all other nodes to do the same.
-			err = storeMailboxCRDT.Add(newMailFileName, func(payload string) {
-				syncChan <- fmt.Sprintf("store|%s|%s|%s|%s;%s", c.UserName, base64.StdEncoding.EncodeToString([]byte(c.SelectedMailbox)), rmvElements, payload, base64.StdEncoding.EncodeToString(mailFileContent))
+			err = storeMailboxCRDT.Add(newMailFileName, func(args ...string) {
+
+				syncChan <- comm.Msg{
+					Operation: "store",
+					Store: &comm.Msg_STORE{
+						User:    c.UserName,
+						Mailbox: c.SelectedMailbox,
+						RmvMail: rmvMails,
+						AddMail: &comm.Msg_Element{
+							Value:    args[0],
+							Tag:      args[1],
+							Contents: mailFileContent,
+						},
+					},
+				}
 			})
 			if err != nil {
 

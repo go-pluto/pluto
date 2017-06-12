@@ -42,31 +42,31 @@ type Service interface {
 
 	// Select sets the current mailbox based on supplied
 	// payload to user-instructed value.
-	Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
 
 	// Create attempts to create a mailbox with
 	// name taken from payload of request.
-	Create(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	Create(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
 
 	// Delete an existing mailbox with all included content.
-	Delete(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	Delete(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
 
 	// List allows clients to learn about the mailboxes
 	// available and also returns the hierarchy delimiter.
-	List(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	List(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
 
 	// Append puts supplied message into specified mailbox.
-	Append(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	Append(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
 
 	// Expunge deletes messages permanently from currently
 	// selected mailbox that have been flagged as Deleted
 	// prior to calling this function.
-	Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
 
 	// Store takes in message sequence numbers and some set
 	// of flags to change in those messages and changes the
 	// attributes for these mails throughout the system.
-	Store(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool
+	Store(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
 }
 
 type service struct {
@@ -333,7 +333,7 @@ func (s *service) HandleConnection(conn net.Conn) error {
 
 // Select sets the current mailbox based on supplied
 // payload to user-instructed value.
-func (s *service) Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
 
 	ok := s.imapNode.Select(c, req, s.SyncSendChan)
 	if ok {
@@ -351,7 +351,7 @@ func (s *service) Select(c *imap.IMAPConnection, req *imap.Request, syncChan cha
 
 // Create attempts to create a mailbox with
 // name taken from payload of request.
-func (s *service) Create(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) Create(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
 
 	ok := s.imapNode.Create(c, req, s.SyncSendChan)
 	if ok {
@@ -368,7 +368,7 @@ func (s *service) Create(c *imap.IMAPConnection, req *imap.Request, syncChan cha
 }
 
 // Delete an existing mailbox with all included content.
-func (s *service) Delete(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) Delete(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
 
 	ok := s.imapNode.Delete(c, req, s.SyncSendChan)
 	if ok {
@@ -386,7 +386,7 @@ func (s *service) Delete(c *imap.IMAPConnection, req *imap.Request, syncChan cha
 
 // List allows clients to learn about the mailboxes
 // available and also returns the hierarchy delimiter.
-func (s *service) List(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) List(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
 
 	ok := s.imapNode.List(c, req, s.SyncSendChan)
 	if ok {
@@ -403,7 +403,7 @@ func (s *service) List(c *imap.IMAPConnection, req *imap.Request, syncChan chan 
 }
 
 // Append puts supplied message into specified mailbox.
-func (s *service) Append(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) Append(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
 
 	ok := s.imapNode.Append(c, req, s.SyncSendChan)
 	if ok {
@@ -422,7 +422,7 @@ func (s *service) Append(c *imap.IMAPConnection, req *imap.Request, syncChan cha
 // Expunge deletes messages permanently from currently
 // selected mailbox that have been flagged as Deleted
 // prior to calling this function.
-func (s *service) Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
 
 	ok := s.imapNode.Expunge(c, req, s.SyncSendChan)
 	if ok {
@@ -441,7 +441,7 @@ func (s *service) Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan ch
 // Store takes in message sequence numbers and some set
 // of flags to change in those messages and changes the
 // attributes for these mails throughout the system.
-func (s *service) Store(c *imap.IMAPConnection, req *imap.Request, syncChan chan string) bool {
+func (s *service) Store(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
 
 	ok := s.imapNode.Store(c, req, s.SyncSendChan)
 	if ok {
