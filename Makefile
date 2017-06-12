@@ -12,7 +12,8 @@ clean:
 	rm -f generate_pki generate_cert generate_cert.go
 
 proto:
-	 protoc -I comm/ comm/receiver.proto --go_out=plugins=grpc:comm
+	protoc -I imap/ imap/node.proto --go_out=plugins=grpc:imap
+	protoc -I comm/ comm/receiver.proto --go_out=plugins=grpc:comm
 
 build:
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'

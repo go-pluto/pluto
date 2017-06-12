@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package imap;
+
+message Context {
+    string clientID = 1;
+    string userName = 2;
+}
+
+message Confirmation {
+    uint32 status = 1;
+}
+
+message Command {
+    string command = 1;
+}
+
+message Reply {
+    string reply = 1;
+}
+
+service Node {
+    rpc SendContext(Context) returns(Confirmation) {}
+    rpc Select(Command) returns(Reply) {}
+    rpc Create(Command) returns(Reply) {}
+    rpc Delete(Command) returns(Reply) {}
+    rpc List(Command) returns(Reply) {}
+    rpc Append(Command) returns(Reply) {}
+    rpc Expunge(Command) returns(Reply) {}
+    rpc Store(Command) returns(Reply) {}
+}
