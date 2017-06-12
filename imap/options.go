@@ -1,4 +1,4 @@
-package comm
+package imap
 
 import (
 	"time"
@@ -15,16 +15,12 @@ import (
 // Symmetric - send and receive option.
 var maxMsgSize int = 268437504
 
-// ReceiverOptions returns a list of gRPC server
-// options that the internal receiver uses for RPCs.
-func ReceiverOptions(tlsConfig *tls.Config, interceptor grpc.UnaryServerInterceptor) []grpc.ServerOption {
+// NodeOptions returns a list of gRPC server
+// options that the IMAP node uses for RPCs.
+func NodeOptions(tlsConfig *tls.Config) []grpc.ServerOption {
 
 	// Use pluto-internal TLS config for credentials.
 	creds := credentials.NewTLS(tlsConfig)
-
-	// Use the custom NoOp codec that simply passes
-	// through received binary messages.
-	codec := NoOpCodec{}
 
 	// Use GZIP for compression and decompression.
 	comp := grpc.NewGZIPCompressor()
@@ -32,8 +28,8 @@ func ReceiverOptions(tlsConfig *tls.Config, interceptor grpc.UnaryServerIntercep
 
 	kaParams := keepalive.ServerParameters{
 		// Any internal connection will be closed after
-		// 5 minutes of being in idle state.
-		MaxConnectionIdle: 5 * time.Minute,
+		// 10 minutes of being in idle state.
+		MaxConnectionIdle: 10 * time.Minute,
 		// The receiver will ping the other node after
 		// 1 minute of inactivity for keepalive.
 		Time: 1 * time.Minute,
@@ -55,10 +51,8 @@ func ReceiverOptions(tlsConfig *tls.Config, interceptor grpc.UnaryServerIntercep
 
 	return []grpc.ServerOption{
 		grpc.Creds(creds),
-		grpc.CustomCodec(codec),
 		grpc.RPCCompressor(comp),
 		grpc.RPCDecompressor(decomp),
-		grpc.UnaryInterceptor(interceptor),
 		grpc.MaxRecvMsgSize(maxMsgSize),
 		grpc.MaxSendMsgSize(maxMsgSize),
 		grpc.KeepaliveParams(kaParams),
@@ -67,13 +61,10 @@ func ReceiverOptions(tlsConfig *tls.Config, interceptor grpc.UnaryServerIntercep
 	}
 }
 
-// SenderOptions defines gRPC options for connection
-// attempts from a sender to a receiver.
-func SenderOptions(tlsConfig *tls.Config) []grpc.DialOption {
-
-	// Use the custom NoOp codec that simply passes
-	// through received binary messages.
-	codec := NoOpCodec{}
+// DistributorOptions defines gRPC options for the
+// distributor to use when proxying IMAP requests
+// to the responsible worker or storage.
+func DistributorOptions(tlsConfig *tls.Config) []grpc.DialOption {
 
 	// Use GZIP for compression and decompression.
 	comp := grpc.NewGZIPCompressor()
@@ -114,7 +105,6 @@ func SenderOptions(tlsConfig *tls.Config) []grpc.DialOption {
 	creds := credentials.NewTLS(tlsConfig)
 
 	return []grpc.DialOption{
-		grpc.WithCodec(codec),
 		grpc.WithCompressor(comp),
 		grpc.WithDecompressor(decomp),
 		// grpc.WithBackoffConfig(boff),
