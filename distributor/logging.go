@@ -14,9 +14,13 @@ type loggingService struct {
 }
 
 // NewLoggingService wraps a provided existing
-// service with the provided logger.
+// service with the supplied logger.
 func NewLoggingService(s Service, logger log.Logger) Service {
-	return &loggingService{logger, s}
+
+	return &loggingService{
+		logger:  logger,
+		service: s,
+	}
 }
 
 // Run wraps this service's Run method with
@@ -117,19 +121,139 @@ func (s *loggingService) StartTLS(c *imap.Connection, req *imap.Request) bool {
 	return ok
 }
 
-// Proxy wraps this service's Proxy method
-// with added logging capabilities.
-func (s *loggingService) Proxy(c *imap.Connection, rawReq string) bool {
+// ProxySelect wraps this service's ProxySelect
+// method with added logging capabilities.
+func (s *loggingService) ProxySelect(c *imap.Connection, rawReq string) bool {
 
-	ok := s.service.Proxy(c, rawReq)
+	ok := s.service.ProxySelect(c, rawReq)
 
 	logger := log.With(s.logger,
-		"method", "Proxy",
+		"method", "ProxySelect",
 		"raw_request", rawReq,
 	)
 
 	if !ok {
-		level.Info(logger).Log("msg", "failed to proxy command to responsible worker")
+		level.Info(logger).Log("msg", "failed to proxy SELECT command to responsible worker or storage")
+	} else {
+		level.Debug(logger).Log()
+	}
+
+	return ok
+}
+
+// ProxyCreate wraps this service's ProxyCreate
+// method with added logging capabilities.
+func (s *loggingService) ProxyCreate(c *imap.Connection, rawReq string) bool {
+
+	ok := s.service.ProxyCreate(c, rawReq)
+
+	logger := log.With(s.logger,
+		"method", "ProxyCreate",
+		"raw_request", rawReq,
+	)
+
+	if !ok {
+		level.Info(logger).Log("msg", "failed to proxy CREATE command to responsible worker or storage")
+	} else {
+		level.Debug(logger).Log()
+	}
+
+	return ok
+}
+
+// ProxyDelete wraps this service's ProxyDelete
+// method with added logging capabilities.
+func (s *loggingService) ProxyDelete(c *imap.Connection, rawReq string) bool {
+
+	ok := s.service.ProxyDelete(c, rawReq)
+
+	logger := log.With(s.logger,
+		"method", "ProxyDelete",
+		"raw_request", rawReq,
+	)
+
+	if !ok {
+		level.Info(logger).Log("msg", "failed to proxy DELETE command to responsible worker or storage")
+	} else {
+		level.Debug(logger).Log()
+	}
+
+	return ok
+}
+
+// ProxyList wraps this service's ProxyList
+// method with added logging capabilities.
+func (s *loggingService) ProxyList(c *imap.Connection, rawReq string) bool {
+
+	ok := s.service.ProxyList(c, rawReq)
+
+	logger := log.With(s.logger,
+		"method", "ProxyList",
+		"raw_request", rawReq,
+	)
+
+	if !ok {
+		level.Info(logger).Log("msg", "failed to proxy LIST command to responsible worker or storage")
+	} else {
+		level.Debug(logger).Log()
+	}
+
+	return ok
+}
+
+// ProxyAppend wraps this service's ProxyAppend
+// method with added logging capabilities.
+func (s *loggingService) ProxyAppend(c *imap.Connection, rawReq string) bool {
+
+	ok := s.service.ProxyAppend(c, rawReq)
+
+	logger := log.With(s.logger,
+		"method", "ProxyAppend",
+		"raw_request", rawReq,
+	)
+
+	if !ok {
+		level.Info(logger).Log("msg", "failed to proxy APPEND command to responsible worker or storage")
+	} else {
+		level.Debug(logger).Log()
+	}
+
+	return ok
+}
+
+// ProxyExpunge wraps this service's ProxyExpunge
+// method with added logging capabilities.
+func (s *loggingService) ProxyExpunge(c *imap.Connection, rawReq string) bool {
+
+	ok := s.service.ProxyExpunge(c, rawReq)
+
+	logger := log.With(s.logger,
+		"method", "ProxyExpunge",
+		"raw_request", rawReq,
+	)
+
+	if !ok {
+		level.Info(logger).Log("msg", "failed to proxy EXPUNGE command to responsible worker or storage")
+	} else {
+		level.Debug(logger).Log()
+	}
+
+	return ok
+}
+
+// ProxyStore wraps this service's ProxyStore
+// method with added logging capabilities.
+func (s *loggingService) ProxyStore(c *imap.Connection, rawReq string) bool {
+
+	ok := s.service.ProxyStore(c, rawReq)
+
+	logger := log.With(s.logger,
+		"method", "ProxyStore",
+		"raw_request", rawReq,
+	)
+
+	if !ok {
+		level.Info(logger).Log("msg", "failed to proxy STORE command to responsible worker or storage")
 	} else {
 		level.Debug(logger).Log()
 	}
