@@ -2,15 +2,6 @@ syntax = "proto3";
 
 package imap;
 
-message Context {
-    string clientID = 1;
-    string userName = 2;
-}
-
-message Confirmation {
-    uint32 status = 1;
-}
-
 message Command {
 
     message Message {
@@ -18,7 +9,9 @@ message Command {
     }
 
     string text = 1;
-    Message hasMsg = 2;
+    string clientID = 2;
+    string userName = 3;
+    Message hasMsg = 4;
 }
 
 message Reply {
@@ -32,7 +25,6 @@ message Reply {
 }
 
 service Node {
-    rpc SendContext(Context) returns(Confirmation) {}
     rpc Select(Command) returns(Reply) {}
     rpc Create(Command) returns(Reply) {}
     rpc Delete(Command) returns(Reply) {}
