@@ -27,15 +27,12 @@ import (
 // for one single place to define behaviour of
 // handling IMAP as well as CRDT update requests.
 type IMAPNode struct {
-	Lock             *sync.RWMutex
-	MailSocket       net.Listener
-	Connections      map[string]*tls.Conn
-	MailboxStructure map[string]map[string]*crdt.ORSet
-	MailboxContents  map[string]map[string][]string
-	CRDTLayerRoot    string
-	MaildirRoot      string
-	Config           *config.Config
-	ShutdownChan     chan struct{}
+	Lock               *sync.RWMutex
+	MailboxStructure   map[string]map[string]*crdt.ORSet
+	MailboxContents    map[string]map[string][]string
+	CRDTLayerRoot      string
+	MaildirRoot        string
+	HierarchySeparator string
 }
 
 // Functions
@@ -199,7 +196,7 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan comm
 
 	// Trim supplied mailbox name of hierarchy separator if
 	// it was sent with a trailing one.
-	posMailbox := strings.TrimSuffix(posMailboxes[0], node.Config.IMAP.HierarchySeparator)
+	posMailbox := strings.TrimSuffix(posMailboxes[0], node.HierarchySeparator)
 
 	if strings.ToUpper(posMailbox) == "INBOX" {
 
@@ -360,7 +357,7 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan comm
 
 	// Trim supplied mailbox name of hierarchy separator if
 	// it was sent with a trailing one.
-	delMailbox := strings.TrimSuffix(delMailboxes[0], node.Config.IMAP.HierarchySeparator)
+	delMailbox := strings.TrimSuffix(delMailboxes[0], node.HierarchySeparator)
 
 	if strings.ToUpper(delMailbox) == "INBOX" {
 
@@ -534,13 +531,13 @@ func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan comm.M
 
 			// Split currently considered mailbox name at
 			// defined hierarchy separator.
-			mailboxParts := strings.Split(mailbox, node.Config.IMAP.HierarchySeparator)
+			mailboxParts := strings.Split(mailbox, node.HierarchySeparator)
 
 			if (listArgs[1] == "*") || (len(mailboxParts) == 1) {
 
 				// Either always include a mailbox in the response
 				// or only when it is a top level mailbox.
-				listAnswerLines = append(listAnswerLines, fmt.Sprintf("* LIST () \"%s\" %s", node.Config.IMAP.HierarchySeparator, mailbox))
+				listAnswerLines = append(listAnswerLines, fmt.Sprintf("* LIST () \"%s\" %s", node.HierarchySeparator, mailbox))
 			}
 		}
 	}
