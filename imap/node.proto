@@ -12,11 +12,23 @@ message Confirmation {
 }
 
 message Command {
-    string command = 1;
+
+    message Message {
+        bytes content = 1;
+    }
+
+    string text = 1;
+    Message hasMsg = 2;
 }
 
 message Reply {
-    string reply = 1;
+
+    message APPEND {
+        uint32 awaitedNumBytes = 1;
+    }
+
+    string text = 1;
+    APPEND isAppend = 2;
 }
 
 service Node {
