@@ -14,12 +14,8 @@ import (
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crdt"
 	"github.com/numbleroot/pluto/imap"
+	"google.golang.org/grpc"
 )
-
-// InternalConnection knows how to create internal TLS connections.
-type InternalConnection interface {
-	ReliableConnect(addr string) (*tls.Conn, error)
-}
 
 // Service defines the interface a worker node
 // in a pluto network provides.
@@ -36,10 +32,6 @@ type Service interface {
 	// dispatches each one to a goroutine taking care of
 	// the commands supplied.
 	Run() error
-
-	// HandleConnection is the main worker routine where all
-	// incoming requests against worker nodes have to go through.
-	HandleConnection(conn net.Conn) error
 
 	// Select sets the current mailbox based on supplied
 	// payload to user-instructed value.
@@ -72,33 +64,36 @@ type Service interface {
 
 type service struct {
 	imapNode     *imap.IMAPNode
-	Name         string
-	SyncSendChan chan comm.Msg
-	intlConn     InternalConnection
+	tlsConfig    *tls.Config
 	config       config.Worker
+	Name         string
+	IMAPNodeGRPC *grpc.Server
+	SyncSendChan chan comm.Msg
 }
 
 // NewService takes in all required parameters for spinning
 // up a new worker node, runs initialization code, and returns
 // a service struct for this node type wrapping all information.
-func NewService(intlConn InternalConnection, mailSocket net.Listener, config config.Worker, name string) Service {
+func NewService(tlsConfig *tls.Config, config config.Config, name string) Service {
 
 	return &service{
 		imapNode: &imap.IMAPNode{
-			Lock:             &sync.RWMutex{},
-			MailSocket:       mailSocket,
-			Connections:      make(map[string]*tls.Conn),
-			MailboxStructure: make(map[string]map[string]*crdt.ORSet),
-			MailboxContents:  make(map[string]map[string][]string),
-			CRDTLayerRoot:    config.CRDTLayerRoot,
-			MaildirRoot:      config.MaildirRoot,
+			Lock:               &sync.RWMutex{},
+			MailboxStructure:   make(map[string]map[string]*crdt.ORSet),
+			MailboxContents:    make(map[string]map[string][]string),
+			CRDTLayerRoot:      config.CRDTLayerRoot,
+			MaildirRoot:        config.MaildirRoot,
+			HierarchySeparator: config.IMAP.HierarchySeparator,
 		},
-		Name:     name,
-		intlConn: intlConn,
-		config:   config,
+		tlsConfig: tlsConfig,
+		config:    config.Workers[name],
+		Name:      name,
 	}
 }
 
+// Init executes functions organizing files and folders
+// needed for this node and passes on the synchronization
+// channel to the service.
 func (s *service) Init(syncSendChan chan comm.Msg) error {
 
 	err := s.findFiles()
@@ -107,6 +102,13 @@ func (s *service) Init(syncSendChan chan comm.Msg) error {
 	}
 
 	s.SyncSendChan = syncSendChan
+
+	// Define options for an empty gRPC server.
+	options := imap.NodeOptions(s.tlsConfig)
+	s.IMAPNodeGRPC = grpc.NewServer(options...)
+
+	// Register the empty server on fulfilling interface.
+	imap.RegisterNodeServer(s.IMAPNodeGRPC, s)
 
 	return err
 }
@@ -173,9 +175,10 @@ func (s *service) findFiles() error {
 	return nil
 }
 
+// ApplyCRDTUpd passes on the required arguments for
+// invoking the IMAP node's ApplyCRDTUpd function so
+// that CRDT messages will get applied in background.
 func (s *service) ApplyCRDTUpd(applyCRDTUpd chan comm.Msg, doneCRDTUpd chan struct{}) {
-
-	// Apply received CRDT messages in background.
 	s.imapNode.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
 }
 
@@ -193,18 +196,18 @@ func (s *service) Run() error {
 		}
 
 		// Dispatch into own goroutine.
-		go s.HandleConnection(conn)
+		go s.handleConnection(conn)
 	}
 }
 
-// HandleConnection is the main worker routine where all
+// handleConnection is the main worker routine where all
 // incoming requests against worker nodes have to go through.
-func (s *service) HandleConnection(conn net.Conn) error {
+func (s *service) handleConnection(conn net.Conn) error {
 
 	// Assert we are talking via a TLS connection.
 	tlsConn, ok := conn.(*tls.Conn)
 	if ok != true {
-		return fmt.Errorf("[imap.HandleConnection] Worker %s could not convert connection into TLS connection", s.Name)
+		return fmt.Errorf("[imap.handleConnection] Worker %s could not convert connection into TLS connection", s.Name)
 	}
 
 	// Create a new connection struct for incoming request.
@@ -223,15 +226,9 @@ func (s *service) HandleConnection(conn net.Conn) error {
 		return nil
 	}
 
-	// TODO: Lock inside that package?!
-	//worker.lock.RLock()
-
 	// Extract CRDT and Maildir location for later use.
 	CRDTLayerRoot := s.config.CRDTLayerRoot
 	MaildirRoot := s.config.MaildirRoot
-
-	// TODO: Lock inside that package?!
-	//worker.lock.RUnlock()
 
 	// Based on received client information, update IMAP
 	// connection to reflect these information.
@@ -322,7 +319,7 @@ func (s *service) HandleConnection(conn net.Conn) error {
 
 	// Terminate connection after logout.
 	if err := c.Terminate(); err != nil {
-		return fmt.Errorf("[imap.HandleConnection] Failed to terminate connection: %v", err)
+		return fmt.Errorf("[imap.handleConnection] Failed to terminate connection: %v", err)
 	}
 
 	// Set IMAP state to logged out.

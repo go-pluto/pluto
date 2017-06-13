@@ -224,6 +224,7 @@ func main() {
 			)
 			os.Exit(1)
 		}
+
 	} else if *workerFlag != "" {
 
 		// Check if supplied worker with workerName actually is configured.
@@ -261,22 +262,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Create needed sockets. First, mail socket.
-		mailSocket, err := tls.Listen("tcp", workerConfig.ListenMailAddr, tlsConfig)
-		if err != nil {
-			level.Error(logger).Log(
-				"msg", fmt.Sprintf("failed to listen for mail TLS connections on %s", *workerFlag),
-				"err", err,
-			)
-			os.Exit(1)
-		}
-		defer mailSocket.Close()
+		var workerS worker.Service
+		workerS = worker.NewService(tlsConfig, conf, *workerFlag)
+		workerS = worker.NewLoggingService(workerS, logger)
 
-		level.Info(logger).Log(
-			"msg", fmt.Sprintf("%s (%s) is accepting mail connections at %s", *workerFlag, workerConfig.ListenMailAddr, workerConfig.PublicMailAddr),
-		)
-
-		// Second, synchronization socket later used by gRPC.
+		// Create needed synchronization socket used by gRPC.
 		syncSocket, err := tls.Listen("tcp", workerConfig.ListenSyncAddr, tlsConfig)
 		if err != nil {
 			level.Error(logger).Log(
@@ -286,10 +276,6 @@ func main() {
 			os.Exit(1)
 		}
 		defer syncSocket.Close()
-
-		var workerS worker.Service
-		workerS = worker.NewService(&intlConn{tlsConfig, conf.IntlConnRetry}, mailSocket, workerConfig, *workerFlag)
-		workerS = worker.NewLoggingService(workerS, logger)
 
 		// Initialize channels for this node.
 		applyCRDTUpd := make(chan comm.Msg)
@@ -326,6 +312,10 @@ func main() {
 			os.Exit(1)
 		}
 
+		// Apply CRDT updates in background.
+		go workerS.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
+
+		// Run required initialization code for worker.
 		err = workerS.Init(syncSendChan)
 		if err != nil {
 			level.Error(logger).Log(
@@ -335,15 +325,26 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Apply CRDT updates in background.
-		go workerS.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
-
-		if err := workerS.Run(); err != nil {
+		// Create socket for gRPC IMAP connections.
+		mailSocket, err := tls.Listen("tcp", workerConfig.ListenMailAddr, tlsConfig)
+		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to run worker",
+				"msg", fmt.Sprintf("failed to listen for mail TLS connections on %s", *workerFlag),
+				"err", err,
+			)
+			os.Exit(1)
+		}
+		defer mailSocket.Close()
+
+		// Run main handler routine on gRPC-served IMAP socket.
+		err = workerS.IMAPNodeGRPC.Serve(mailSocket)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", fmt.Sprintf("failed to run Serve() on IMAP gRPC socket of %s", *workerFlag),
 				"err", err,
 			)
 		}
+
 	} else if *storageFlag {
 
 		tlsConfig, err := crypto.NewInternalTLSConfig(conf.Storage.TLS.CertLoc, conf.Storage.TLS.KeyLoc, conf.RootCertLoc)
@@ -355,22 +356,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Create needed sockets. First, mail socket.
-		mailSocket, err := tls.Listen("tcp", conf.Storage.ListenMailAddr, tlsConfig)
-		if err != nil {
-			level.Error(logger).Log(
-				"msg", "failed to listen for mail TLS connections on storage",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-		defer mailSocket.Close()
+		var storageS storage.Service
+		storageS = storage.NewService(tlsConfig, conf, conf.Workers)
+		storageS = storage.NewLoggingService(storageS, logger)
 
-		level.Info(logger).Log(
-			"msg", fmt.Sprintf("storage (%s) is accepting mail connections at %s", conf.Storage.ListenMailAddr, conf.Storage.PublicMailAddr),
-		)
-
-		// Second, synchronization socket later used by gRPC.
+		// Create needed synchronization socket used by gRPC.
 		syncSocket, err := tls.Listen("tcp", conf.Storage.ListenSyncAddr, tlsConfig)
 		if err != nil {
 			level.Error(logger).Log(
@@ -380,10 +370,6 @@ func main() {
 			os.Exit(1)
 		}
 		defer syncSocket.Close()
-
-		var storageS storage.Service
-		storageS = storage.NewService(&intlConn{tlsConfig, conf.IntlConnRetry}, mailSocket, conf.Storage, conf.Workers)
-		storageS = storage.NewLoggingService(storageS, logger)
 
 		syncSendChans := make(map[string]chan comm.Msg)
 
@@ -437,25 +423,40 @@ func main() {
 				os.Exit(1)
 			}
 
-			err = storageS.Init(syncSendChans)
-			if err != nil {
-				level.Error(logger).Log(
-					"msg", "failed to initilize service of storage",
-					"err", err,
-				)
-				os.Exit(1)
-			}
-
 			// Apply CRDT updates in background.
 			go storageS.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
 		}
 
-		if err := storageS.Run(); err != nil {
+		// Run required initialization code for storage.
+		err = storageS.Init(syncSendChans)
+		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to run storage",
+				"msg", "failed to initilize service of storage",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+
+		// Create socket for gRPC IMAP connections.
+		mailSocket, err := tls.Listen("tcp", conf.Storage.ListenMailAddr, tlsConfig)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to listen for mail TLS connections on storage",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+		defer mailSocket.Close()
+
+		// Run main handler routine on gRPC-served IMAP socket.
+		err = storageS.IMAPNodeGRPC.Serve(mailSocket)
+		if err != nil {
+			level.Error(logger).Log(
+				"msg", "failed to run Serve() on IMAP gRPC socket of storage",
 				"err", err,
 			)
 		}
+
 	} else {
 
 		// If no flags were specified, print usage

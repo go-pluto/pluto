@@ -17,13 +17,21 @@ type loggingService struct {
 // NewLoggingService wraps a provided existing
 // service with the provided logger.
 func NewLoggingService(s Service, logger log.Logger) Service {
-	return &loggingService{logger, s}
+
+	return &loggingService{
+		logger:  logger,
+		service: s,
+	}
 }
 
+// Init wraps this service's Init method
+// with added logging capabilities.
 func (s *loggingService) Init(syncSendChans map[string]chan comm.Msg) error {
 	return s.service.Init(syncSendChans)
 }
 
+// ApplyCRDTUpd wraps this service's ApplyCRDTUpd
+// method with added logging capabilities.
 func (s *loggingService) ApplyCRDTUpd(applyCRDTUpd chan comm.Msg, doneCRDTUpd chan struct{}) {
 	s.service.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
 }
