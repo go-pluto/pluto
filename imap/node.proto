@@ -5,6 +5,7 @@ package imap;
 message Context {
     string clientID = 1;
     string userName = 2;
+    string respWorker = 3;
 }
 
 message Confirmation {
@@ -12,24 +13,21 @@ message Confirmation {
 }
 
 message Command {
-
-    message Message {
-        bytes content = 1;
-    }
-
     string text = 1;
     string clientID = 2;
-    Message hasMsg = 3;
 }
 
 message Reply {
-
-    message APPEND {
-        uint32 awaitedNumBytes = 1;
-    }
-
     string text = 1;
-    APPEND isAppend = 2;
+    uint32 status = 2;
+}
+
+message Await {
+    uint32 numBytes = 1;
+}
+
+message MailFile {
+    bytes content = 1;
 }
 
 service Node {
@@ -39,7 +37,8 @@ service Node {
     rpc Create(Command) returns(Reply) {}
     rpc Delete(Command) returns(Reply) {}
     rpc List(Command) returns(Reply) {}
-    rpc Append(Command) returns(Reply) {}
+    rpc AppendBegin(Command) returns(Await) {}
+    rpc AppendEnd(MailFile) returns(Reply) {}
     rpc Expunge(Command) returns(Reply) {}
     rpc Store(Command) returns(Reply) {}
 }
