@@ -112,6 +112,8 @@ func (p *PostgresAuthenticator) AuthenticatePlain(username string, password stri
 	}
 
 	// Build the deterministic client-specific session identifier.
+	// Note: we expect this clientID to really identify exactly one
+	// device in one session of one user.
 	clientID := fmt.Sprintf("%s:%s", clientAddr, username)
 
 	return dbUserID, clientID, nil
