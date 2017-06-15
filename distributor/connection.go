@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"crypto/tls"
+
+	"github.com/numbleroot/pluto/imap"
 )
 
 // Structs
@@ -15,11 +17,12 @@ import (
 // a pluto node that only authenticates and proxies
 // IMAP connections.
 type Connection struct {
-	gRPCClient   NodeClient
+	gRPCClient   imap.NodeClient
 	IncConn      *tls.Conn
 	IncReader    *bufio.Reader
 	IsAuthorized bool
 	ClientID     string
+	ClientAddr   string
 	UserName     string
 	RespWorker   string
 }

@@ -43,7 +43,7 @@ func (s *loggingService) Run(listener net.Listener, greeting string) error {
 
 // Capability wraps this service's Capability
 // method with added logging capabilities.
-func (s *loggingService) Capability(c *imap.Connection, req *imap.Request) bool {
+func (s *loggingService) Capability(c *Connection, req *imap.Request) bool {
 
 	ok := s.service.Capability(c, req)
 
@@ -64,7 +64,7 @@ func (s *loggingService) Capability(c *imap.Connection, req *imap.Request) bool 
 
 // Logout wraps this service's Logout method
 // with added logging capabilities.
-func (s *loggingService) Logout(c *imap.Connection, req *imap.Request) bool {
+func (s *loggingService) Logout(c *Connection, req *imap.Request) bool {
 
 	ok := s.service.Logout(c, req)
 
@@ -85,7 +85,7 @@ func (s *loggingService) Logout(c *imap.Connection, req *imap.Request) bool {
 
 // Login wraps this service's Login method
 // with added logging capabilities.
-func (s *loggingService) Login(c *imap.Connection, req *imap.Request) bool {
+func (s *loggingService) Login(c *Connection, req *imap.Request) bool {
 
 	ok := s.service.Login(c, req)
 
@@ -106,7 +106,7 @@ func (s *loggingService) Login(c *imap.Connection, req *imap.Request) bool {
 
 // StartTLS wraps this service's StartTLS
 // method with added logging capabilities.
-func (s *loggingService) StartTLS(c *imap.Connection, req *imap.Request) bool {
+func (s *loggingService) StartTLS(c *Connection, req *imap.Request) bool {
 
 	ok := s.service.StartTLS(c, req)
 
@@ -127,7 +127,7 @@ func (s *loggingService) StartTLS(c *imap.Connection, req *imap.Request) bool {
 
 // ProxySelect wraps this service's ProxySelect
 // method with added logging capabilities.
-func (s *loggingService) ProxySelect(c *imap.Connection, rawReq string) bool {
+func (s *loggingService) ProxySelect(c *Connection, rawReq string) bool {
 
 	ok := s.service.ProxySelect(c, rawReq)
 
@@ -147,7 +147,7 @@ func (s *loggingService) ProxySelect(c *imap.Connection, rawReq string) bool {
 
 // ProxyCreate wraps this service's ProxyCreate
 // method with added logging capabilities.
-func (s *loggingService) ProxyCreate(c *imap.Connection, rawReq string) bool {
+func (s *loggingService) ProxyCreate(c *Connection, rawReq string) bool {
 
 	ok := s.service.ProxyCreate(c, rawReq)
 
@@ -167,7 +167,7 @@ func (s *loggingService) ProxyCreate(c *imap.Connection, rawReq string) bool {
 
 // ProxyDelete wraps this service's ProxyDelete
 // method with added logging capabilities.
-func (s *loggingService) ProxyDelete(c *imap.Connection, rawReq string) bool {
+func (s *loggingService) ProxyDelete(c *Connection, rawReq string) bool {
 
 	ok := s.service.ProxyDelete(c, rawReq)
 
@@ -187,7 +187,7 @@ func (s *loggingService) ProxyDelete(c *imap.Connection, rawReq string) bool {
 
 // ProxyList wraps this service's ProxyList
 // method with added logging capabilities.
-func (s *loggingService) ProxyList(c *imap.Connection, rawReq string) bool {
+func (s *loggingService) ProxyList(c *Connection, rawReq string) bool {
 
 	ok := s.service.ProxyList(c, rawReq)
 
@@ -207,7 +207,7 @@ func (s *loggingService) ProxyList(c *imap.Connection, rawReq string) bool {
 
 // ProxyAppend wraps this service's ProxyAppend
 // method with added logging capabilities.
-func (s *loggingService) ProxyAppend(c *imap.Connection, rawReq string) bool {
+func (s *loggingService) ProxyAppend(c *Connection, rawReq string) bool {
 
 	ok := s.service.ProxyAppend(c, rawReq)
 
@@ -227,7 +227,7 @@ func (s *loggingService) ProxyAppend(c *imap.Connection, rawReq string) bool {
 
 // ProxyExpunge wraps this service's ProxyExpunge
 // method with added logging capabilities.
-func (s *loggingService) ProxyExpunge(c *imap.Connection, rawReq string) bool {
+func (s *loggingService) ProxyExpunge(c *Connection, rawReq string) bool {
 
 	ok := s.service.ProxyExpunge(c, rawReq)
 
@@ -247,7 +247,7 @@ func (s *loggingService) ProxyExpunge(c *imap.Connection, rawReq string) bool {
 
 // ProxyStore wraps this service's ProxyStore
 // method with added logging capabilities.
-func (s *loggingService) ProxyStore(c *imap.Connection, rawReq string) bool {
+func (s *loggingService) ProxyStore(c *Connection, rawReq string) bool {
 
 	ok := s.service.ProxyStore(c, rawReq)
 

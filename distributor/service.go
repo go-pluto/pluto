@@ -2,16 +2,15 @@ package distributor
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"net"
-	"strconv"
 	"strings"
 
 	"crypto/tls"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/imap"
 	"golang.org/x/net/context"
@@ -21,6 +20,7 @@ import (
 // Structs
 
 type service struct {
+	logger      log.Logger
 	auther      Authenticator
 	tlsConfig   *tls.Config
 	workers     map[string]config.Worker
@@ -111,13 +111,14 @@ type Service interface {
 // NewService takes in all required parameters for spinning
 // up a new distributor node and returns a service struct for
 // this node type wrapping all information.
-func NewService(auther Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker) Service {
+func NewService(logger log.Logger, auther Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker) Service {
 
 	return &service{
+		logger:      logger,
 		auther:      auther,
 		tlsConfig:   tlsConfig,
 		workers:     workers,
-		gRPCOptions: DistributorOptions(tlsConfig),
+		gRPCOptions: imap.DistributorOptions(tlsConfig),
 	}
 }
 
@@ -130,7 +131,7 @@ func (s *service) Run(listener net.Listener, greeting string) error {
 		// Accept request or fail on error.
 		conn, err := listener.Accept()
 		if err != nil {
-			return fmt.Errorf("[imap.Run] Accepting incoming request at distributor failed with: %v", err)
+			return fmt.Errorf("accepting incoming request at distributor failed with: %v", err)
 		}
 
 		// Dispatch into own goroutine.
@@ -143,30 +144,34 @@ func (s *service) Run(listener net.Listener, greeting string) error {
 // invokes correct methods for supplied IMAP commands, and
 // proxies state-changing requests to the responsible worker
 // or storage node (failover).
-func (s *service) handleConnection(conn net.Conn, greeting string) error {
+func (s *service) handleConnection(conn net.Conn, greeting string) {
 
 	// Assert we are talking via a TLS connection.
 	tlsConn, ok := conn.(*tls.Conn)
 	if ok != true {
-		return errors.New("connection is no *tls.Conn")
+		level.Info(s.logger).Log("msg", "connection not accepted because it is no *tls.Conn")
+		return
 	}
 
 	// Create a new connection struct for incoming request.
 	c := &Connection{
-		IncConn:   tlsConn,
-		IncReader: bufio.NewReader(tlsConn),
+		IncConn:    tlsConn,
+		IncReader:  bufio.NewReader(tlsConn),
+		ClientAddr: tlsConn.RemoteAddr().String(),
 	}
 
 	// Send initial server greeting.
-	err := c.Send(true, fmt.Sprintf("* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] %s", greeting))
+	err := c.Send(fmt.Sprintf("* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] %s", greeting))
 	if err != nil {
-		c.Error("Encountered error while sending IMAP greeting", err)
-		return err
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+		return
 	}
 
-	// As long as we do not receive a LOGOUT
-	// command from client, we accept requests.
+	// As long as we did not receive a LOGOUT
+	// command from client or experienced an
+	// error, we accept requests.
 	recvUntil := ""
+	cmdOK := false
 
 	for recvUntil != "LOGOUT" {
 
@@ -177,7 +182,7 @@ func (s *service) handleConnection(conn net.Conn, greeting string) error {
 			// Check if error was a simple disconnect.
 			if err.Error() == "EOF" {
 
-				// TODO: Log client disconnect.
+				level.Debug(s.logger).Log("msg", fmt.Sprintf("client at %s disconnected", c.ClientAddr))
 
 				// If so and if a worker was already assigned,
 				// inform the worker about the disconnect.
@@ -189,26 +194,23 @@ func (s *service) handleConnection(conn net.Conn, greeting string) error {
 						UserName:   c.UserName,
 						RespWorker: c.RespWorker,
 					})
-					if err != nil {
-						c.Error(fmt.Sprintf("could not send Close() to internal node %s", c.RespWorker), err)
-						return err
-					}
+					if (err != nil) || (conf.Status != 0) {
 
-					if conf.Status != 0 {
-						c.Error(fmt.Sprintf("internal node %s replied with error code to Close()", c.RespWorker), conf.Status)
-						return fmt.Errorf("internal node %s replied to Close() with error code: %d", c.RespWorker, conf.Status)
+						if err != nil {
+							level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Close() to internal node %s: %v", c.RespWorker, err))
+						} else if conf.Status != 0 {
+							level.Error(s.logger).Log("msg", fmt.Sprintf("sending Close() to internal node %s returned error", c.RespWorker))
+						}
 					}
 				}
 
 				c.IncConn.Close()
 
 			} else {
-				// If not a simple disconnect, log error and
-				// terminate connection to client.
-				c.Error("Encountered receive error from client", err)
+				level.Error(s.logger).Log("msg", fmt.Sprintf("error while receiving text from client %s: %v", c.ClientAddr, err))
 			}
 
-			return err
+			return
 		}
 
 		// Parse received next raw request into struct.
@@ -216,10 +218,10 @@ func (s *service) handleConnection(conn net.Conn, greeting string) error {
 		if err != nil {
 
 			// Signal error to client.
-			err := c.Send(true, err.Error())
+			err := c.Send(err.Error())
 			if err != nil {
-				c.Error("Encountered send error", err)
-				return err
+				level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+				return
 			}
 
 			// Go back to beginning of loop.
@@ -229,52 +231,61 @@ func (s *service) handleConnection(conn net.Conn, greeting string) error {
 		switch {
 
 		case req.Command == "CAPABILITY":
-			s.Capability(c, req)
+			cmdOK = s.Capability(c, req)
 
 		case req.Command == "LOGOUT":
-			if ok := s.Logout(c, req); ok {
+			cmdOK = s.Logout(c, req)
+			if cmdOK {
 				// A LOGOUT marks connection termination.
 				recvUntil = "LOGOUT"
 			}
 
 		case req.Command == "STARTTLS":
-			s.StartTLS(c, req)
+			cmdOK = s.StartTLS(c, req)
 
 		case req.Command == "LOGIN":
-			s.Login(c, req)
+			cmdOK = s.Login(c, req)
 
 		case (c.IsAuthorized) && (req.Command == "SELECT"):
-			s.ProxySelect(c, req)
+			cmdOK = s.ProxySelect(c, rawReq)
 
 		case (c.IsAuthorized) && (req.Command == "CREATE"):
-			s.ProxyCreate(c, req)
+			cmdOK = s.ProxyCreate(c, rawReq)
 
 		case (c.IsAuthorized) && (req.Command == "DELETE"):
-			s.ProxyDelete(c, req)
+			cmdOK = s.ProxyDelete(c, rawReq)
 
 		case (c.IsAuthorized) && (req.Command == "LIST"):
-			s.ProxyList(c, req)
+			cmdOK = s.ProxyList(c, rawReq)
 
 		case (c.IsAuthorized) && (req.Command == "APPEND"):
-			s.ProxyAppend(c, req)
+			cmdOK = s.ProxyAppend(c, rawReq)
 
 		case (c.IsAuthorized) && (req.Command == "EXPUNGE"):
-			s.ProxyExpunge(c, req)
+			cmdOK = s.ProxyExpunge(c, rawReq)
 
 		case (c.IsAuthorized) && (req.Command == "STORE"):
-			s.ProxyStore(c, req)
+			cmdOK = s.ProxyStore(c, rawReq)
 
 		default:
 			// Client sent inappropriate command. Signal tagged error.
-			err := c.Send(true, fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
+			err := c.Send(fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
 			if err != nil {
-				c.Error("Encountered send error", err)
-				return err
+				level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+				return
 			}
+		}
+
+		// Executed command above indicated failure in
+		// operation. Return from function.
+		if !cmdOK {
+			return
 		}
 	}
 
-	return c.IncConn.Close()
+	c.IncConn.Close()
+
+	return
 }
 
 // Capability handles the IMAP CAPABILITY command.
@@ -285,9 +296,9 @@ func (s *service) Capability(c *Connection, req *imap.Request) bool {
 
 		// If payload was not empty to CAPABILITY command,
 		// this is a client error. Return BAD statement.
-		err := c.Send(true, fmt.Sprintf("%s BAD Command CAPABILITY was sent with extra parameters", req.Tag))
+		err := c.Send(fmt.Sprintf("%s BAD Command CAPABILITY was sent with extra parameters", req.Tag))
 		if err != nil {
-			c.Error("Encountered send error", err)
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
 			return false
 		}
 
@@ -298,9 +309,9 @@ func (s *service) Capability(c *Connection, req *imap.Request) bool {
 	// This means, AUTH=PLAIN is allowed and nothing else.
 	// STARTTLS will be answered but is not listed as
 	// each connection already is a TLS connection.
-	err := c.Send(true, fmt.Sprintf("* CAPABILITY IMAP4rev1 AUTH=PLAIN\r\n%s OK CAPABILITY completed", req.Tag))
+	err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 AUTH=PLAIN\r\n%s OK CAPABILITY completed", req.Tag))
 	if err != nil {
-		c.Error("Encountered send error", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
@@ -319,9 +330,9 @@ func (s *service) Logout(c *Connection, req *imap.Request) bool {
 
 		// If payload was not empty to LOGOUT command,
 		// this is a client error. Return BAD statement.
-		err := c.Send(true, fmt.Sprintf("%s BAD Command LOGOUT was sent with extra parameters", req.Tag))
+		err := c.Send(fmt.Sprintf("%s BAD Command LOGOUT was sent with extra parameters", req.Tag))
 		if err != nil {
-			c.Error("Encountered send error", err)
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
 			return false
 		}
 
@@ -336,21 +347,24 @@ func (s *service) Logout(c *Connection, req *imap.Request) bool {
 			UserName:   c.UserName,
 			RespWorker: c.RespWorker,
 		})
-		if err != nil {
-			c.Error(fmt.Sprintf("could not send Close() to internal node %s", c.RespWorker), err)
-			return false
-		}
+		if (err != nil) || (conf.Status != 0) {
 
-		if conf.Status != 0 {
-			c.Error(fmt.Sprintf("internal node %s replied with error code to Close()", c.RespWorker), conf.Status)
+			c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+
+			if err != nil {
+				level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Close() to internal node %s: %v", c.RespWorker, err))
+			} else if conf.Status != 0 {
+				level.Error(s.logger).Log("msg", fmt.Sprintf("sending Close() to internal node %s returned error", c.RespWorker))
+			}
+
 			return false
 		}
 	}
 
 	// Signal success to client.
-	err := c.Send(true, fmt.Sprintf("* BYE Terminating connection\r\n%s OK LOGOUT completed", req.Tag))
+	err := c.Send(fmt.Sprintf("* BYE Terminating connection\r\n%s OK LOGOUT completed", req.Tag))
 	if err != nil {
-		c.Error("Encountered send error", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
@@ -366,9 +380,9 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 		// Connection was already once authenticated,
 		// cannot do that a second time, client error.
 		// Send tagged BAD response.
-		err := c.Send(true, fmt.Sprintf("%s BAD Command LOGIN cannot be executed in this state", req.Tag))
+		err := c.Send(fmt.Sprintf("%s BAD Command LOGIN cannot be executed in this state", req.Tag))
 		if err != nil {
-			c.Error("Encountered send error", err)
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
 			return false
 		}
 
@@ -382,9 +396,9 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 
 		// If payload did not contain exactly two elements,
 		// this is a client error. Return BAD statement.
-		err := c.Send(true, fmt.Sprintf("%s BAD Command LOGIN was not sent with exactly two parameters", req.Tag))
+		err := c.Send(fmt.Sprintf("%s BAD Command LOGIN was not sent with exactly two parameters", req.Tag))
 		if err != nil {
-			c.Error("Encountered send error", err)
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
 			return false
 		}
 
@@ -392,14 +406,14 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 	}
 
 	// Perform the actual authentication.
-	id, clientID, err := s.auther.AuthenticatePlain(userCredentials[0], userCredentials[1], c.IncConn.RemoteAddr().String())
+	id, clientID, err := s.auther.AuthenticatePlain(userCredentials[0], userCredentials[1], c.ClientAddr)
 	if err != nil {
 
 		// If supplied credentials failed to authenticate client,
 		// they are invalid. Return NO statement.
-		err := c.Send(true, fmt.Sprintf("%s NO Name and / or password wrong", req.Tag))
+		err := c.Send(fmt.Sprintf("%s NO Name and / or password wrong", req.Tag))
 		if err != nil {
-			c.Error("Encountered send error", err)
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
 			return false
 		}
 
@@ -409,14 +423,15 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 	// Find worker node responsible for this connection.
 	respWorker, err := s.auther.GetWorkerForUser(s.workers, id)
 	if err != nil {
-		c.Error("Authentication error", err)
+		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error finding worker for user %s with ID %d: %v", userCredentials[0], id, err))
 		return false
 	}
 
 	// Connect to responsible worker or storage node.
 	conn, err := grpc.Dial(s.workers[respWorker].PublicMailAddr, s.gRPCOptions...)
 	if err != nil {
-		c.Error(fmt.Sprintf("could not connect to internal node %s", respWorker), err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("[FAILOVER RELEVANT???] could not connect to internal node %s: %#v", respWorker, err))
 		return false
 	}
 
@@ -433,20 +448,23 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 		UserName:   c.UserName,
 		RespWorker: c.RespWorker,
 	})
-	if err != nil {
-		c.Error(fmt.Sprintf("could not send Prepare() to internal node %s", respWorker), err)
-		return false
-	}
+	if (err != nil) || (conf.Status != 0) {
 
-	if conf.Status != 0 {
-		c.Error(fmt.Sprintf("internal node %s replied with error code to Prepare()", respWorker), conf.Status)
+		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+
+		if err != nil {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Prepare() to internal node %s: %v", c.RespWorker, err))
+		} else if conf.Status != 0 {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("sending Prepare() to internal node %s returned error", c.RespWorker))
+		}
+
 		return false
 	}
 
 	// Signal success to client.
-	err = c.Send(true, fmt.Sprintf("%s OK LOGIN completed", req.Tag))
+	err = c.Send(fmt.Sprintf("%s OK LOGIN completed", req.Tag))
 	if err != nil {
-		c.Error("Encountered send error", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
@@ -461,9 +479,9 @@ func (s *service) StartTLS(c *Connection, req *imap.Request) bool {
 
 		// If payload was not empty to STARTTLS command,
 		// this is a client error. Return BAD statement.
-		err := c.Send(true, fmt.Sprintf("%s BAD Command STARTTLS was sent with extra parameters", req.Tag))
+		err := c.Send(fmt.Sprintf("%s BAD Command STARTTLS was sent with extra parameters", req.Tag))
 		if err != nil {
-			c.Error("Encountered send error", err)
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
 			return false
 		}
 
@@ -472,9 +490,9 @@ func (s *service) StartTLS(c *Connection, req *imap.Request) bool {
 
 	// As the connection is already TLS encrypted,
 	// tell client that a TLS session is active.
-	err := c.Send(true, fmt.Sprintf("%s BAD TLS is already active", req.Tag))
+	err := c.Send(fmt.Sprintf("%s BAD TLS is already active", req.Tag))
 	if err != nil {
-		c.Error("Encountered send error", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
@@ -487,19 +505,27 @@ func (s *service) StartTLS(c *Connection, req *imap.Request) bool {
 func (s *service) ProxySelect(c *Connection, rawReq string) bool {
 
 	// Send the request via gRPC.
-	resp, err := c.gRPCClient.Select(context.Background(), &imap.Command{
+	reply, err := c.gRPCClient.Select(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
 	})
-	if err != nil {
-		c.Error("failed to proxy SELECT", err)
+	if (err != nil) || (reply.Status != 0) {
+
+		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+
+		if err != nil {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying SELECT to internal node %s: %v", c.RespWorker, err))
+		} else if reply.Status != 0 {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying SELECT to internal node %s returned error", c.RespWorker))
+		}
+
 		return false
 	}
 
 	// And send response from worker or storage to client.
-	err = c.Send(true, resp.Text)
+	err = c.Send(reply.Text)
 	if err != nil {
-		c.Error("error while sending SELECT answer to client", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending SELECT answer to client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
@@ -512,19 +538,27 @@ func (s *service) ProxySelect(c *Connection, rawReq string) bool {
 func (s *service) ProxyCreate(c *Connection, rawReq string) bool {
 
 	// Send the request via gRPC.
-	resp, err := c.gRPCClient.Create(context.Background(), &imap.Command{
+	reply, err := c.gRPCClient.Create(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
 	})
-	if err != nil {
-		c.Error("failed to proxy CREATE", err)
+	if (err != nil) || (reply.Status != 0) {
+
+		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+
+		if err != nil {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying CREATE to internal node %s: %v", c.RespWorker, err))
+		} else if reply.Status != 0 {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying CREATE to internal node %s returned error", c.RespWorker))
+		}
+
 		return false
 	}
 
 	// And send response from worker or storage to client.
-	err = c.Send(true, resp.Text)
+	err = c.Send(reply.Text)
 	if err != nil {
-		c.Error("error while sending CREATE answer to client", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending CREATE answer to client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
@@ -537,19 +571,27 @@ func (s *service) ProxyCreate(c *Connection, rawReq string) bool {
 func (s *service) ProxyDelete(c *Connection, rawReq string) bool {
 
 	// Send the request via gRPC.
-	resp, err := c.gRPCClient.Delete(context.Background(), &imap.Command{
+	reply, err := c.gRPCClient.Delete(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
 	})
-	if err != nil {
-		c.Error("failed to proxy DELETE", err)
+	if (err != nil) || (reply.Status != 0) {
+
+		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+
+		if err != nil {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying DELETE to internal node %s: %v", c.RespWorker, err))
+		} else if reply.Status != 0 {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying DELETE to internal node %s returned error", c.RespWorker))
+		}
+
 		return false
 	}
 
 	// And send response from worker or storage to client.
-	err = c.Send(true, resp.Text)
+	err = c.Send(reply.Text)
 	if err != nil {
-		c.Error("error while sending DELETE answer to client", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending DELETE answer to client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
@@ -562,19 +604,27 @@ func (s *service) ProxyDelete(c *Connection, rawReq string) bool {
 func (s *service) ProxyList(c *Connection, rawReq string) bool {
 
 	// Send the request via gRPC.
-	resp, err := c.gRPCClient.List(context.Background(), &imap.Command{
+	reply, err := c.gRPCClient.List(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
 	})
-	if err != nil {
-		c.Error("failed to proxy LIST", err)
+	if (err != nil) || (reply.Status != 0) {
+
+		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+
+		if err != nil {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying LIST to internal node %s: %v", c.RespWorker, err))
+		} else if reply.Status != 0 {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying LIST to internal node %s returned error", c.RespWorker))
+		}
+
 		return false
 	}
 
 	// And send response from worker or storage to client.
-	err = c.Send(true, resp.Text)
+	err = c.Send(reply.Text)
 	if err != nil {
-		c.Error("error while sending LIST answer to client", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending LIST answer to client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
@@ -592,14 +642,15 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 		ClientID: c.ClientID,
 	})
 	if err != nil {
-		c.Error("failed to proxy begin part of APPEND command", err)
+		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying begin part of APPEND to internal node %s: %v", c.RespWorker, err))
 		return false
 	}
 
 	// Pass on either error or continuation response to client.
-	err = c.Send(true, await.Text)
+	err = c.Send(await.Text)
 	if err != nil {
-		c.Error("error while sending beginning APPEND answer to client", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending begin APPEND answer to client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
@@ -615,24 +666,32 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 	// Read in that amount from connection to client.
 	_, err = io.ReadFull(c.IncReader, msgBuffer)
 	if err != nil {
-		c.Error("encountered error while reading client literal data", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error reading mail content from client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
 	// Send the end part of APPEND request via gRPC.
-	resp, err := c.gRPCClient.AppendEnd(context.Background(), &imap.MailFile{
+	reply, err := c.gRPCClient.AppendEnd(context.Background(), &imap.MailFile{
 		Content:  msgBuffer,
 		ClientID: c.ClientID,
 	})
-	if err != nil {
-		c.Error("failed to proxy message contained in APPEND", err)
+	if (err != nil) || (reply.Status != 0) {
+
+		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+
+		if err != nil {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying end part of APPEND to internal node %s: %v", c.RespWorker, err))
+		} else if reply.Status != 0 {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying end part of APPEND to internal node %s returned error", c.RespWorker))
+		}
+
 		return false
 	}
 
 	// And send response from worker or storage to client.
-	err = c.Send(true, resp.Text)
+	err = c.Send(reply.Text)
 	if err != nil {
-		c.Error("error while sending APPEND answer to client", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending end APPEND answer to client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
@@ -645,19 +704,27 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 func (s *service) ProxyExpunge(c *Connection, rawReq string) bool {
 
 	// Send the request via gRPC.
-	resp, err := c.gRPCClient.Expunge(context.Background(), &imap.Command{
+	reply, err := c.gRPCClient.Expunge(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
 	})
-	if err != nil {
-		c.Error("failed to proxy EXPUNGE", err)
+	if (err != nil) || (reply.Status != 0) {
+
+		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+
+		if err != nil {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying EXPUNGE to internal node %s: %v", c.RespWorker, err))
+		} else if reply.Status != 0 {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying EXPUNGE to internal node %s returned error", c.RespWorker))
+		}
+
 		return false
 	}
 
 	// And send response from worker or storage to client.
-	err = c.Send(true, resp.Text)
+	err = c.Send(reply.Text)
 	if err != nil {
-		c.Error("error while sending EXPUNGE answer to client", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending EXPUNGE answer to client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
@@ -670,19 +737,27 @@ func (s *service) ProxyExpunge(c *Connection, rawReq string) bool {
 func (s *service) ProxyStore(c *Connection, rawReq string) bool {
 
 	// Send the request via gRPC.
-	resp, err := c.gRPCClient.Store(context.Background(), &imap.Command{
+	reply, err := c.gRPCClient.Store(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
 	})
-	if err != nil {
-		c.Error("failed to proxy STORE", err)
+	if (err != nil) || (reply.Status != 0) {
+
+		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+
+		if err != nil {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying STORE to internal node %s: %v", c.RespWorker, err))
+		} else if reply.Status != 0 {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying STORE to internal node %s returned error", c.RespWorker))
+		}
+
 		return false
 	}
 
 	// And send response from worker or storage to client.
-	err = c.Send(true, resp.Text)
+	err = c.Send(reply.Text)
 	if err != nil {
-		c.Error("error while sending STORE answer to client", err)
+		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending STORE answer to client %s: %v", c.ClientAddr, err))
 		return false
 	}
 
