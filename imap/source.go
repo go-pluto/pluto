@@ -118,8 +118,13 @@ func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (
 		// Retrieve flags of mail.
 		mailFlags, err := mailbox.Flags(mail, false)
 		if err != nil {
-			s.Error("Error while retrieving flags for mail", err)
-			return false
+
+			// Return an vague explanation error to caller in
+			// error case and indicate failure to distributor.
+			return &Reply{
+				Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+				Status: 1,
+			}, fmt.Errorf("error while retrieving flags for mail: %v", err)
 		}
 
 		// Check if \Seen flag is present.
@@ -200,8 +205,11 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 	// Create a new Maildir on stable storage.
 	err := posMaildir.Create()
 	if err != nil {
-		s.Error("Error while creating Maildir for new mailbox", err)
-		return false
+
+		return &Reply{
+			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Status: 1,
+		}, fmt.Errorf("error while creating Maildir for new mailbox: %v", err)
 	}
 
 	// Initialize new ORSet for new mailbox.
@@ -271,7 +279,6 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 		os.Exit(1)
 	}
 
-	// Send success answer.
 	return &Reply{
 		Text: fmt.Sprintf("%s OK CREATE completed\r\n", req.Tag),
 	}, nil
@@ -383,21 +390,26 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 	// Remove CRDT file of mailbox.
 	err = os.Remove(delMailboxCRDTPath)
 	if err != nil {
+
 		// TODO: Maybe think about better way to clean up here?
-		s.Error("Error while deleting CRDT file of mailbox", err)
-		return false
+		return &Reply{
+			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Status: 1,
+		}, fmt.Errorf("error while deleting CRDT file of mailbox: %v", err)
 	}
 
 	// Remove files associated with deleted mailbox
 	// from stable storage.
 	err = delMaildir.Remove()
 	if err != nil {
+
 		// TODO: Maybe think about better way to clean up here?
-		s.Error("Error while deleting Maildir", err)
-		return false
+		return &Reply{
+			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Status: 1,
+		}, fmt.Errorf("error while deleting Maildir: %v", err)
 	}
 
-	// Send success answer.
 	return &Reply{
 		Text: fmt.Sprintf("%s OK DELETE completed\r\n", req.Tag),
 	}, nil
@@ -521,7 +533,9 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 
 	// Make space for tracking environment characteristics
 	// for this command from AppendBegin to AppendEnd.
-	s.AppendInProg = &AppendInProg{}
+	s.AppendInProg = &AppendInProg{
+		Tag: req.Tag,
+	}
 
 	// Depending on amount of arguments, store them.
 	switch lenAppendArgs {
@@ -585,9 +599,9 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 
 	// Construct path to maildir on node.
 	if s.AppendInProg.Mailbox == "INBOX" {
-		s.AppendInProg.AppMaildir = maildir.Dir(s.UserMaildirPath)
+		s.AppendInProg.Maildir = maildir.Dir(s.UserMaildirPath)
 	} else {
-		s.AppendInProg.AppMaildir = maildir.Dir(filepath.Join(s.UserMaildirPath, s.AppendInProg.Mailbox))
+		s.AppendInProg.Maildir = maildir.Dir(filepath.Join(s.UserMaildirPath, s.AppendInProg.Mailbox))
 	}
 
 	// Lock node exclusively to make execution
@@ -622,38 +636,53 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	defer node.Lock.Unlock()
 
 	// Open a new Maildir delivery.
-	appDelivery, err := s.AppendInProg.AppMaildir.NewDelivery()
+	appDelivery, err := s.AppendInProg.Maildir.NewDelivery()
 	if err != nil {
-		s.Error("Error during delivery creation", err)
-		return false
+
+		return &Reply{
+			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Status: 1,
+		}, fmt.Errorf("error during delivery creation: %v", err)
 	}
 
 	// Write actual message content to file.
 	err = appDelivery.Write(content)
 	if err != nil {
-		s.Error("Error while writing message during delivery", err)
-		return false
+
+		return &Reply{
+			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Status: 1,
+		}, fmt.Errorf("error during writing message during delivery: %v", err)
 	}
 
 	// Close and move just created message.
 	newKey, err := appDelivery.Close()
 	if err != nil {
-		s.Error("Error while finishing delivery of new message", err)
-		return false
+
+		return &Reply{
+			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Status: 1,
+		}, fmt.Errorf("error finishing delivery of new message: %v", err)
 	}
 
 	// Follow Maildir's renaming procedure.
-	_, err = s.AppendInProg.AppMaildir.Unseen()
+	_, err = s.AppendInProg.Maildir.Unseen()
 	if err != nil {
-		s.Error("Could not Unseen() recently delivered messages", err)
-		return false
+
+		return &Reply{
+			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Status: 1,
+		}, fmt.Errorf("error executing Unseen() on recently delivered messages: %v", err)
 	}
 
 	// Find file name of just delivered mail.
-	mailFileNamePath, err := s.AppendInProg.AppMaildir.Filename(newKey)
+	mailFileNamePath, err := s.AppendInProg.Maildir.Filename(newKey)
 	if err != nil {
-		s.Error("Finding file name of new message failed", err)
-		return false
+
+		return &Reply{
+			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Status: 1,
+		}, fmt.Errorf("error finding file name of new message: %v", err)
 	}
 	mailFileName := filepath.Base(mailFileNamePath)
 
@@ -696,9 +725,13 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 		os.Exit(1)
 	}
 
-	// Send success answer.
+	answer := fmt.Sprintf("%s OK APPEND completed\r\n", s.AppendInProg.Tag)
+
+	// Delete in-progress-object after APPEND is done.
+	s.AppendInProg = nil
+
 	return &Reply{
-		Text: fmt.Sprintf("%s OK APPEND completed\r\n", req.Tag),
+		Text: answer,
 	}, nil
 }
 
@@ -761,9 +794,13 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 			// Retrieve all flags of fetched mail.
 			mailFlags, err := expMaildir.Flags(expMails[i], false)
 			if err != nil {
-				s.Error("Encountered error while retrieving flags for expunging mails", err)
+
 				node.Lock.Unlock()
-				return false
+
+				return &Reply{
+					Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+					Status: 1,
+				}, fmt.Errorf("error retrieving flags for expunging mails: %v", err)
 			}
 
 			// Check for presence of \Deleted flag and
@@ -820,9 +857,13 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 			// Remove the file.
 			err = os.Remove(expMailPath)
 			if err != nil {
-				s.Error("Error while removing expunged mail file from stable storage", err)
+
 				node.Lock.Unlock()
-				return false
+
+				return &Reply{
+					Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+					Status: 1,
+				}, fmt.Errorf("error while removing expunged mail file from stable storage: %v", err)
 			}
 
 			// Immediately remove mail from contents structure.
@@ -993,17 +1034,25 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 		// Read message content from file.
 		mailFileContent, err := ioutil.ReadFile(filepath.Join(selectedMailbox, "cur", mailFileName))
 		if err != nil {
-			s.Error("Error while reading in mail file content in STORE operation", err)
+
 			node.Lock.Unlock()
-			return false
+
+			return &Reply{
+				Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+				Status: 1,
+			}, fmt.Errorf("error while reading in mail file content in STORE operation: %v", err)
 		}
 
 		// Retrieve flags included in mail file name.
 		mailFlags, err := mailMaildir.Flags(mailFileName, false)
 		if err != nil {
-			s.Error("Error while retrieving flags from mail file", err)
+
 			node.Lock.Unlock()
-			return false
+
+			return &Reply{
+				Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+				Status: 1,
+			}, fmt.Errorf("error while retrieving flags from mail file: %v", err)
 		}
 
 		// Check if supplied flags should be added
@@ -1052,9 +1101,13 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 			// file name (renaming it).
 			newMailFileName, err := mailMaildir.SetFlags(mailFileName, string(newMailFlags), false)
 			if err != nil {
-				s.Error("Error renaming mail file in STORE operation", err)
+
 				node.Lock.Unlock()
-				return false
+
+				return &Reply{
+					Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+					Status: 1,
+				}, fmt.Errorf("error renaming mail file in STORE operation: %v", err)
 			}
 
 			// Save CRDT of mailbox.

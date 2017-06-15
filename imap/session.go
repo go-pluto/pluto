@@ -36,8 +36,9 @@ type Session struct {
 // AppendInProg captures the important environment
 // characteristics handed from AppendBegin to AppendEnd.
 type AppendInProg struct {
+	Tag         string
 	Mailbox     string
+	Maildir     maildir.Dir
 	FlagsRaw    string
 	DateTimeRaw string
-	AppMaildir  maildir.Dir
 }
