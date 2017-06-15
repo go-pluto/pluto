@@ -206,13 +206,13 @@ func (s *service) Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.C
 
 	// Create new connection tracking object.
 	s.sessions[clientCtx.ClientID] = &imap.Session{
-		State:            imap.Authenticated,
-		ClientID:         clientCtx.ClientID,
-		UserName:         clientCtx.UserName,
-		RespWorker:       clientCtx.RespWorker,
-		UserCRDTPath:     filepath.Join(s.config.CRDTLayerRoot, clientCtx.UserName),
-		UserMaildirPath:  filepath.Join(s.config.MaildirRoot, clientCtx.UserName),
-		AppendInProgress: false,
+		State:           imap.Authenticated,
+		ClientID:        clientCtx.ClientID,
+		UserName:        clientCtx.UserName,
+		RespWorker:      clientCtx.RespWorker,
+		UserCRDTPath:    filepath.Join(s.config.CRDTLayerRoot, clientCtx.UserName),
+		UserMaildirPath: filepath.Join(s.config.MaildirRoot, clientCtx.UserName),
+		AppendInProg:    nil,
 	}
 
 	return &imap.Confirmation{
@@ -246,14 +246,14 @@ func (s *service) Select(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
 		sess.Error("error while parsing request in SELECT", err)
-		return false
+		return nil, err
 	}
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.Select(sess, req, s.SyncSendChan)
 	if err != nil {
 		sess.Error("failed to complete IMAP handler for SELECT", err)
-		return false
+		return nil, err
 	}
 
 	return reply, nil
@@ -273,14 +273,14 @@ func (s *service) Create(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
 		sess.Error("error while parsing request in CREATE", err)
-		return false
+		return nil, err
 	}
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.Create(sess, req, s.SyncSendChan)
 	if err != nil {
 		sess.Error("failed to complete IMAP handler for CREATE", err)
-		return false
+		return nil, err
 	}
 
 	return reply, nil
@@ -299,14 +299,14 @@ func (s *service) Delete(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
 		sess.Error("error while parsing request in DELETE", err)
-		return false
+		return nil, err
 	}
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.Delete(sess, req, s.SyncSendChan)
 	if err != nil {
 		sess.Error("failed to complete IMAP handler for DELETE", err)
-		return false
+		return nil, err
 	}
 
 	return reply, nil
@@ -326,14 +326,14 @@ func (s *service) List(ctx context.Context, comd *imap.Command) (*imap.Reply, er
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
 		sess.Error("error while parsing request in LIST", err)
-		return false
+		return nil, err
 	}
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.List(sess, req, s.SyncSendChan)
 	if err != nil {
 		sess.Error("failed to complete IMAP handler for LIST", err)
-		return false
+		return nil, err
 	}
 
 	return reply, nil
@@ -353,14 +353,14 @@ func (s *service) AppendBegin(ctx context.Context, comd *imap.Command) (*imap.Aw
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
 		sess.Error("error while parsing request in begin message of APPEND", err)
-		return false
+		return nil, err
 	}
 
 	// Forward gathered info to IMAP function.
 	await, err := s.imapNode.AppendBegin(sess, req)
 	if err != nil {
 		sess.Error("failed to complete IMAP handler for begin message of APPEND", err)
-		return false
+		return nil, err
 	}
 
 	return await, nil
@@ -374,13 +374,13 @@ func (s *service) AppendEnd(ctx context.Context, mailFile *imap.MailFile) (*imap
 	// from map of all known to this node.
 	// Note: ClientID is expected to truly identify
 	// exactly one device session (thus, no locking).
-	sess := s.sessions[comd.ClientID]
+	sess := s.sessions[mailFile.ClientID]
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.AppendEnd(sess, mailFile.Content, s.SyncSendChan)
 	if err != nil {
 		sess.Error("failed to complete IMAP handler for end message of APPEND", err)
-		return false
+		return nil, err
 	}
 
 	return reply, nil
@@ -401,14 +401,14 @@ func (s *service) Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply,
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
 		sess.Error("error while parsing request in EXPUNGE", err)
-		return false
+		return nil, err
 	}
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.Expunge(sess, req, s.SyncSendChan)
 	if err != nil {
 		sess.Error("failed to complete IMAP handler for EXPUNGE", err)
-		return false
+		return nil, err
 	}
 
 	return reply, nil
@@ -429,14 +429,14 @@ func (s *service) Store(ctx context.Context, comd *imap.Command) (*imap.Reply, e
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
 		sess.Error("error while parsing request in STORE", err)
-		return false
+		return nil, err
 	}
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.Store(sess, req, s.SyncSendChan)
 	if err != nil {
 		sess.Error("failed to complete IMAP handler for STORE", err)
-		return false
+		return nil, err
 	}
 
 	return reply, nil

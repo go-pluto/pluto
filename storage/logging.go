@@ -7,12 +7,17 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/imap"
+	"golang.org/x/net/context"
 )
+
+// Structs
 
 type loggingService struct {
 	logger  log.Logger
 	service Service
 }
+
+// Functions
 
 // NewLoggingService wraps a provided existing
 // service with the provided logger.
@@ -36,177 +41,205 @@ func (s *loggingService) ApplyCRDTUpd(applyCRDTUpd chan comm.Msg, doneCRDTUpd ch
 	s.service.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
 }
 
-// Run wraps this service's Run method with
-// added logging capabilities.
-func (s *loggingService) Run() error {
+// Prepare wraps this service's Prepare method
+// with added logging capabilities.
+func (s *loggingService) Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.Confirmation, error) {
 
-	err := s.service.Run()
+	conf, err := s.service.Prepare(ctx, clientCtx)
 
-	level.Warn(s.logger).Log(
-		"msg", "failed to run storage service",
-		"err", err,
+	logger := log.With(s.logger,
+		"method", "Prepare client context",
+		"clientID", clientCtx.ClientID,
+		"userName", clientCtx.UserName,
+		"respWorker", clientCtx.RespWorker,
 	)
 
-	return err
+	if err != nil {
+		level.Info(logger).Log("msg", "failed to process Prepare() (failover) for client connection")
+	} else {
+		level.Debug(logger).Log()
+	}
+
+	return conf, err
 }
 
-// HandleConnection wraps this service's HandleConnection
-// method with added logging capabilities.
-func (s *loggingService) HandleConnection(conn net.Conn) error {
+// Close wraps this service's Close method
+// with added logging capabilities.
+func (s *loggingService) Close(ctx context.Context, clientCtx *imap.Context) (*imap.Confirmation, error) {
 
-	err := s.service.HandleConnection(conn)
+	conf, err := s.service.Close(ctx, clientCtx)
 
-	level.Info(s.logger).Log(
-		"msg", "failed to handle connection",
-		"err", err,
+	logger := log.With(s.logger,
+		"method", "Close client context",
+		"clientID", clientCtx.ClientID,
+		"userName", clientCtx.UserName,
+		"respWorker", clientCtx.RespWorker,
 	)
 
-	return err
+	if err != nil {
+		level.Info(logger).Log("msg", "failed to process Close() (failover) for client connection")
+	} else {
+		level.Debug(logger).Log()
+	}
+
+	return conf, err
 }
 
 // Select wraps this service's Select method
 // with added logging capabilities.
-func (s *loggingService) Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
+func (s *loggingService) Select(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	ok := s.service.Select(c, req, syncChan)
+	reply, err := s.service.Select(ctx, comd)
 
 	logger := log.With(s.logger,
 		"method", "SELECT",
-		"command", req.Command,
-		"payload", req.Payload,
+		"command", comd.Text,
 	)
 
-	if !ok {
+	if err != nil {
 		level.Info(logger).Log("msg", "failed to perform operation SELECT (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
 
-	return ok
+	return reply, err
 }
 
 // Create wraps this service's Create method
 // with added logging capabilities.
-func (s *loggingService) Create(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
+func (s *loggingService) Create(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	ok := s.service.Create(c, req, syncChan)
+	reply, err := s.service.Create(ctx, req)
 
 	logger := log.With(s.logger,
 		"method", "CREATE",
-		"command", req.Command,
-		"payload", req.Payload,
+		"command", comd.Text,
 	)
 
-	if !ok {
+	if err != nil {
 		level.Info(logger).Log("msg", "failed to perform operation CREATE (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
 
-	return ok
+	return reply, err
 }
 
 // Delete wraps this service's Delete method
 // with added logging capabilities.
-func (s *loggingService) Delete(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
+func (s *loggingService) Delete(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	ok := s.service.Delete(c, req, syncChan)
+	reply, err := s.service.Delete(ctx, req)
 
 	logger := log.With(s.logger,
 		"method", "DELETE",
-		"command", req.Command,
-		"payload", req.Payload,
+		"command", comd.Text,
 	)
 
-	if !ok {
+	if err != nil {
 		level.Info(logger).Log("msg", "failed to perform operation DELETE (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
 
-	return ok
+	return reply, err
 }
 
 // List wraps this service's List method
 // with added logging capabilities.
-func (s *loggingService) List(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
+func (s *loggingService) List(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	ok := s.service.List(c, req, syncChan)
+	reply, err := s.service.List(ctx, req)
 
 	logger := log.With(s.logger,
 		"method", "LIST",
-		"command", req.Command,
-		"payload", req.Payload,
+		"command", comd.Text,
 	)
 
-	if !ok {
+	if err != nil {
 		level.Info(logger).Log("msg", "failed to perform operation LIST (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
 
-	return ok
+	return reply, err
 }
 
-// Create wraps this service's Create method
+// AppendBegin wraps this service's AppendBegin method
 // with added logging capabilities.
-func (s *loggingService) Append(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
+func (s *loggingService) AppendBegin(ctx context.Context, comd *imap.Command) (*imap.Await, error) {
 
-	ok := s.service.Append(c, req, syncChan)
+	await, err := s.service.AppendBegin(ctx, comd)
 
 	logger := log.With(s.logger,
-		"method", "APPEND",
-		"command", req.Command,
-		"payload", req.Payload,
+		"method", "APPEND (begin)",
+		"command", comd.Text,
 	)
 
-	if !ok {
-		level.Info(logger).Log("msg", "failed to perform operation APPEND (failover) correctly")
+	if err != nil {
+		level.Info(logger).Log("msg", "failed to perform begin part of operation APPEND (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
 
-	return ok
+	return await, err
+}
+
+// AppendEnd wraps this service's AppendEnd method
+// with added logging capabilities.
+func (s *loggingService) AppendEnd(ctx context.Context, mailFile *imap.MailFile) (*imap.Reply, error) {
+
+	reply, err := s.service.AppendEnd(ctx, mailFile)
+
+	logger := log.With(s.logger,
+		"method", "APPEND (end)",
+	)
+
+	if err != nil {
+		level.Info(logger).Log("msg", "failed to perform end part of operation APPEND (failover) correctly")
+	} else {
+		level.Debug(logger).Log()
+	}
+
+	return reply, err
 }
 
 // Expunge wraps this service's Expunge method
 // with added logging capabilities.
-func (s *loggingService) Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
+func (s *loggingService) Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	ok := s.service.Expunge(c, req, syncChan)
+	reply, err := s.service.Expunge(ctx, req)
 
 	logger := log.With(s.logger,
 		"method", "EXPUNGE",
-		"command", req.Command,
-		"payload", req.Payload,
+		"command", comd.Text,
 	)
 
-	if !ok {
+	if err != nil {
 		level.Info(logger).Log("msg", "failed to perform operation EXPUNGE (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
 
-	return ok
+	return reply, err
 }
 
 // Store wraps this service's Store method
 // with added logging capabilities.
-func (s *loggingService) Store(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool {
+func (s *loggingService) Store(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	ok := s.service.Store(c, req, syncChan)
+	reply, err := s.service.Store(ctx, req)
 
 	logger := log.With(s.logger,
 		"method", "STORE",
-		"command", req.Command,
-		"payload", req.Payload,
+		"command", comd.Text,
 	)
 
-	if !ok {
+	if err != nil {
 		level.Info(logger).Log("msg", "failed to perform operation STORE (failover) correctly")
 	} else {
 		level.Debug(logger).Log()
 	}
 
-	return ok
+	return reply, err
 }

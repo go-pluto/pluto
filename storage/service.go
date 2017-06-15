@@ -14,7 +14,22 @@ import (
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crdt"
 	"github.com/numbleroot/pluto/imap"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
+
+// Structs
+
+type service struct {
+	imapNode      *imap.IMAPNode
+	tlsConfig     *tls.Config
+	config        config.Storage
+	sessions      map[string]*imap.Session
+	IMAPNodeGRPC  *grpc.Server
+	SyncSendChans map[string]chan comm.Msg
+}
+
+// Interfaces
 
 // Service defines the interface a storage node
 // in a pluto network provides.
@@ -27,47 +42,49 @@ type Service interface {
 	// update operations from receiver and executes them.
 	ApplyCRDTUpd(applyCRDTUpd chan comm.Msg, doneCRDTUpd chan struct{})
 
-	// Run loops over incoming requests at storage and
-	// dispatches each one to a goroutine taking care of
-	// the commands supplied.
-	Run() error
+	// Prepare initializes context for an upcoming client
+	// connection on this node.
+	Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.Confirmation, error)
+
+	// Close invalidates an active session and deletes
+	// information associated with it.
+	Close(ctx context.Context, clientCtx *imap.Context) (*imap.Confirmation, error)
 
 	// Select sets the current mailbox based on supplied
 	// payload to user-instructed value.
-	Select(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
+	Select(ctx context.Context, comd *imap.Command) (*imap.Reply, error)
 
 	// Create attempts to create a mailbox with
 	// name taken from payload of request.
-	Create(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
+	Create(ctx context.Context, comd *imap.Command) (*imap.Reply, error)
 
 	// Delete an existing mailbox with all included content.
-	Delete(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
+	Delete(ctx context.Context, comd *imap.Command) (*imap.Reply, error)
 
 	// List allows clients to learn about the mailboxes
 	// available and also returns the hierarchy delimiter.
-	List(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
+	List(ctx context.Context, comd *imap.Command) (*imap.Reply, error)
 
-	// Append puts supplied message into specified mailbox.
-	Append(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
+	// AppendBegin checks environment conditions and returns
+	// a message specifying the awaited number of bytes.
+	AppendBegin(ctx context.Context, comd *imap.Command) (*imap.Await, error)
+
+	// AppendEnd receives the mail file associated with a
+	// prior AppendBegin.
+	AppendEnd(ctx context.Context, comd *imap.MailFile) (*imap.Reply, error)
 
 	// Expunge deletes messages permanently from currently
 	// selected mailbox that have been flagged as Deleted
 	// prior to calling this function.
-	Expunge(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
+	Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply, error)
 
 	// Store takes in message sequence numbers and some set
 	// of flags to change in those messages and changes the
 	// attributes for these mails throughout the system.
-	Store(c *imap.IMAPConnection, req *imap.Request, syncChan chan comm.Msg) bool
+	Store(ctx context.Context, comd *imap.Command) (*imap.Reply, error)
 }
 
-type service struct {
-	imapNode      *imap.IMAPNode
-	tlsConfig     *tls.Config
-	config        config.Storage
-	IMAPNodeGRPC  *grpc.Server
-	SyncSendChans map[string]chan comm.Msg
-}
+// Functions
 
 // NewService takes in all required parameters for spinning
 // up a new storage node, runs initialization code, and returns
@@ -85,6 +102,7 @@ func NewService(tlsConfig *tls.Config, config config.Config, workers map[string]
 		},
 		tlsConfig:     tlsConfig,
 		config:        config.Storage,
+		sessions:      make(map[string]*imap.Session),
 		SyncSendChans: make(map[string]chan comm.Msg),
 	}
 }
@@ -94,6 +112,7 @@ func NewService(tlsConfig *tls.Config, config config.Config, workers map[string]
 // channels to the service.
 func (s *service) Init(syncSendChans map[string]chan comm.Msg) error {
 
+	// Find all Maildir and CRDT files for this node.
 	err := s.findFiles()
 	if err != nil {
 		return err
@@ -183,274 +202,276 @@ func (s *service) ApplyCRDTUpd(applyCRDTUpd chan comm.Msg, doneCRDTUpd chan stru
 	s.imapNode.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
 }
 
-// Run loops over incoming requests at storage and
-// dispatches each one to a goroutine taking care of
-// the commands supplied.
-func (s *service) Run() error {
+// Prepare initializes context for an upcoming client
+// connection on this node.
+func (s *service) Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.Confirmation, error) {
 
-	for {
-
-		// Accept request or fail on error.
-		conn, err := s.imapNode.MailSocket.Accept()
-		if err != nil {
-			return fmt.Errorf("[imap.Run] Accepting incoming request at storage failed with: %v", err)
-		}
-
-		// Dispatch into own goroutine.
-		go s.handleConnection(conn)
+	// Create new connection tracking object.
+	s.sessions[clientCtx.ClientID] = &imap.Session{
+		State:           imap.Authenticated,
+		ClientID:        clientCtx.ClientID,
+		UserName:        clientCtx.UserName,
+		RespWorker:      clientCtx.RespWorker,
+		UserCRDTPath:    filepath.Join(s.config.CRDTLayerRoot, clientCtx.UserName),
+		UserMaildirPath: filepath.Join(s.config.MaildirRoot, clientCtx.UserName),
+		AppendInProg:    nil,
 	}
+
+	return &imap.Confirmation{
+		Status: 0,
+	}, nil
 }
 
-// handleConnection is the main storage routine where all
-// incoming requests against this storage node have to go through.
-func (s *service) handleConnection(conn net.Conn) error {
+// Close invalidates an active session and deletes
+// information associated with it.
+func (s *service) Close(ctx context.Context, clientCtx *imap.Context) (*imap.Confirmation, error) {
 
-	// Assert we are talking via a TLS connection.
-	tlsConn, ok := conn.(*tls.Conn)
-	if ok != true {
-		return fmt.Errorf("[imap.handleConnection] Storage could not convert connection into TLS connection")
-	}
+	// Delete connection-tracking object from sessions map.
+	delete(s.sessions, clientCtx.ClientID)
 
-	// Create a new connection struct for incoming request.
-	c := &imap.IMAPConnection{
-		Connection: &imap.Connection{
-			IncConn:   tlsConn,
-			IncReader: bufio.NewReader(tlsConn),
-		},
-		State: imap.Authenticated,
-	}
-
-	// Receive opening information.
-	clientInfo, err := c.InternalReceive(true)
-	if err != nil {
-		c.Error("Receive error waiting for client information", err)
-		return nil
-	}
-
-	// Based on received client information, update IMAP
-	// connection to reflect these information.
-	origWorker, err := c.UpdateClientContext(clientInfo, s.imapNode.CRDTLayerRoot, s.imapNode.MaildirRoot)
-	if err != nil {
-		c.Error("Error extracting client information", err)
-		return nil
-	}
-
-	// Receive actual client command.
-	rawReq, err := c.InternalReceive(true)
-	if err != nil {
-		c.Error("Encountered receive error waiting for first request", err)
-		return nil
-	}
-
-	// As long as the proxying node did not indicate that
-	// the client connection was ended, we accept requests.
-	for rawReq != "> done <" {
-
-		// Parse received next raw request into struct.
-		req, err := imap.ParseRequest(rawReq)
-		if err != nil {
-
-			// Signal error to client.
-			err := c.InternalSend(true, err.Error(), false, "")
-			if err != nil {
-				c.Error("Encountered send error", err)
-				return nil
-			}
-
-			// In case of failure, wait for next sent command.
-			rawReq, err = c.InternalReceive(true)
-			if err != nil {
-				c.Error("Encountered receive error", err)
-				return nil
-			}
-
-			// Go back to beginning of loop.
-			continue
-		}
-
-		// Retrieve sync channel for node.
-		workerSyncChan := s.SyncSendChans[origWorker]
-
-		switch {
-
-		case req.Command == "SELECT":
-			s.Select(c, req, workerSyncChan)
-
-		case req.Command == "CREATE":
-			s.Create(c, req, workerSyncChan)
-
-		case req.Command == "DELETE":
-			s.Delete(c, req, workerSyncChan)
-
-		case req.Command == "LIST":
-			s.List(c, req, workerSyncChan)
-
-		case req.Command == "APPEND":
-			s.Append(c, req, workerSyncChan)
-
-		case req.Command == "EXPUNGE":
-			s.Expunge(c, req, workerSyncChan)
-
-		case req.Command == "STORE":
-			s.Store(c, req, workerSyncChan)
-
-		default:
-			// Client sent inappropriate command. Signal tagged error.
-			err := c.InternalSend(true, fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag), false, "")
-			if err != nil {
-				c.Error("Encountered send error", err)
-				return nil
-			}
-
-			err = c.SignalSessionDone(true)
-			if err != nil {
-				c.Error("Encountered send error", err)
-				return nil
-			}
-		}
-
-		// Receive next incoming proxied request.
-		rawReq, err = c.InternalReceive(true)
-		if err != nil {
-			c.Error("Encountered receive error", err)
-			return nil
-		}
-	}
-
-	// Terminate connection after logout.
-	err = c.Terminate()
-	if err != nil {
-		return fmt.Errorf("[imap.handleConnection] Failed to terminate connection: %v", err)
-	}
-
-	// Set IMAP state to logged out.
-	c.State = imap.Logout
-
-	return nil
+	return &imap.Confirmation{
+		Status: 0,
+	}, nil
 }
 
 // Select sets the current mailbox based on supplied
 // payload to user-instructed value.
-func (s *service) Select(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan comm.Msg) bool {
+func (s *service) Select(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	ok := s.imapNode.Select(c, req, workerSyncChan)
-	if ok {
+	// Retrieve active IMAP connection context
+	// from map of all known to this node.
+	// Note: ClientID is expected to truly identify
+	// exactly one device session (thus, no locking).
+	sess := s.sessions[comd.ClientID]
 
-		// If successful, signal end of operation to proxy node.
-		err := c.SignalSessionDone(true)
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
+	// Retrieve correct channel to send downstream
+	// updates from this node to.
+	syncChan := s.SyncSendChans[sess.RespWorker]
+
+	// Parse received raw request into struct.
+	req, err := imap.ParseRequest(comd.Text)
+	if err != nil {
+		sess.Error("error while parsing request in SELECT", err)
+		return nil, err
 	}
 
-	return ok
+	// Forward gathered info to IMAP function.
+	reply, err := s.imapNode.Select(sess, req, syncChan)
+	if err != nil {
+		sess.Error("failed to complete IMAP handler for SELECT", err)
+		return nil, err
+	}
+
+	return reply, nil
 }
 
 // Create attempts to create a mailbox with
 // name taken from payload of request.
-func (s *service) Create(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan comm.Msg) bool {
+func (s *service) Create(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	ok := s.imapNode.Create(c, req, workerSyncChan)
-	if ok {
+	// Retrieve active IMAP connection context
+	// from map of all known to this node.
+	// Note: ClientID is expected to truly identify
+	// exactly one device session (thus, no locking).
+	sess := s.sessions[comd.ClientID]
 
-		// If successful, signal end of operation to proxy node.
-		err := c.SignalSessionDone(true)
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
+	// Retrieve correct channel to send downstream
+	// updates from this node to.
+	syncChan := s.SyncSendChans[sess.RespWorker]
+
+	// Parse received raw request into struct.
+	req, err := imap.ParseRequest(comd.Text)
+	if err != nil {
+		sess.Error("error while parsing request in CREATE", err)
+		return nil, err
 	}
 
-	return ok
+	// Forward gathered info to IMAP function.
+	reply, err := s.imapNode.Create(sess, req, syncChan)
+	if err != nil {
+		sess.Error("failed to complete IMAP handler for CREATE", err)
+		return nil, err
+	}
+
+	return reply, nil
 }
 
 // Delete an existing mailbox with all included content.
-func (s *service) Delete(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan comm.Msg) bool {
+func (s *service) Delete(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	ok := s.imapNode.Delete(c, req, workerSyncChan)
-	if ok {
+	// Retrieve active IMAP connection context
+	// from map of all known to this node.
+	// Note: ClientID is expected to truly identify
+	// exactly one device session (thus, no locking).
+	sess := s.sessions[comd.ClientID]
 
-		// If successful, signal end of operation to proxy node.
-		err := c.SignalSessionDone(true)
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
+	// Retrieve correct channel to send downstream
+	// updates from this node to.
+	syncChan := s.SyncSendChans[sess.RespWorker]
+
+	// Parse received raw request into struct.
+	req, err := imap.ParseRequest(comd.Text)
+	if err != nil {
+		sess.Error("error while parsing request in DELETE", err)
+		return nil, err
 	}
 
-	return ok
+	// Forward gathered info to IMAP function.
+	reply, err := s.imapNode.Delete(sess, req, syncChan)
+	if err != nil {
+		sess.Error("failed to complete IMAP handler for DELETE", err)
+		return nil, err
+	}
+
+	return reply, nil
 }
 
 // List allows clients to learn about the mailboxes
 // available and also returns the hierarchy delimiter.
-func (s *service) List(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan comm.Msg) bool {
+func (s *service) List(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	ok := s.imapNode.List(c, req, workerSyncChan)
-	if ok {
+	// Retrieve active IMAP connection context
+	// from map of all known to this node.
+	// Note: ClientID is expected to truly identify
+	// exactly one device session (thus, no locking).
+	sess := s.sessions[comd.ClientID]
 
-		// If successful, signal end of operation to proxy node.
-		err := c.SignalSessionDone(true)
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
+	// Retrieve correct channel to send downstream
+	// updates from this node to.
+	syncChan := s.SyncSendChans[sess.RespWorker]
+
+	// Parse received raw request into struct.
+	req, err := imap.ParseRequest(comd.Text)
+	if err != nil {
+		sess.Error("error while parsing request in LIST", err)
+		return nil, err
 	}
 
-	return ok
+	// Forward gathered info to IMAP function.
+	reply, err := s.imapNode.List(sess, req, syncChan)
+	if err != nil {
+		sess.Error("failed to complete IMAP handler for LIST", err)
+		return nil, err
+	}
+
+	return reply, nil
 }
 
-// Append puts supplied message into specified mailbox.
-func (s *service) Append(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan comm.Msg) bool {
+// AppendBegin checks environment conditions and returns
+// a message specifying the awaited number of bytes.
+func (s *service) AppendBegin(ctx context.Context, comd *imap.Command) (*imap.Await, error) {
 
-	ok := s.imapNode.Append(c, req, workerSyncChan)
-	if ok {
+	// Retrieve active IMAP connection context
+	// from map of all known to this node.
+	// Note: ClientID is expected to truly identify
+	// exactly one device session (thus, no locking).
+	sess := s.sessions[comd.ClientID]
 
-		// If successful, signal end of operation to proxy node.
-		err := c.SignalSessionDone(true)
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
+	// Retrieve correct channel to send downstream
+	// updates from this node to.
+	syncChan := s.SyncSendChans[sess.RespWorker]
+
+	// Parse received raw request into struct.
+	req, err := imap.ParseRequest(comd.Text)
+	if err != nil {
+		sess.Error("error while parsing request in begin message of APPEND", err)
+		return nil, err
 	}
 
-	return ok
+	// Forward gathered info to IMAP function.
+	await, err := s.imapNode.AppendBegin(sess, req)
+	if err != nil {
+		sess.Error("failed to complete IMAP handler for begin message APPEND", err)
+		return nil, err
+	}
+
+	return await, nil
+}
+
+// AppendEnd receives the mail file associated with a
+// prior AppendBegin.
+func (s *service) AppendEnd(ctx context.Context, mailFile *imap.MailFile) (*imap.Reply, error) {
+
+	// Retrieve active IMAP connection context
+	// from map of all known to this node.
+	// Note: ClientID is expected to truly identify
+	// exactly one device session (thus, no locking).
+	sess := s.sessions[mailFile.ClientID]
+
+	// Retrieve correct channel to send downstream
+	// updates from this node to.
+	syncChan := s.SyncSendChans[sess.RespWorker]
+
+	// Forward gathered info to IMAP function.
+	reply, err := s.imapNode.AppendEnd(sess, mailFile.Content, syncChan)
+	if err != nil {
+		sess.Error("failed to complete IMAP handler for end message of APPEND", err)
+		return nil, err
+	}
+
+	return reply, nil
 }
 
 // Expunge deletes messages permanently from currently
 // selected mailbox that have been flagged as Deleted
 // prior to calling this function.
-func (s *service) Expunge(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan comm.Msg) bool {
+func (s *service) Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	ok := s.imapNode.Expunge(c, req, workerSyncChan)
-	if ok {
+	// Retrieve active IMAP connection context
+	// from map of all known to this node.
+	// Note: ClientID is expected to truly identify
+	// exactly one device session (thus, no locking).
+	sess := s.sessions[comd.ClientID]
 
-		// If successful, signal end of operation to proxy node.
-		err := c.SignalSessionDone(true)
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
+	// Retrieve correct channel to send downstream
+	// updates from this node to.
+	syncChan := s.SyncSendChans[sess.RespWorker]
+
+	// Parse received raw request into struct.
+	req, err := imap.ParseRequest(comd.Text)
+	if err != nil {
+		sess.Error("error while parsing request in EXPUNGE", err)
+		return nil, err
 	}
 
-	return ok
+	// Forward gathered info to IMAP function.
+	reply, err := s.imapNode.Expunge(sess, req, syncChan)
+	if err != nil {
+		sess.Error("failed to complete IMAP handler for EXPUNGE", err)
+		return nil, err
+	}
+
+	return reply, nil
 }
 
 // Store takes in message sequence numbers and some set
 // of flags to change in those messages and changes the
 // attributes for these mails throughout the system.
-func (s *service) Store(c *imap.IMAPConnection, req *imap.Request, workerSyncChan chan comm.Msg) bool {
+func (s *service) Store(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	ok := s.imapNode.Store(c, req, workerSyncChan)
-	if ok {
+	// Retrieve active IMAP connection context
+	// from map of all known to this node.
+	// Note: ClientID is expected to truly identify
+	// exactly one device session (thus, no locking).
+	sess := s.sessions[comd.ClientID]
 
-		// If successful, signal end of operation to proxy node.
-		err := c.SignalSessionDone(true)
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
+	// Retrieve correct channel to send downstream
+	// updates from this node to.
+	syncChan := s.SyncSendChans[sess.RespWorker]
+
+	// Parse received raw request into struct.
+	req, err := imap.ParseRequest(comd.Text)
+	if err != nil {
+		sess.Error("error while parsing request in STORE", err)
+		return nil, err
 	}
 
-	return ok
+	// Forward gathered info to IMAP function.
+	reply, err := s.imapNode.Store(sess, req, syncChan)
+	if err != nil {
+		sess.Error("failed to complete IMAP handler for STORE", err)
+		return nil, err
+	}
+
+	return reply, nil
 }

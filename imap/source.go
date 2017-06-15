@@ -2,21 +2,17 @@ package imap
 
 import (
 	"fmt"
-	"io"
 	stdlog "log"
-	"net"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 
-	"crypto/tls"
 	"io/ioutil"
 	"path/filepath"
 
 	"github.com/numbleroot/maildir"
 	"github.com/numbleroot/pluto/comm"
-	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crdt"
 )
 
@@ -46,33 +42,25 @@ type IMAPNode struct {
 // (e.g. a missing mailbox to select) but otherwise correct
 // handling, this function would send a useful message to
 // the client and still return true.
-func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
+func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
 
-	if (c.State != Authenticated) && (c.State != Mailbox) {
+	if (s.State != Authenticated) && (s.State != Mailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command SELECT cannot be executed in this state", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Command SELECT cannot be executed in this state\r\n", req.Tag),
+		}, nil
 	}
 
 	if len(req.Payload) < 1 {
 
 		// If no mailbox to select was specified in payload,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select\r\n", req.Tag),
+		}, nil
 	}
 
 	// Split payload on every whitespace character.
@@ -82,17 +70,13 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan comm
 
 		// If there were more than two names supplied to select,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one\r\n", req.Tag),
+		}, nil
 	}
 
 	// Save maildir for later use.
-	mailboxPath := c.UserMaildirPath
+	mailboxPath := s.UserMaildirPath
 
 	// If any other mailbox than INBOX was specified,
 	// append it to mailbox in order to check it.
@@ -109,26 +93,22 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan comm
 
 		// If specified maildir did not turn out to be a valid one,
 		// this is a client error. Return NO statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder\r\n", req.Tag),
+		}, nil
 	}
 
 	// Set selected mailbox in connection to supplied one
 	// and advance IMAP state of connection to Mailbox.
-	c.State = Mailbox
-	c.SelectedMailbox = mailboxes[0]
+	s.State = Mailbox
+	s.SelectedMailbox = mailboxes[0]
 
 	node.Lock.RLock()
 	defer node.Lock.RUnlock()
 
 	// Store contents structure of selected mailbox
 	// for later convenient use.
-	selMailboxContents := node.MailboxContents[c.UserName][c.SelectedMailbox]
+	selMailboxContents := node.MailboxContents[s.UserName][s.SelectedMailbox]
 
 	// Count how many mails do not have the \Seen
 	// flag attached, i.e. recent mails.
@@ -138,7 +118,7 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan comm
 		// Retrieve flags of mail.
 		mailFlags, err := mailbox.Flags(mail, false)
 		if err != nil {
-			c.Error("Error while retrieving flags for mail", err)
+			s.Error("Error while retrieving flags for mail", err)
 			return false
 		}
 
@@ -151,31 +131,23 @@ func (node *IMAPNode) Select(c *IMAPConnection, req *Request, syncChan chan comm
 	// TODO: Add other SELECT response elements if needed.
 
 	// Send answer to requesting client.
-	err = c.InternalSend(true, fmt.Sprintf("* %d EXISTS\r\n* %d RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\n%s OK [READ-WRITE] SELECT completed", len(selMailboxContents), recentMails, req.Tag), false, "")
-	if err != nil {
-		c.Error("Encountered send error", err)
-		return false
-	}
-
-	return true
+	return &Reply{
+		Text: fmt.Sprintf("* %d EXISTS\r\n* %d RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\n%s OK [READ-WRITE] SELECT completed\r\n", len(selMailboxContents), recentMails, req.Tag),
+	}, nil
 }
 
 // Create attempts to create a mailbox with name
 // taken from payload of request.
-func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
+func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
 
-	if (c.State != Authenticated) && (c.State != Mailbox) {
+	if (s.State != Authenticated) && (s.State != Mailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state\r\n", req.Tag),
+		}, nil
 	}
 
 	// Split payload on every space character.
@@ -185,13 +157,9 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan comm
 
 		// If payload did not contain exactly one element,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command CREATE was not sent with exactly one parameter", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Command CREATE was not sent with exactly one parameter\r\n", req.Tag),
+		}, nil
 	}
 
 	// Trim supplied mailbox name of hierarchy separator if
@@ -202,18 +170,14 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan comm
 
 		// If mailbox to-be-created was named INBOX,
 		// this is a client error. Return NO response.
-		err := c.InternalSend(true, fmt.Sprintf("%s NO New mailbox cannot be named INBOX", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s NO New mailbox cannot be named INBOX\r\n", req.Tag),
+		}, nil
 	}
 
 	// Build up paths before entering critical section.
-	posMaildir := maildir.Dir(filepath.Join(c.UserMaildirPath, posMailbox))
-	posMailboxCRDTPath := filepath.Join(c.UserCRDTPath, fmt.Sprintf("%s.log", posMailbox))
+	posMaildir := maildir.Dir(filepath.Join(s.UserMaildirPath, posMailbox))
+	posMailboxCRDTPath := filepath.Join(s.UserCRDTPath, fmt.Sprintf("%s.log", posMailbox))
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
@@ -222,25 +186,21 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan comm
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
-	userMainCRDT := node.MailboxStructure[c.UserName]["Structure"]
+	userMainCRDT := node.MailboxStructure[s.UserName]["Structure"]
 
 	if userMainCRDT.Lookup(posMailbox) {
 
 		// If mailbox to-be-created already exists for user,
 		// this is a client error. Return NO response.
-		err := c.InternalSend(true, fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox\r\n", req.Tag),
+		}, nil
 	}
 
 	// Create a new Maildir on stable storage.
 	err := posMaildir.Create()
 	if err != nil {
-		c.Error("Error while creating Maildir for new mailbox", err)
+		s.Error("Error while creating Maildir for new mailbox", err)
 		return false
 	}
 
@@ -265,11 +225,11 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan comm
 	}
 
 	// Place newly created CRDT in mailbox structure.
-	node.MailboxStructure[c.UserName][posMailbox] = posMailboxCRDT
+	node.MailboxStructure[s.UserName][posMailbox] = posMailboxCRDT
 
 	// Initialize contents slice for new mailbox to track
 	// message sequence numbers in it.
-	node.MailboxContents[c.UserName][posMailbox] = make([]string, 0, 6)
+	node.MailboxContents[s.UserName][posMailbox] = make([]string, 0, 6)
 
 	// If succeeded, add a new folder in user's main CRDT
 	// and synchronise it to other replicas.
@@ -277,7 +237,7 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan comm
 		syncChan <- comm.Msg{
 			Operation: "create",
 			Create: &comm.Msg_CREATE{
-				User:    c.UserName,
+				User:    s.UserName,
 				Mailbox: posMailbox,
 				AddMailbox: &comm.Msg_Element{
 					Value: args[0],
@@ -294,8 +254,8 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan comm
 
 		// Remove just added CRDT of new maildir from mailbox structure
 		// and corresponding contents slice.
-		delete(node.MailboxStructure[c.UserName], posMailbox)
-		delete(node.MailboxContents[c.UserName], posMailbox)
+		delete(node.MailboxStructure[s.UserName], posMailbox)
+		delete(node.MailboxContents[s.UserName], posMailbox)
 
 		stdlog.Printf("[imap.Create] ... done. Removing just created Maildir completely...")
 
@@ -312,31 +272,23 @@ func (node *IMAPNode) Create(c *IMAPConnection, req *Request, syncChan chan comm
 	}
 
 	// Send success answer.
-	err = c.InternalSend(true, fmt.Sprintf("%s OK CREATE completed", req.Tag), false, "")
-	if err != nil {
-		c.Error("Encountered send error", err)
-		return false
-	}
-
-	return true
+	return &Reply{
+		Text: fmt.Sprintf("%s OK CREATE completed\r\n", req.Tag),
+	}, nil
 }
 
 // Delete attempts to remove an existing mailbox with
 // all included content in CRDT as well as file system.
-func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
+func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
 
-	if (c.State != Authenticated) && (c.State != Mailbox) {
+	if (s.State != Authenticated) && (s.State != Mailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command DELETE cannot be executed in this state", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Command DELETE cannot be executed in this state\r\n", req.Tag),
+		}, nil
 	}
 
 	// Split payload on every space character.
@@ -346,13 +298,9 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan comm
 
 		// If payload did not contain exactly one element,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command DELETE was not sent with exactly one parameter", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Command DELETE was not sent with exactly one parameter\r\n", req.Tag),
+		}, nil
 	}
 
 	// Trim supplied mailbox name of hierarchy separator if
@@ -363,18 +311,14 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan comm
 
 		// If mailbox to-be-deleted was named INBOX,
 		// this is a client error. Return NO response.
-		err := c.InternalSend(true, fmt.Sprintf("%s NO Forbidden to delete INBOX", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s NO Forbidden to delete INBOX\r\n", req.Tag),
+		}, nil
 	}
 
 	// Build up paths before entering critical section.
-	delMailboxCRDTPath := filepath.Join(c.UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
-	delMaildir := maildir.Dir(filepath.Join(c.UserMaildirPath, delMailbox))
+	delMailboxCRDTPath := filepath.Join(s.UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
+	delMaildir := maildir.Dir(filepath.Join(s.UserMaildirPath, delMailbox))
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
@@ -383,7 +327,7 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan comm
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
-	userMainCRDT := node.MailboxStructure[c.UserName]["Structure"]
+	userMainCRDT := node.MailboxStructure[s.UserName]["Structure"]
 
 	// TODO: Add routines to take care of mailboxes that
 	//       are tagged with a \Noselect tag.
@@ -407,7 +351,7 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan comm
 		syncChan <- comm.Msg{
 			Operation: "delete",
 			Delete: &comm.Msg_DELETE{
-				User:       c.UserName,
+				User:       s.UserName,
 				Mailbox:    delMailbox,
 				RmvMailbox: rmvMailbox,
 			},
@@ -415,18 +359,13 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan comm
 	})
 	if err != nil {
 
-		// Check if error was caused by client, trying to
-		// delete an non-existent mailbox.
 		if err.Error() == "element to be removed not found in set" {
 
-			// If so, return a NO response.
-			err := c.InternalSend(true, fmt.Sprintf("%s NO Cannot delete folder that does not exist", req.Tag), false, "")
-			if err != nil {
-				c.Error("Encountered send error", err)
-				return false
-			}
-
-			return true
+			// Check if error was caused by client, trying to
+			// delete an non-existent mailbox.
+			return &Reply{
+				Text: fmt.Sprintf("%s NO Cannot delete folder that does not exist\r\n", req.Tag),
+			}, nil
 		}
 
 		// Otherwise, this is a write-back error of the updated CRDT
@@ -438,14 +377,14 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan comm
 
 	// Remove CRDT from mailbox structure and corresponding
 	// mail contents slice.
-	delete(node.MailboxStructure[c.UserName], delMailbox)
-	delete(node.MailboxContents[c.UserName], delMailbox)
+	delete(node.MailboxStructure[s.UserName], delMailbox)
+	delete(node.MailboxContents[s.UserName], delMailbox)
 
 	// Remove CRDT file of mailbox.
 	err = os.Remove(delMailboxCRDTPath)
 	if err != nil {
 		// TODO: Maybe think about better way to clean up here?
-		c.Error("Error while deleting CRDT file of mailbox", err)
+		s.Error("Error while deleting CRDT file of mailbox", err)
 		return false
 	}
 
@@ -454,36 +393,28 @@ func (node *IMAPNode) Delete(c *IMAPConnection, req *Request, syncChan chan comm
 	err = delMaildir.Remove()
 	if err != nil {
 		// TODO: Maybe think about better way to clean up here?
-		c.Error("Error while deleting Maildir", err)
+		s.Error("Error while deleting Maildir", err)
 		return false
 	}
 
 	// Send success answer.
-	err = c.InternalSend(true, fmt.Sprintf("%s OK DELETE completed", req.Tag), false, "")
-	if err != nil {
-		c.Error("Encountered send error", err)
-		return false
-	}
-
-	return true
+	return &Reply{
+		Text: fmt.Sprintf("%s OK DELETE completed\r\n", req.Tag),
+	}, nil
 }
 
 // List allows clients to learn about the mailboxes
 // available and also returns the hierarchy delimiter.
-func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
+func (node *IMAPNode) List(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
 
-	if (c.State != Authenticated) && (c.State != Mailbox) {
+	if (s.State != Authenticated) && (s.State != Mailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command LIST cannot be executed in this state", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Command LIST cannot be executed in this state\r\n", req.Tag),
+		}, nil
 	}
 
 	// Split payload on every space character.
@@ -493,33 +424,25 @@ func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan comm.M
 
 		// If payload did not contain between exactly two elements,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command LIST was not sent with exactly two arguments", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Command LIST was not sent with exactly two arguments\r\n", req.Tag),
+		}, nil
 	}
 
 	if (listArgs[1] != "%") && (listArgs[1] != "*") {
 
 		// If second argument is not one of two wildcards,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command LIST needs either '%%' or '*' as mailbox name", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Command LIST needs either '%%' or '*' as mailbox name\r\n", req.Tag),
+		}, nil
 	}
 
 	node.Lock.RLock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
-	userMainCRDT := node.MailboxStructure[c.UserName]
+	userMainCRDT := node.MailboxStructure[s.UserName]
 
 	// Reserve space for answer.
 	listAnswerLines := make([]string, 0, (len(userMainCRDT) - 1))
@@ -544,46 +467,42 @@ func (node *IMAPNode) List(c *IMAPConnection, req *Request, syncChan chan comm.M
 
 	node.Lock.RUnlock()
 
-	// Send out LIST response lines.
+	var answer string
 	for _, listAnswerLine := range listAnswerLines {
 
-		err := c.InternalSend(true, listAnswerLine, false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
+		// Append answer line.
+		if answer == "" {
+			answer = fmt.Sprintf("%s\r\n", listAnswerLine)
+		} else {
+			answer = fmt.Sprintf("%s%s\r\n", answer, listAnswerLine)
 		}
 	}
 
-	// Send success answer.
-	err := c.InternalSend(true, fmt.Sprintf("%s OK LIST completed", req.Tag), false, "")
-	if err != nil {
-		c.Error("Encountered send error", err)
-		return false
+	if answer == "" {
+		answer = fmt.Sprintf("%s OK LIST completed\r\n", req.Tag)
+	} else {
+		answer = fmt.Sprintf("%s%s OK LIST completed\r\n", answer, req.Tag)
 	}
 
-	return true
+	return &Reply{
+		Text: answer,
+	}, nil
 }
 
-// Append puts supplied message into specified mailbox.
-func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
+// AppendBegin checks environment conditions and returns
+// a message specifying the awaited number of bytes.
+func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 
-	var mailbox string
-	var flagsRaw string
-	var dateTimeRaw string
 	var numBytesRaw string
 
-	if (c.State != Authenticated) && (c.State != Mailbox) {
+	if (s.State != Authenticated) && (s.State != Mailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Await{
+			Text: fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state\r\n", req.Tag),
+		}, nil
 	}
 
 	// Split payload on every space character.
@@ -595,61 +514,57 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan comm
 		// If payload did not contain between two and four
 		// elements, this is a client error.
 		// Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND was not sent with appropriate number of parameters", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Await{
+			Text: fmt.Sprintf("%s BAD Command APPEND was not sent with appropriate number of parameters\r\n", req.Tag),
+		}, nil
 	}
+
+	// Make space for tracking environment characteristics
+	// for this command from AppendBegin to AppendEnd.
+	s.AppendInProg = &AppendInProg{}
 
 	// Depending on amount of arguments, store them.
 	switch lenAppendArgs {
 
 	case 2:
-		mailbox = appendArgs[0]
+		s.AppendInProg.Mailbox = appendArgs[0]
 		numBytesRaw = appendArgs[1]
 
 	case 3:
-		mailbox = appendArgs[0]
-		flagsRaw = appendArgs[1]
+		s.AppendInProg.Mailbox = appendArgs[0]
+		s.AppendInProg.FlagsRaw = appendArgs[1]
 		numBytesRaw = appendArgs[2]
 
 	case 4:
-		mailbox = appendArgs[0]
-		flagsRaw = appendArgs[1]
-		dateTimeRaw = appendArgs[2]
+		s.AppendInProg.Mailbox = appendArgs[0]
+		s.AppendInProg.FlagsRaw = appendArgs[1]
+		s.AppendInProg.DateTimeRaw = appendArgs[2]
 		numBytesRaw = appendArgs[3]
 	}
 
 	// If user specified inbox, set it accordingly.
-	if strings.ToUpper(mailbox) == "INBOX" {
-		mailbox = "INBOX"
+	if strings.ToUpper(s.AppendInProg.Mailbox) == "INBOX" {
+		s.AppendInProg.Mailbox = "INBOX"
 	}
 
 	// If flags were supplied, parse them.
-	if flagsRaw != "" {
+	if s.AppendInProg.FlagsRaw != "" {
 
-		_, err := ParseFlags(flagsRaw)
+		_, err := ParseFlags(s.AppendInProg.FlagsRaw)
 		if err != nil {
 
 			// Parsing flags from APPEND request produced
 			// an error. Return tagged BAD response.
-			err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), false, "")
-			if err != nil {
-				c.Error("Encountered send error", err)
-				return false
-			}
-
-			return true
+			return &Await{
+				Text: fmt.Sprintf("%s BAD %s\r\n", req.Tag, err.Error()),
+			}, nil
 		}
 
 		// TODO: Do something with these flags.
 	}
 
 	// If date-time was supplied, parse it.
-	if dateTimeRaw != "" {
+	if s.AppendInProg.DateTimeRaw != "" {
 		// TODO: Parse time and do something with it.
 	}
 
@@ -663,111 +578,90 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan comm
 
 		// If we were not able to parse out the number,
 		// it was probably a client error. Send tagged BAD.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command APPEND did not contain proper literal data byte number", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Await{
+			Text: fmt.Sprintf("%s BAD Command APPEND did not contain proper literal data byte number\r\n", req.Tag),
+		}, nil
 	}
 
 	// Construct path to maildir on node.
-	var appMaildir maildir.Dir
-	if mailbox == "INBOX" {
-		appMaildir = maildir.Dir(c.UserMaildirPath)
+	if s.AppendInProg.Mailbox == "INBOX" {
+		s.AppendInProg.AppMaildir = maildir.Dir(s.UserMaildirPath)
 	} else {
-		appMaildir = maildir.Dir(filepath.Join(c.UserMaildirPath, mailbox))
+		s.AppendInProg.AppMaildir = maildir.Dir(filepath.Join(s.UserMaildirPath, s.AppendInProg.Mailbox))
 	}
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
 	node.Lock.Lock()
-	defer node.Lock.Unlock()
 
 	// Save user's mailbox structure CRDT to more
 	// conveniently use it hereafter.
-	userMainCRDT := node.MailboxStructure[c.UserName]["Structure"]
+	userMainCRDT := node.MailboxStructure[s.UserName]["Structure"]
 
-	if userMainCRDT.Lookup(mailbox) != true {
+	if userMainCRDT.Lookup(s.AppendInProg.Mailbox) != true {
+
+		node.Lock.Unlock()
 
 		// If mailbox to append message to does not exist,
 		// this is a client error. Return NO response.
-		err := c.InternalSend(true, fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Await{
+			Text: fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist\r\n", req.Tag),
+		}, nil
 	}
 
-	// Send command continuation to client.
-	err = c.InternalSend(true, "+ Ready for literal data", false, "")
-	if err != nil {
-		c.Error("Encountered send error", err)
-		return false
-	}
+	return &Await{
+		Text:     "+ Ready for literal data\r\n",
+		NumBytes: uint32(numBytes),
+	}, nil
+}
 
-	// Signal proxying distributor that we expect an
-	// inbound answer from the client.
-	err = c.SignalAwaitingLiteral(true, numBytes)
-	if err != nil {
-		c.Error("Encountered send error", err)
-		return false
-	}
+// AppendEnd receives the mail file associated with a
+// prior AppendBegin.
+func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.Msg) (*Reply, error) {
 
-	// Reserve space for exact amount of expected data.
-	msgBuffer := make([]byte, numBytes)
-
-	// Read in that amount from connection to distributor.
-	_, err = io.ReadFull(c.IncReader, msgBuffer)
-	if err != nil {
-		c.Error("Encountered error while reading distributor literal data", err)
-		return false
-	}
+	defer node.Lock.Unlock()
 
 	// Open a new Maildir delivery.
-	appDelivery, err := appMaildir.NewDelivery()
+	appDelivery, err := s.AppendInProg.AppMaildir.NewDelivery()
 	if err != nil {
-		c.Error("Error during delivery creation", err)
+		s.Error("Error during delivery creation", err)
 		return false
 	}
 
 	// Write actual message content to file.
-	err = appDelivery.Write(msgBuffer)
+	err = appDelivery.Write(content)
 	if err != nil {
-		c.Error("Error while writing message during delivery", err)
+		s.Error("Error while writing message during delivery", err)
 		return false
 	}
 
 	// Close and move just created message.
 	newKey, err := appDelivery.Close()
 	if err != nil {
-		c.Error("Error while finishing delivery of new message", err)
+		s.Error("Error while finishing delivery of new message", err)
 		return false
 	}
 
 	// Follow Maildir's renaming procedure.
-	_, err = appMaildir.Unseen()
+	_, err = s.AppendInProg.AppMaildir.Unseen()
 	if err != nil {
-		c.Error("Could not Unseen() recently delivered messages", err)
+		s.Error("Could not Unseen() recently delivered messages", err)
 		return false
 	}
 
 	// Find file name of just delivered mail.
-	mailFileNamePath, err := appMaildir.Filename(newKey)
+	mailFileNamePath, err := s.AppendInProg.AppMaildir.Filename(newKey)
 	if err != nil {
-		c.Error("Finding file name of new message failed", err)
+		s.Error("Finding file name of new message failed", err)
 		return false
 	}
 	mailFileName := filepath.Base(mailFileNamePath)
 
 	// Retrieve CRDT of mailbox to append mail to.
-	appMailboxCRDT := node.MailboxStructure[c.UserName][mailbox]
+	appMailboxCRDT := node.MailboxStructure[s.UserName][s.AppendInProg.Mailbox]
 
 	// Append new mail to mailbox' contents CRDT.
-	node.MailboxContents[c.UserName][mailbox] = append(node.MailboxContents[c.UserName][mailbox], mailFileName)
+	node.MailboxContents[s.UserName][s.AppendInProg.Mailbox] = append(node.MailboxContents[s.UserName][s.AppendInProg.Mailbox], mailFileName)
 
 	// Add new mail to mailbox' CRDT and send update
 	// message to other replicas.
@@ -775,12 +669,12 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan comm
 		syncChan <- comm.Msg{
 			Operation: "append",
 			Append: &comm.Msg_APPEND{
-				User:    c.UserName,
-				Mailbox: mailbox,
+				User:    s.UserName,
+				Mailbox: s.AppendInProg.Mailbox,
 				AddMail: &comm.Msg_Element{
 					Value:    args[0],
 					Tag:      args[1],
-					Contents: msgBuffer,
+					Contents: content,
 				},
 			},
 		}
@@ -803,60 +697,49 @@ func (node *IMAPNode) Append(c *IMAPConnection, req *Request, syncChan chan comm
 	}
 
 	// Send success answer.
-	err = c.InternalSend(true, fmt.Sprintf("%s OK APPEND completed", req.Tag), false, "")
-	if err != nil {
-		c.Error("Encountered send error", err)
-		return false
-	}
-
-	return true
+	return &Reply{
+		Text: fmt.Sprintf("%s OK APPEND completed\r\n", req.Tag),
+	}, nil
 }
 
 // Expunge deletes messages permanently from currently
 // selected mailbox that have been flagged as Deleted
 // prior to calling this function.
-func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
+func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
 
-	if c.State != Mailbox {
+	if s.State != Mailbox {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD No mailbox selected to expunge", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD No mailbox selected to expunge\r\n", req.Tag),
+		}, nil
 	}
 
 	if len(req.Payload) > 0 {
 
 		// If payload was not empty to EXPUNGE command,
 		// this is a client error. Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command EXPUNGE was sent with extra parameters", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Command EXPUNGE was sent with extra parameters\r\n", req.Tag),
+		}, nil
 	}
 
 	// Construct path to Maildir to expunge.
 	var expMaildir maildir.Dir
-	if c.SelectedMailbox == "INBOX" {
-		expMaildir = maildir.Dir(filepath.Join(c.UserMaildirPath, "cur"))
+	if s.SelectedMailbox == "INBOX" {
+		expMaildir = maildir.Dir(filepath.Join(s.UserMaildirPath, "cur"))
 	} else {
-		expMaildir = maildir.Dir(filepath.Join(c.UserMaildirPath, c.SelectedMailbox, "cur"))
+		expMaildir = maildir.Dir(filepath.Join(s.UserMaildirPath, s.SelectedMailbox, "cur"))
 	}
 
 	// Reserve space for mails to expunge.
 	expMailNums := make([]int, 0, 6)
 
-	// Declare variable to contain answers of
-	// individual remove operations.
+	// Declare variable to contain answers
+	// (e.g. individual remove operations).
+	var answer string
 	var expAnswerLines []string
 
 	// Lock node exclusively to make execution
@@ -865,7 +748,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan com
 
 	// Save all mails possibly to delete and
 	// number of these files.
-	expMails := node.MailboxContents[c.UserName][c.SelectedMailbox]
+	expMails := node.MailboxContents[s.UserName][s.SelectedMailbox]
 	numExpMails := len(expMails)
 
 	// Only do the work if there are any mails
@@ -878,7 +761,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan com
 			// Retrieve all flags of fetched mail.
 			mailFlags, err := expMaildir.Flags(expMails[i], false)
 			if err != nil {
-				c.Error("Encountered error while retrieving flags for expunging mails", err)
+				s.Error("Encountered error while retrieving flags for expunging mails", err)
 				node.Lock.Unlock()
 				return false
 			}
@@ -894,7 +777,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan com
 		expAnswerLines = make([]string, 0, len(expMailNums))
 
 		// Retrieve CRDT of mailbox to expunge.
-		expMailboxCRDT := node.MailboxStructure[c.UserName][c.SelectedMailbox]
+		expMailboxCRDT := node.MailboxStructure[s.UserName][s.SelectedMailbox]
 
 		for _, msgNum := range expMailNums {
 
@@ -916,8 +799,8 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan com
 				syncChan <- comm.Msg{
 					Operation: "expunge",
 					Expunge: &comm.Msg_EXPUNGE{
-						User:    c.UserName,
-						Mailbox: c.SelectedMailbox,
+						User:    s.UserName,
+						Mailbox: s.SelectedMailbox,
 						RmvMail: rmvMails,
 					},
 				}
@@ -937,7 +820,7 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan com
 			// Remove the file.
 			err = os.Remove(expMailPath)
 			if err != nil {
-				c.Error("Error while removing expunged mail file from stable storage", err)
+				s.Error("Error while removing expunged mail file from stable storage", err)
 				node.Lock.Unlock()
 				return false
 			}
@@ -952,48 +835,45 @@ func (node *IMAPNode) Expunge(c *IMAPConnection, req *Request, syncChan chan com
 
 		node.Lock.Unlock()
 
-		// Send out FETCH part with new flags.
 		for _, expAnswerLine := range expAnswerLines {
 
-			err := c.InternalSend(true, expAnswerLine, false, "")
-			if err != nil {
-				c.Error("Encountered send error", err)
-				return false
+			// Append FETCH part with new flags.
+			if answer == "" {
+				answer = fmt.Sprintf("%s\r\n", expAnswerLine)
+			} else {
+				answer = fmt.Sprintf("%s%s\r\n", answer, expAnswerLine)
 			}
 		}
 	}
 
-	// Send success answer.
-	err := c.InternalSend(true, fmt.Sprintf("%s OK EXPUNGE completed", req.Tag), false, "")
-	if err != nil {
-		c.Error("Encountered send error", err)
-		return false
+	if answer == "" {
+		answer = fmt.Sprintf("%s OK EXPUNGE completed\r\n", req.Tag)
+	} else {
+		answer = fmt.Sprintf("%s%s OK EXPUNGE completed\r\n", answer, req.Tag)
 	}
 
-	return true
+	return &Reply{
+		Text: answer,
+	}, nil
 }
 
 // Store takes in message sequence numbers and some set
 // of flags to change in those messages and changes the
 // attributes for these mails throughout the system.
-func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.Msg) bool {
+func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
 
 	// Set updated flags list indicator
 	// initially to false.
 	silent := false
 
-	if c.State != Mailbox {
+	if s.State != Mailbox {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD No mailbox selected for store", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD No mailbox selected for store\r\n", req.Tag),
+		}, nil
 	}
 
 	// Split payload on every space character.
@@ -1004,13 +884,9 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 		// If payload did not contain at least three
 		// elements, this is a client error.
 		// Return BAD statement.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Command STORE was not sent with three parameters", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Command STORE was not sent with three parameters\r\n", req.Tag),
+		}, nil
 	}
 
 	// Parse data item type (second parameter).
@@ -1023,13 +899,9 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 		// If supplied data item type is none of the
 		// supported ones, this is a client error.
 		// Send tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD Unknown data item type specified", req.Tag), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD Unknown data item type specified\r\n", req.Tag),
+		}, nil
 	}
 
 	// If client requested not to receive the updated
@@ -1044,22 +916,18 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 
 		// Parsing flags from STORE request produced
 		// an error. Return tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			return false
-		}
-
-		return true
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD %s\r\n", req.Tag, err.Error()),
+		}, nil
 	}
 
 	// Set currently selected mailbox with respect to special
 	// case of INBOX as current location.
 	var selectedMailbox string
-	if c.SelectedMailbox == "INBOX" {
-		selectedMailbox = c.UserMaildirPath
+	if s.SelectedMailbox == "INBOX" {
+		selectedMailbox = s.UserMaildirPath
 	} else {
-		selectedMailbox = filepath.Join(c.UserMaildirPath, c.SelectedMailbox)
+		selectedMailbox = filepath.Join(s.UserMaildirPath, s.SelectedMailbox)
 	}
 
 	// Build up paths before entering critical section.
@@ -1070,7 +938,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 	node.Lock.Lock()
 
 	// Retrieve number of messages in mailbox.
-	lenMailboxContents := len(node.MailboxContents[c.UserName][c.SelectedMailbox])
+	lenMailboxContents := len(node.MailboxContents[s.UserName][s.SelectedMailbox])
 
 	// Parse sequence numbers argument (first parameter).
 	// CAUTION: We expect this function to fail if supplied
@@ -1079,18 +947,13 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 	msgNums, err := ParseSeqNumbers(storeArgs[0], lenMailboxContents)
 	if err != nil {
 
-		// Parsing sequence numbers from STORE request produced
-		// an error. Return tagged BAD response.
-		err := c.InternalSend(true, fmt.Sprintf("%s BAD %s", req.Tag, err.Error()), false, "")
-		if err != nil {
-			c.Error("Encountered send error", err)
-			node.Lock.Unlock()
-			return false
-		}
-
 		node.Lock.Unlock()
 
-		return true
+		// Parsing sequence numbers from STORE request produced
+		// an error. Return tagged BAD response.
+		return &Reply{
+			Text: fmt.Sprintf("%s BAD %s\r\n", req.Tag, err.Error()),
+		}, nil
 	}
 
 	// Prepare answer slice.
@@ -1125,12 +988,12 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 		}
 
 		// Retrieve mail file name.
-		mailFileName := node.MailboxContents[c.UserName][c.SelectedMailbox][msgNum]
+		mailFileName := node.MailboxContents[s.UserName][s.SelectedMailbox][msgNum]
 
 		// Read message content from file.
 		mailFileContent, err := ioutil.ReadFile(filepath.Join(selectedMailbox, "cur", mailFileName))
 		if err != nil {
-			c.Error("Error while reading in mail file content in STORE operation", err)
+			s.Error("Error while reading in mail file content in STORE operation", err)
 			node.Lock.Unlock()
 			return false
 		}
@@ -1138,7 +1001,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 		// Retrieve flags included in mail file name.
 		mailFlags, err := mailMaildir.Flags(mailFileName, false)
 		if err != nil {
-			c.Error("Error while retrieving flags from mail file", err)
+			s.Error("Error while retrieving flags from mail file", err)
 			node.Lock.Unlock()
 			return false
 		}
@@ -1189,13 +1052,13 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 			// file name (renaming it).
 			newMailFileName, err := mailMaildir.SetFlags(mailFileName, string(newMailFlags), false)
 			if err != nil {
-				c.Error("Error renaming mail file in STORE operation", err)
+				s.Error("Error renaming mail file in STORE operation", err)
 				node.Lock.Unlock()
 				return false
 			}
 
 			// Save CRDT of mailbox.
-			storeMailboxCRDT := node.MailboxStructure[c.UserName][c.SelectedMailbox]
+			storeMailboxCRDT := node.MailboxStructure[s.UserName][s.SelectedMailbox]
 
 			var rmvMails []*comm.Msg_Element
 
@@ -1231,8 +1094,8 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 				syncChan <- comm.Msg{
 					Operation: "store",
 					Store: &comm.Msg_STORE{
-						User:    c.UserName,
-						Mailbox: c.SelectedMailbox,
+						User:    s.UserName,
+						Mailbox: s.SelectedMailbox,
 						RmvMail: rmvMails,
 						AddMail: &comm.Msg_Element{
 							Value:    args[0],
@@ -1253,7 +1116,7 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 
 			// If we are done with that, also replace the mail's
 			// file name in the corresponding contents slice.
-			node.MailboxContents[c.UserName][c.SelectedMailbox][msgNum] = newMailFileName
+			node.MailboxContents[s.UserName][s.SelectedMailbox][msgNum] = newMailFileName
 		}
 
 		// Check if client requested update information.
@@ -1318,26 +1181,29 @@ func (node *IMAPNode) Store(c *IMAPConnection, req *Request, syncChan chan comm.
 
 	node.Lock.Unlock()
 
+	var answer string
+
 	// Check if client requested update information.
 	if silent != true {
 
-		// Send out FETCH part with new flags.
 		for _, answerLine := range answerLines {
 
-			err = c.InternalSend(true, answerLine, false, "")
-			if err != nil {
-				c.Error("Encountered send error", err)
-				return false
+			// Append FETCH part with new flags.
+			if answer == "" {
+				answer = fmt.Sprintf("%s\r\n", answerLine)
+			} else {
+				answer = fmt.Sprintf("%s%s\r\n", answer, answerLine)
 			}
 		}
 	}
 
-	// Send success answer.
-	err = c.InternalSend(true, fmt.Sprintf("%s OK STORE completed", req.Tag), false, "")
-	if err != nil {
-		c.Error("Encountered send error", err)
-		return false
+	if answer == "" {
+		answer = fmt.Sprintf("%s OK STORE completed\r\n", req.Tag)
+	} else {
+		answer = fmt.Sprintf("%s%s OK STORE completed\r\n", answer, req.Tag)
 	}
 
-	return true
+	return &Reply{
+		Text: answer,
+	}, nil
 }
