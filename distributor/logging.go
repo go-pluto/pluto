@@ -8,10 +8,14 @@ import (
 	"github.com/numbleroot/pluto/imap"
 )
 
+// Structs
+
 type loggingService struct {
 	logger  log.Logger
 	service Service
 }
+
+// Functions
 
 // NewLoggingService wraps a provided existing
 // service with the supplied logger.

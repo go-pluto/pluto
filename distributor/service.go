@@ -18,6 +18,15 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Structs
+
+type service struct {
+	auther      Authenticator
+	tlsConfig   *tls.Config
+	workers     map[string]config.Worker
+	gRPCOptions []grpc.DialOption
+}
+
 // Interfaces
 
 // Authenticator defines the methods required to
@@ -46,63 +55,58 @@ type Service interface {
 
 	// Capability handles the IMAP CAPABILITY command.
 	// It outputs the supported actions in the current state.
-	Capability(c *imap.Connection, req *imap.Request) bool
+	Capability(c *Connection, req *imap.Request) bool
 
 	// Logout correctly ends a connection with a client.
 	// Also necessarily created management structures will
 	// get shut down gracefully.
-	Logout(c *imap.Connection, req *imap.Request) bool
+	Logout(c *Connection, req *imap.Request) bool
 
 	// Login performs the authentication mechanism specified
 	// as part of the distributor config.
-	Login(c *imap.Connection, req *imap.Request) bool
+	Login(c *Connection, req *imap.Request) bool
 
 	// StartTLS states on IMAP STARTTLS command
 	// that current connection is already encrypted.
-	StartTLS(c *imap.Connection, req *imap.Request) bool
+	StartTLS(c *Connection, req *imap.Request) bool
 
 	// ProxySelect tunnels a received SELECT request by
 	// an authorized client to the responsible worker or
 	// storage node.
-	ProxySelect(c *imap.Connection, rawReq string) bool
+	ProxySelect(c *Connection, rawReq string) bool
 
 	// ProxyCreate tunnels a received CREATE request by
 	// an authorized client to the responsible worker or
 	// storage node.
-	ProxyCreate(c *imap.Connection, rawReq string) bool
+	ProxyCreate(c *Connection, rawReq string) bool
 
 	// ProxyDelete tunnels a received DELETE request by
 	// an authorized client to the responsible worker or
 	// storage node.
-	ProxyDelete(c *imap.Connection, rawReq string) bool
+	ProxyDelete(c *Connection, rawReq string) bool
 
 	// ProxyList tunnels a received LIST request by
 	// an authorized client to the responsible worker or
 	// storage node.
-	ProxyList(c *imap.Connection, rawReq string) bool
+	ProxyList(c *Connection, rawReq string) bool
 
 	// ProxyAppend tunnels a received APPEND request by
 	// an authorized client to the responsible worker or
 	// storage node.
-	ProxyAppend(c *imap.Connection, rawReq string) bool
+	ProxyAppend(c *Connection, rawReq string) bool
 
 	// ProxyExpunge tunnels a received EXPUNGE request by
 	// an authorized client to the responsible worker or
 	// storage node.
-	ProxyExpunge(c *imap.Connection, rawReq string) bool
+	ProxyExpunge(c *Connection, rawReq string) bool
 
 	// ProxyStore tunnels a received STORE request by
 	// an authorized client to the responsible worker or
 	// storage node.
-	ProxyStore(c *imap.Connection, rawReq string) bool
+	ProxyStore(c *Connection, rawReq string) bool
 }
 
-type service struct {
-	auther      Authenticator
-	tlsConfig   *tls.Config
-	workers     map[string]config.Worker
-	gRPCOptions []grpc.DialOption
-}
+// Functions
 
 // NewService takes in all required parameters for spinning
 // up a new distributor node and returns a service struct for
@@ -148,7 +152,7 @@ func (s *service) handleConnection(conn net.Conn, greeting string) error {
 	}
 
 	// Create a new connection struct for incoming request.
-	c := &imap.Connection{
+	c := &Connection{
 		IncConn:   tlsConn,
 		IncReader: bufio.NewReader(tlsConn),
 	}
@@ -167,26 +171,36 @@ func (s *service) handleConnection(conn net.Conn, greeting string) error {
 	for recvUntil != "LOGOUT" {
 
 		// Receive next incoming client command.
-		rawReq, err := c.Receive(true)
+		rawReq, err := c.Receive()
 		if err != nil {
 
 			// Check if error was a simple disconnect.
 			if err.Error() == "EOF" {
+
+				// TODO: Log client disconnect.
 
 				// If so and if a worker was already assigned,
 				// inform the worker about the disconnect.
 				if c.IsAuthorized {
 
 					// Signal to worker node that session is done.
-					err := c.SignalSessionDone(false)
+					conf, err := c.gRPCClient.Close(context.Background(), &imap.Context{
+						ClientID:   c.ClientID,
+						UserName:   c.UserName,
+						RespWorker: c.RespWorker,
+					})
 					if err != nil {
-						c.Error("Encountered send error when distributor was signalling end to worker", err)
+						c.Error(fmt.Sprintf("could not send Close() to internal node %s", c.RespWorker), err)
 						return err
+					}
+
+					if conf.Status != 0 {
+						c.Error(fmt.Sprintf("internal node %s replied with error code to Close()", c.RespWorker), conf.Status)
+						return fmt.Errorf("internal node %s replied to Close() with error code: %d", c.RespWorker, conf.Status)
 					}
 				}
 
-				// And terminate connection.
-				c.Terminate()
+				c.IncConn.Close()
 
 			} else {
 				// If not a simple disconnect, log error and
@@ -260,13 +274,12 @@ func (s *service) handleConnection(conn net.Conn, greeting string) error {
 		}
 	}
 
-	// Terminate connection after logout.
-	return c.Terminate()
+	return c.IncConn.Close()
 }
 
 // Capability handles the IMAP CAPABILITY command.
 // It outputs the supported actions in the current state.
-func (s *service) Capability(c *imap.Connection, req *imap.Request) bool {
+func (s *service) Capability(c *Connection, req *imap.Request) bool {
 
 	if len(req.Payload) > 0 {
 
@@ -300,7 +313,7 @@ func (s *service) Capability(c *imap.Connection, req *imap.Request) bool {
 // Logout correctly ends a connection with a client.
 // Also necessarily created management structures will
 // get shut down gracefully.
-func (s *service) Logout(c *imap.Connection, req *imap.Request) bool {
+func (s *service) Logout(c *Connection, req *imap.Request) bool {
 
 	if len(req.Payload) > 0 {
 
@@ -315,13 +328,21 @@ func (s *service) Logout(c *imap.Connection, req *imap.Request) bool {
 		return true
 	}
 
-	// If already a worker was assigned, signal logout.
 	if c.IsAuthorized {
 
-		// Signal to worker node that session is done.
-		err := c.SignalSessionDone(false)
+		// If already a worker was assigned, signal logout.
+		conf, err := c.gRPCClient.Close(context.Background(), &imap.Context{
+			ClientID:   c.ClientID,
+			UserName:   c.UserName,
+			RespWorker: c.RespWorker,
+		})
 		if err != nil {
-			c.Error("Encountered send error when distributor was signalling end to worker", err)
+			c.Error(fmt.Sprintf("could not send Close() to internal node %s", c.RespWorker), err)
+			return false
+		}
+
+		if conf.Status != 0 {
+			c.Error(fmt.Sprintf("internal node %s replied with error code to Close()", c.RespWorker), conf.Status)
 			return false
 		}
 	}
@@ -338,7 +359,7 @@ func (s *service) Logout(c *imap.Connection, req *imap.Request) bool {
 
 // Login performs the authentication mechanism specified
 // as part of the distributor config.
-func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
+func (s *service) Login(c *Connection, req *imap.Request) bool {
 
 	if c.IsAuthorized {
 
@@ -404,6 +425,23 @@ func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
 	c.IsAuthorized = true
 	c.ClientID = clientID
 	c.UserName = userCredentials[0]
+	c.RespWorker = respWorker
+
+	// Send worker or storage context of to-come client connection.
+	conf, err := c.gRPCClient.Prepare(context.Background(), &imap.Context{
+		ClientID:   c.ClientID,
+		UserName:   c.UserName,
+		RespWorker: c.RespWorker,
+	})
+	if err != nil {
+		c.Error(fmt.Sprintf("could not send Prepare() to internal node %s", respWorker), err)
+		return false
+	}
+
+	if conf.Status != 0 {
+		c.Error(fmt.Sprintf("internal node %s replied with error code to Prepare()", respWorker), conf.Status)
+		return false
+	}
 
 	// Signal success to client.
 	err = c.Send(true, fmt.Sprintf("%s OK LOGIN completed", req.Tag))
@@ -417,7 +455,7 @@ func (s *service) Login(c *imap.Connection, req *imap.Request) bool {
 
 // StartTLS states on IMAP STARTTLS command
 // that current connection is already encrypted.
-func (s *service) StartTLS(c *imap.Connection, req *imap.Request) bool {
+func (s *service) StartTLS(c *Connection, req *imap.Request) bool {
 
 	if len(req.Payload) > 0 {
 
@@ -446,13 +484,12 @@ func (s *service) StartTLS(c *imap.Connection, req *imap.Request) bool {
 // ProxySelect tunnels a received SELECT request by
 // an authorized client to the responsible worker or
 // storage node.
-func (s *service) ProxySelect(c *imap.Connection, rawReq string) bool {
+func (s *service) ProxySelect(c *Connection, rawReq string) bool {
 
 	// Send the request via gRPC.
-	resp, err := c.gRPCClient.Select(context.Background(), Command{
+	resp, err := c.gRPCClient.Select(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-		UserName: c.UserName,
 	})
 	if err != nil {
 		c.Error("failed to proxy SELECT", err)
@@ -472,13 +509,12 @@ func (s *service) ProxySelect(c *imap.Connection, rawReq string) bool {
 // ProxyCreate tunnels a received CREATE request by
 // an authorized client to the responsible worker or
 // storage node.
-func (s *service) ProxyCreate(c *imap.Connection, rawReq string) bool {
+func (s *service) ProxyCreate(c *Connection, rawReq string) bool {
 
 	// Send the request via gRPC.
-	resp, err := c.gRPCClient.Create(context.Background(), Command{
+	resp, err := c.gRPCClient.Create(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-		UserName: c.UserName,
 	})
 	if err != nil {
 		c.Error("failed to proxy CREATE", err)
@@ -498,13 +534,12 @@ func (s *service) ProxyCreate(c *imap.Connection, rawReq string) bool {
 // ProxyDelete tunnels a received DELETE request by
 // an authorized client to the responsible worker or
 // storage node.
-func (s *service) ProxyDelete(c *imap.Connection, rawReq string) bool {
+func (s *service) ProxyDelete(c *Connection, rawReq string) bool {
 
 	// Send the request via gRPC.
-	resp, err := c.gRPCClient.Delete(context.Background(), Command{
+	resp, err := c.gRPCClient.Delete(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-		UserName: c.UserName,
 	})
 	if err != nil {
 		c.Error("failed to proxy DELETE", err)
@@ -524,13 +559,12 @@ func (s *service) ProxyDelete(c *imap.Connection, rawReq string) bool {
 // ProxyList tunnels a received LIST request by
 // an authorized client to the responsible worker or
 // storage node.
-func (s *service) ProxyList(c *imap.Connection, rawReq string) bool {
+func (s *service) ProxyList(c *Connection, rawReq string) bool {
 
 	// Send the request via gRPC.
-	resp, err := c.gRPCClient.List(context.Background(), Command{
+	resp, err := c.gRPCClient.List(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-		UserName: c.UserName,
 	})
 	if err != nil {
 		c.Error("failed to proxy LIST", err)
@@ -550,50 +584,45 @@ func (s *service) ProxyList(c *imap.Connection, rawReq string) bool {
 // ProxyAppend tunnels a received APPEND request by
 // an authorized client to the responsible worker or
 // storage node.
-func (s *service) ProxyAppend(c *imap.Connection, rawReq string) bool {
+func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 
-	// Send the initial request via gRPC.
-	resp, err := c.gRPCClient.Append(context.Background(), Command{
+	// Send the begin part of the APPEND request via gRPC.
+	await, err := c.gRPCClient.AppendBegin(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-		UserName: c.UserName,
 	})
 	if err != nil {
-		c.Error("failed to proxy IMAP part of APPEND", err)
+		c.Error("failed to proxy begin part of APPEND command", err)
 		return false
 	}
 
 	// Pass on either error or continuation response to client.
-	err = c.Send(true, resp.Text)
+	err = c.Send(true, await.Text)
 	if err != nil {
-		c.Error("error while sending APPEND answer to client", err)
+		c.Error("error while sending beginning APPEND answer to client", err)
 		return false
 	}
 
 	// Check if seen response was no continuation response.
 	// In such case, simply return as this function is done here.
-	if resp.Text != "+ Ready for literal data" {
+	if await.Text != "+ Ready for literal data" {
 		return true
 	}
 
 	// Reserve space for exact amount of expected data.
-	msgBuffer := make([]byte, resp.IsAppend.AwaitedNumBytes)
+	msgBuffer := make([]byte, await.NumBytes)
 
 	// Read in that amount from connection to client.
 	_, err = io.ReadFull(c.IncReader, msgBuffer)
 	if err != nil {
-		c.Error("Encountered error while reading client literal data", err)
+		c.Error("encountered error while reading client literal data", err)
 		return false
 	}
 
-	// Send the request via gRPC.
-	resp, err = c.gRPCClient.Append(context.Background(), Command{
-		Text:     rawReq,
+	// Send the end part of APPEND request via gRPC.
+	resp, err := c.gRPCClient.AppendEnd(context.Background(), &imap.MailFile{
+		Content:  msgBuffer,
 		ClientID: c.ClientID,
-		UserName: c.UserName,
-		HasMsg: *Command_Message{
-			Content: msgBuffer,
-		},
 	})
 	if err != nil {
 		c.Error("failed to proxy message contained in APPEND", err)
@@ -613,13 +642,12 @@ func (s *service) ProxyAppend(c *imap.Connection, rawReq string) bool {
 // ProxyExpunge tunnels a received EXPUNGE request by
 // an authorized client to the responsible worker or
 // storage node.
-func (s *service) ProxyExpunge(c *imap.Connection, rawReq string) bool {
+func (s *service) ProxyExpunge(c *Connection, rawReq string) bool {
 
 	// Send the request via gRPC.
-	resp, err := c.gRPCClient.Expunge(context.Background(), Command{
+	resp, err := c.gRPCClient.Expunge(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-		UserName: c.UserName,
 	})
 	if err != nil {
 		c.Error("failed to proxy EXPUNGE", err)
@@ -639,13 +667,12 @@ func (s *service) ProxyExpunge(c *imap.Connection, rawReq string) bool {
 // ProxyStore tunnels a received STORE request by
 // an authorized client to the responsible worker or
 // storage node.
-func (s *service) ProxyStore(c *imap.Connection, rawReq string) bool {
+func (s *service) ProxyStore(c *Connection, rawReq string) bool {
 
 	// Send the request via gRPC.
-	resp, err := c.gRPCClient.Store(context.Background(), Command{
+	resp, err := c.gRPCClient.Store(context.Background(), &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-		UserName: c.UserName,
 	})
 	if err != nil {
 		c.Error("failed to proxy STORE", err)

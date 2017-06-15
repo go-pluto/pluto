@@ -7,11 +7,15 @@ import (
 	"github.com/numbleroot/pluto/imap"
 )
 
+// Structs
+
 type metricsService struct {
 	service Service
 	logins  metrics.Counter
 	logouts metrics.Counter
 }
+
+// Functions
 
 // NewMetricsService wraps a provided existing
 // service with defined Prometheus metrics.
