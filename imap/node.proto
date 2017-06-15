@@ -23,11 +23,13 @@ message Reply {
 }
 
 message Await {
-    uint32 numBytes = 1;
+    string text = 1;
+    uint32 numBytes = 2;
 }
 
 message MailFile {
     bytes content = 1;
+    string clientID = 2;
 }
 
 service Node {

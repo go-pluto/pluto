@@ -1,5 +1,7 @@
 package imap
 
+import "github.com/numbleroot/maildir"
+
 // Constants
 
 // Integer counter for IMAP states.
@@ -21,12 +23,21 @@ type State int
 // and performing the actual IMAP operations for an
 // authenticated client.
 type Session struct {
-	State            State
-	ClientID         string
-	UserName         string
-	RespWorker       string
-	UserCRDTPath     string
-	UserMaildirPath  string
-	SelectedMailbox  string
-	AppendInProgress bool
+	State           State
+	ClientID        string
+	UserName        string
+	RespWorker      string
+	UserCRDTPath    string
+	UserMaildirPath string
+	SelectedMailbox string
+	AppendInProg    *AppendInProg
+}
+
+// AppendInProg captures the important environment
+// characteristics handed from AppendBegin to AppendEnd.
+type AppendInProg struct {
+	Mailbox     string
+	FlagsRaw    string
+	DateTimeRaw string
+	AppMaildir  maildir.Dir
 }
