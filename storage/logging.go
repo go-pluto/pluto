@@ -1,8 +1,6 @@
 package storage
 
 import (
-	"net"
-
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/numbleroot/pluto/comm"
@@ -109,7 +107,7 @@ func (s *loggingService) Select(ctx context.Context, comd *imap.Command) (*imap.
 // with added logging capabilities.
 func (s *loggingService) Create(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	reply, err := s.service.Create(ctx, req)
+	reply, err := s.service.Create(ctx, comd)
 
 	logger := log.With(s.logger,
 		"method", "CREATE",
@@ -129,7 +127,7 @@ func (s *loggingService) Create(ctx context.Context, comd *imap.Command) (*imap.
 // with added logging capabilities.
 func (s *loggingService) Delete(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	reply, err := s.service.Delete(ctx, req)
+	reply, err := s.service.Delete(ctx, comd)
 
 	logger := log.With(s.logger,
 		"method", "DELETE",
@@ -149,7 +147,7 @@ func (s *loggingService) Delete(ctx context.Context, comd *imap.Command) (*imap.
 // with added logging capabilities.
 func (s *loggingService) List(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	reply, err := s.service.List(ctx, req)
+	reply, err := s.service.List(ctx, comd)
 
 	logger := log.With(s.logger,
 		"method", "LIST",
@@ -208,7 +206,7 @@ func (s *loggingService) AppendEnd(ctx context.Context, mailFile *imap.MailFile)
 // with added logging capabilities.
 func (s *loggingService) Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	reply, err := s.service.Expunge(ctx, req)
+	reply, err := s.service.Expunge(ctx, comd)
 
 	logger := log.With(s.logger,
 		"method", "EXPUNGE",
@@ -228,7 +226,7 @@ func (s *loggingService) Expunge(ctx context.Context, comd *imap.Command) (*imap
 // with added logging capabilities.
 func (s *loggingService) Store(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
-	reply, err := s.service.Store(ctx, req)
+	reply, err := s.service.Store(ctx, comd)
 
 	logger := log.With(s.logger,
 		"method", "STORE",

@@ -1,9 +1,7 @@
 package worker
 
 import (
-	"bufio"
 	"fmt"
-	"net"
 	"os"
 	"sync"
 
@@ -97,8 +95,8 @@ func NewService(tlsConfig *tls.Config, config config.Config, name string) Servic
 			Lock:               &sync.RWMutex{},
 			MailboxStructure:   make(map[string]map[string]*crdt.ORSet),
 			MailboxContents:    make(map[string]map[string][]string),
-			CRDTLayerRoot:      config.CRDTLayerRoot,
-			MaildirRoot:        config.MaildirRoot,
+			CRDTLayerRoot:      config.Workers[name].CRDTLayerRoot,
+			MaildirRoot:        config.Workers[name].MaildirRoot,
 			HierarchySeparator: config.IMAP.HierarchySeparator,
 		},
 		tlsConfig: tlsConfig,
