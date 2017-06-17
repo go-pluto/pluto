@@ -24,7 +24,8 @@ message Reply {
 
 message Await {
     string text = 1;
-    uint32 numBytes = 2;
+    uint32 status = 2;
+    uint32 numBytes = 3;
 }
 
 message MailFile {

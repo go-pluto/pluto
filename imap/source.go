@@ -633,6 +633,8 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 // prior AppendBegin.
 func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.Msg) (*Reply, error) {
 
+	// TODO: Check if APPEND even in progress for this node.
+
 	defer node.Lock.Unlock()
 
 	// Open a new Maildir delivery.
