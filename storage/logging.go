@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"net"
+
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/numbleroot/pluto/comm"
@@ -37,6 +39,12 @@ func (s *loggingService) Init(syncSendChans map[string]chan comm.Msg) error {
 // method with added logging capabilities.
 func (s *loggingService) ApplyCRDTUpd(applyCRDTUpd chan comm.Msg, doneCRDTUpd chan struct{}) {
 	s.service.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
+}
+
+// Serve wraps this service's Serve
+// method with added logging capabilities.
+func (s *loggingService) Serve(socket net.Listener) error {
+	return s.service.Serve(socket)
 }
 
 // Prepare wraps this service's Prepare method

@@ -115,7 +115,7 @@ func (sender *Sender) TestGRPC(msg *Msg) error {
 		return errors.Wrap(err, "[TEST 2]")
 	}
 
-	sender.logger.Log("msg", fmt.Sprintf("connection to server closed with: '%#v'", closed))
+	level.Info(sender.logger).Log("msg", fmt.Sprintf("connection to server closed with: '%#v'", closed))
 
 	return nil
 }

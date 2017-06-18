@@ -213,7 +213,7 @@ func main() {
 		}
 
 		var distrS distributor.Service
-		distrS = distributor.NewService(auther, intlTLSConfig, conf.Workers)
+		distrS = distributor.NewService(logger, auther, intlTLSConfig, conf.Workers)
 		distrS = distributor.NewLoggingService(distrS, logger)
 		distrS = distributor.NewMetricsService(distrS, plutoMetrics.Distributor.Logins, plutoMetrics.Distributor.Logouts)
 
@@ -337,7 +337,7 @@ func main() {
 		defer mailSocket.Close()
 
 		// Run main handler routine on gRPC-served IMAP socket.
-		err = workerS.IMAPNodeGRPC.Serve(mailSocket)
+		err = workerS.Serve(mailSocket)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", fmt.Sprintf("failed to run Serve() on IMAP gRPC socket of %s", *workerFlag),
@@ -449,7 +449,7 @@ func main() {
 		defer mailSocket.Close()
 
 		// Run main handler routine on gRPC-served IMAP socket.
-		err = storageS.IMAPNodeGRPC.Serve(mailSocket)
+		err = storageS.Serve(mailSocket)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to run Serve() on IMAP gRPC socket of storage",

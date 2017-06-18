@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"sync"
 
@@ -39,6 +40,9 @@ type Service interface {
 	// ApplyCRDTUpd receives strings representing CRDT
 	// update operations from receiver and executes them.
 	ApplyCRDTUpd(applyCRDTUpd chan comm.Msg, doneCRDTUpd chan struct{})
+
+	// Serve invokes the main gRPC Serve() function.
+	Serve(socket net.Listener) error
 
 	// Prepare initializes context for an upcoming client
 	// connection on this node.
@@ -87,7 +91,7 @@ type Service interface {
 // NewService takes in all required parameters for spinning
 // up a new storage node, runs initialization code, and returns
 // a service struct for this node type wrapping all information.
-func NewService(tlsConfig *tls.Config, config config.Config, workers map[string]config.Worker) Service {
+func NewService(tlsConfig *tls.Config, config *config.Config, workers map[string]config.Worker) Service {
 
 	return &service{
 		imapNode: &imap.IMAPNode{
@@ -200,6 +204,11 @@ func (s *service) ApplyCRDTUpd(applyCRDTUpd chan comm.Msg, doneCRDTUpd chan stru
 	s.imapNode.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
 }
 
+// Serve invokes the main gRPC Serve() function.
+func (s *service) Serve(socket net.Listener) error {
+	return s.IMAPNodeGRPC.Serve(socket)
+}
+
 // Prepare initializes context for an upcoming client
 // connection on this node.
 func (s *service) Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.Confirmation, error) {
@@ -249,18 +258,15 @@ func (s *service) Select(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
-		sess.Error("error while parsing request in SELECT", err)
-		return nil, err
+		return &imap.Reply{
+			Status: 1,
+		}, err
 	}
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.Select(sess, req, syncChan)
-	if err != nil {
-		sess.Error("failed to complete IMAP handler for SELECT", err)
-		return nil, err
-	}
 
-	return reply, nil
+	return reply, err
 }
 
 // Create attempts to create a mailbox with
@@ -280,18 +286,15 @@ func (s *service) Create(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
-		sess.Error("error while parsing request in CREATE", err)
-		return nil, err
+		return &imap.Reply{
+			Status: 1,
+		}, err
 	}
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.Create(sess, req, syncChan)
-	if err != nil {
-		sess.Error("failed to complete IMAP handler for CREATE", err)
-		return nil, err
-	}
 
-	return reply, nil
+	return reply, err
 }
 
 // Delete an existing mailbox with all included content.
@@ -310,18 +313,15 @@ func (s *service) Delete(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
-		sess.Error("error while parsing request in DELETE", err)
-		return nil, err
+		return &imap.Reply{
+			Status: 1,
+		}, err
 	}
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.Delete(sess, req, syncChan)
-	if err != nil {
-		sess.Error("failed to complete IMAP handler for DELETE", err)
-		return nil, err
-	}
 
-	return reply, nil
+	return reply, err
 }
 
 // List allows clients to learn about the mailboxes
@@ -341,18 +341,15 @@ func (s *service) List(ctx context.Context, comd *imap.Command) (*imap.Reply, er
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
-		sess.Error("error while parsing request in LIST", err)
-		return nil, err
+		return &imap.Reply{
+			Status: 1,
+		}, err
 	}
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.List(sess, req, syncChan)
-	if err != nil {
-		sess.Error("failed to complete IMAP handler for LIST", err)
-		return nil, err
-	}
 
-	return reply, nil
+	return reply, err
 }
 
 // AppendBegin checks environment conditions and returns
@@ -365,25 +362,18 @@ func (s *service) AppendBegin(ctx context.Context, comd *imap.Command) (*imap.Aw
 	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
 
-	// Retrieve correct channel to send downstream
-	// updates from this node to.
-	syncChan := s.SyncSendChans[sess.RespWorker]
-
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
-		sess.Error("error while parsing request in begin message of APPEND", err)
-		return nil, err
+		return &imap.Await{
+			Status: 1,
+		}, err
 	}
 
 	// Forward gathered info to IMAP function.
 	await, err := s.imapNode.AppendBegin(sess, req)
-	if err != nil {
-		sess.Error("failed to complete IMAP handler for begin message APPEND", err)
-		return nil, err
-	}
 
-	return await, nil
+	return await, err
 }
 
 // AppendEnd receives the mail file associated with a
@@ -402,12 +392,8 @@ func (s *service) AppendEnd(ctx context.Context, mailFile *imap.MailFile) (*imap
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.AppendEnd(sess, mailFile.Content, syncChan)
-	if err != nil {
-		sess.Error("failed to complete IMAP handler for end message of APPEND", err)
-		return nil, err
-	}
 
-	return reply, nil
+	return reply, err
 }
 
 // Expunge deletes messages permanently from currently
@@ -428,18 +414,15 @@ func (s *service) Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply,
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
-		sess.Error("error while parsing request in EXPUNGE", err)
-		return nil, err
+		return &imap.Reply{
+			Status: 1,
+		}, err
 	}
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.Expunge(sess, req, syncChan)
-	if err != nil {
-		sess.Error("failed to complete IMAP handler for EXPUNGE", err)
-		return nil, err
-	}
 
-	return reply, nil
+	return reply, err
 }
 
 // Store takes in message sequence numbers and some set
@@ -460,16 +443,13 @@ func (s *service) Store(ctx context.Context, comd *imap.Command) (*imap.Reply, e
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
-		sess.Error("error while parsing request in STORE", err)
-		return nil, err
+		return &imap.Reply{
+			Status: 1,
+		}, err
 	}
 
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.Store(sess, req, syncChan)
-	if err != nil {
-		sess.Error("failed to complete IMAP handler for STORE", err)
-		return nil, err
-	}
 
-	return reply, nil
+	return reply, err
 }

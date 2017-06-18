@@ -641,9 +641,16 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 		Text:     rawReq,
 		ClientID: c.ClientID,
 	})
-	if err != nil {
+	if (err != nil) || (await.Status != 0) {
+
 		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying begin part of APPEND to internal node %s: %v", c.RespWorker, err))
+
+		if err != nil {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying begin part of APPEND to internal node %s: %v", c.RespWorker, err))
+		} else if await.Status != 0 {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying begin part of APPEND to internal node %s returned error", c.RespWorker))
+		}
+
 		return false
 	}
 
