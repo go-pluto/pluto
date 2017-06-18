@@ -1,4 +1,4 @@
-.PHONY: all clean build docker pki test-pki test-public test
+.PHONY: all clean build docker pki test-pki test-public test destroy-test-env
 
 PACKAGES = $(shell go list ./... | grep -v /vendor/)
 
@@ -44,13 +44,15 @@ test-public:
 	go clean
 	rm -f generate_cert.go
 
-test:
-	echo "mode: atomic" > coverage.out;
-	@echo ""
-	if [ -d "private/Maildirs" ]; then rm -rf private/Maildirs; fi
-	if [ -d "private/crdt-layers" ]; then rm -rf private/crdt-layers; fi
+test: destroy-test-env
+	@echo "mode: atomic" > coverage.out;
 	@echo ""
 	@for PKG in $(PACKAGES); do \
 		go test -v -race -coverprofile $${GOPATH}/src/$${PKG}/coverage-package.out -covermode=atomic $${PKG} || exit 1; \
 		test ! -f $${GOPATH}/src/$${PKG}/coverage-package.out || (cat $${GOPATH}/src/$${PKG}/coverage-package.out | grep -v mode: | sort -r >> coverage.out); \
 	done
+
+destroy-test-env:
+	@echo ""
+	if [ -d "private/Maildirs" ]; then rm -rf private/Maildirs; fi
+	if [ -d "private/crdt-layers" ]; then rm -rf private/crdt-layers; fi

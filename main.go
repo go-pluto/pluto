@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"runtime"
 	"strings"
@@ -267,10 +268,10 @@ func main() {
 		workerS = worker.NewLoggingService(workerS, logger)
 
 		// Create needed synchronization socket used by gRPC.
-		syncSocket, err := tls.Listen("tcp", workerConfig.ListenSyncAddr, tlsConfig)
+		syncSocket, err := net.Listen("tcp", workerConfig.ListenSyncAddr) //, tlsConfig)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", fmt.Sprintf("failed to listen for synchronization TLS connections on %s", *workerFlag),
+				"msg", fmt.Sprintf("failed to open synchronization socket on %s", *workerFlag),
 				"err", err,
 			)
 			os.Exit(1)
@@ -326,10 +327,10 @@ func main() {
 		}
 
 		// Create socket for gRPC IMAP connections.
-		mailSocket, err := tls.Listen("tcp", workerConfig.ListenMailAddr, tlsConfig)
+		mailSocket, err := net.Listen("tcp", workerConfig.ListenMailAddr) //, tlsConfig)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", fmt.Sprintf("failed to listen for mail TLS connections on %s", *workerFlag),
+				"msg", fmt.Sprintf("failed to open socket for proxied mail traffic on %s", *workerFlag),
 				"err", err,
 			)
 			os.Exit(1)
@@ -365,10 +366,10 @@ func main() {
 		storageS = storage.NewLoggingService(storageS, logger)
 
 		// Create needed synchronization socket used by gRPC.
-		syncSocket, err := tls.Listen("tcp", conf.Storage.ListenSyncAddr, tlsConfig)
+		syncSocket, err := net.Listen("tcp", conf.Storage.ListenSyncAddr) //, tlsConfig)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to listen for synchronization TLS connections on storage",
+				"msg", "failed to open synchronization socket on storage",
 				"err", err,
 			)
 			os.Exit(1)
@@ -442,10 +443,10 @@ func main() {
 		}
 
 		// Create socket for gRPC IMAP connections.
-		mailSocket, err := tls.Listen("tcp", conf.Storage.ListenMailAddr, tlsConfig)
+		mailSocket, err := net.Listen("tcp", conf.Storage.ListenMailAddr) //, tlsConfig)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to listen for mail TLS connections on storage",
+				"msg", "failed to open socket for proxied mail traffic on storage",
 				"err", err,
 			)
 			os.Exit(1)
