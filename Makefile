@@ -1,7 +1,6 @@
-.PHONY: all clean deps build pki test-pki test-public test destroy-test-env setup-test-env exec-tests
+.PHONY: all clean build docker pki test-pki test-public test
 
 PACKAGES = $(shell go list ./... | grep -v /vendor/)
-NUM_USERS := 9
 
 all: clean build
 
@@ -45,44 +44,13 @@ test-public:
 	go clean
 	rm -f generate_cert.go
 
-test: destroy-test-env setup-test-env exec-tests
-
-destroy-test-env:
+test:
+	echo "mode: atomic" > coverage.out;
 	@echo ""
 	if [ -d "private/Maildirs" ]; then rm -rf private/Maildirs; fi
 	if [ -d "private/crdt-layers" ]; then rm -rf private/crdt-layers; fi
-
-setup-test-env:
-	@echo ""
-	echo "mode: atomic" > coverage.out;
-	if [ ! -d "private" ]; then mkdir private; fi
-	chmod 0700 private
-	if [ ! -d "private/Maildirs/worker-1" ]; then mkdir -p private/Maildirs/worker-1; fi
-	@for i in `seq 0 ${NUM_USERS}`; do if [ ! -d "private/Maildirs/worker-1/user$${i}/new" ]; then mkdir -p private/Maildirs/worker-1/user$${i}/new; fi; done
-	@for i in `seq 0 ${NUM_USERS}`; do if [ ! -d "private/Maildirs/worker-1/user$${i}/tmp" ]; then mkdir -p private/Maildirs/worker-1/user$${i}/tmp; fi; done
-	@for i in `seq 0 ${NUM_USERS}`; do if [ ! -d "private/Maildirs/worker-1/user$${i}/cur" ]; then mkdir -p private/Maildirs/worker-1/user$${i}/cur; fi; done
-	if [ ! -d "private/Maildirs/storage" ]; then mkdir -p private/Maildirs/storage; fi
-	@for i in `seq 0 ${NUM_USERS}`; do if [ ! -d "private/Maildirs/storage/user$${i}/new" ]; then mkdir -p private/Maildirs/storage/user$${i}/new; fi; done
-	@for i in `seq 0 ${NUM_USERS}`; do if [ ! -d "private/Maildirs/storage/user$${i}/tmp" ]; then mkdir -p private/Maildirs/storage/user$${i}/tmp; fi; done
-	@for i in `seq 0 ${NUM_USERS}`; do if [ ! -d "private/Maildirs/storage/user$${i}/cur" ]; then mkdir -p private/Maildirs/storage/user$${i}/cur; fi; done
-	chmod -R 0700 private/Maildirs/*
-	if [ ! -d "private/crdt-layers/worker-1" ]; then mkdir -p private/crdt-layers/worker-1; fi
-	@for i in `seq 0 ${NUM_USERS}`; do \
-		if [ ! -d "private/crdt-layers/worker-1/user$${i}" ]; then mkdir -p private/crdt-layers/worker-1/user$${i}; fi; \
-		if [ ! -f "private/crdt-layers/worker-1/user$${i}/mailbox-structure.log" ]; then touch private/crdt-layers/worker-1/user$${i}/mailbox-structure.log && echo "SU5CT1g=;aa$${i}cc488-7469-4984-8f88-27adc426ab6a" > private/crdt-layers/worker-1/user$${i}/mailbox-structure.log; fi; \
-		if [ ! -f "private/crdt-layers/worker-1/user$${i}/INBOX.log" ]; then touch private/crdt-layers/worker-1/user$${i}/INBOX.log; fi; \
-	done
-	if [ ! -d "private/crdt-layers/storage" ]; then mkdir -p private/crdt-layers/storage; fi
-	@for i in `seq 0 ${NUM_USERS}`; do \
-		if [ ! -d "private/crdt-layers/storage/user$${i}" ]; then mkdir -p private/crdt-layers/storage/user$${i}; fi; \
-		if [ ! -f "private/crdt-layers/storage/user$${i}/mailbox-structure.log" ]; then touch private/crdt-layers/storage/user$${i}/mailbox-structure.log && echo "SU5CT1g=;bb$${i}cc488-7469-4984-8f88-27adc426ab6a" > private/crdt-layers/storage/user$${i}/mailbox-structure.log; fi; \
-		if [ ! -f "private/crdt-layers/storage/user$${i}/INBOX.log" ]; then touch private/crdt-layers/storage/user$${i}/INBOX.log; fi; \
-	done
-
-exec-tests:
 	@echo ""
 	@for PKG in $(PACKAGES); do \
 		go test -v -race -coverprofile $${GOPATH}/src/$${PKG}/coverage-package.out -covermode=atomic $${PKG} || exit 1; \
 		test ! -f $${GOPATH}/src/$${PKG}/coverage-package.out || (cat $${GOPATH}/src/$${PKG}/coverage-package.out | grep -v mode: | sort -r >> coverage.out); \
 	done
-	@echo ""

@@ -336,6 +336,10 @@ func main() {
 		}
 		defer mailSocket.Close()
 
+		level.Info(logger).Log(
+			"msg", fmt.Sprintf("%s (%s) is accepting proxied mail connections at %s", *workerFlag, workerConfig.ListenMailAddr, workerConfig.PublicMailAddr),
+		)
+
 		// Run main handler routine on gRPC-served IMAP socket.
 		err = workerS.Serve(mailSocket)
 		if err != nil {
@@ -447,6 +451,10 @@ func main() {
 			os.Exit(1)
 		}
 		defer mailSocket.Close()
+
+		level.Info(logger).Log(
+			"msg", fmt.Sprintf("storage (%s) is accepting proxied mail connections at %s", conf.Storage.ListenMailAddr, conf.Storage.PublicMailAddr),
+		)
 
 		// Run main handler routine on gRPC-served IMAP socket.
 		err = storageS.Serve(mailSocket)

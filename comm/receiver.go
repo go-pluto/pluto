@@ -143,7 +143,7 @@ func (recv *Receiver) StartGRPCRecv() error {
 	RegisterReceiverServer(grpcRecv, recv)
 
 	level.Info(recv.logger).Log(
-		"msg", fmt.Sprintf("receiver is accepting CRDT sync connections at %s", recv.socket.Addr()),
+		"msg", fmt.Sprintf("receiver at %s is accepting CRDT sync connections at %s", recv.name, recv.socket.Addr()),
 	)
 
 	// Run server.
