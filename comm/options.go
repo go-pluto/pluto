@@ -17,14 +17,10 @@ var maxMsgSize int = 268437504
 
 // ReceiverOptions returns a list of gRPC server
 // options that the internal receiver uses for RPCs.
-func ReceiverOptions(tlsConfig *tls.Config, interceptor grpc.UnaryServerInterceptor) []grpc.ServerOption {
+func ReceiverOptions(tlsConfig *tls.Config) []grpc.ServerOption {
 
 	// Use pluto-internal TLS config for credentials.
 	creds := credentials.NewTLS(tlsConfig)
-
-	// Use the custom NoOp codec that simply passes
-	// through received binary messages.
-	codec := NoOpCodec{}
 
 	// Use GZIP for compression and decompression.
 	comp := grpc.NewGZIPCompressor()
@@ -55,10 +51,8 @@ func ReceiverOptions(tlsConfig *tls.Config, interceptor grpc.UnaryServerIntercep
 
 	return []grpc.ServerOption{
 		grpc.Creds(creds),
-		grpc.CustomCodec(codec),
 		grpc.RPCCompressor(comp),
 		grpc.RPCDecompressor(decomp),
-		grpc.UnaryInterceptor(interceptor),
 		grpc.MaxRecvMsgSize(maxMsgSize),
 		grpc.MaxSendMsgSize(maxMsgSize),
 		grpc.KeepaliveParams(kaParams),
@@ -70,10 +64,6 @@ func ReceiverOptions(tlsConfig *tls.Config, interceptor grpc.UnaryServerIntercep
 // SenderOptions defines gRPC options for connection
 // attempts from a sender to a receiver.
 func SenderOptions(tlsConfig *tls.Config) []grpc.DialOption {
-
-	// Use the custom NoOp codec that simply passes
-	// through received binary messages.
-	codec := NoOpCodec{}
 
 	// Use GZIP for compression and decompression.
 	comp := grpc.NewGZIPCompressor()
@@ -114,7 +104,6 @@ func SenderOptions(tlsConfig *tls.Config) []grpc.DialOption {
 	creds := credentials.NewTLS(tlsConfig)
 
 	return []grpc.DialOption{
-		grpc.WithCodec(codec),
 		grpc.WithCompressor(comp),
 		grpc.WithDecompressor(decomp),
 		// grpc.WithBackoffConfig(boff),

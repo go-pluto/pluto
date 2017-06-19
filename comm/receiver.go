@@ -136,7 +136,7 @@ func InitReceiver(logger log.Logger, name string, logFilePath string, vclockLogP
 func (recv *Receiver) StartGRPCRecv() error {
 
 	// Define options for an empty gRPC server.
-	options := ReceiverOptions(recv.tlsConfig, recv.IncomingInt)
+	options := ReceiverOptions(recv.tlsConfig)
 	grpcRecv := grpc.NewServer(options...)
 
 	// Register the empty server on fulfilling interface.
@@ -180,25 +180,25 @@ func (recv *Receiver) TriggerMsgApplier() {
 	}
 }
 
-func (recv *Receiver) IncomingInt(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, noOpHdlr grpc.UnaryHandler) (interface{}, error) {
+// Incoming is the main handler for CRDT downstream synchronization
+// messages reaching a receiver. It accepts transported binary messages
+// and writes their content to the designted receiving log file. Finally,
+// a trigger is sent to the application routine.
+func (recv *Receiver) Incoming(ctx context.Context, binMsg *BinMsg) (*Conf, error) {
 
-	recv.logger.Log("msg", "[TODO] intercepting message...")
-	// Make sure we are receiving a slice of bytes.
-	msg, ok := req.([]byte)
-	if !ok {
-		return nil, fmt.Errorf("incoming gRPC message could not asserted to be []byte")
-	}
-	recv.logger.Log("msg", fmt.Sprintf("[TODO] intercepted msg: '%#v'", msg))
-
-	recv.logger.Log("msg", fmt.Sprintf("[TODO] BEFORE incoming with newline: len: %d, '%#v', lastbyte: '%#v'", len(msg), msg, msg[(len(msg)-1)]))
-	msg = append(msg, '\n')
-	recv.logger.Log("msg", fmt.Sprintf("[TODO] AFTER incoming with newline: len: %d, '%#v', lastbyte: '%#v'", len(msg), msg, msg[(len(msg)-1)]))
+	level.Info(recv.logger).Log("msg", fmt.Sprintf("[TODO] INCOMING BINMSG: '%#v'", binMsg))
 
 	// Lock mutex.
 	recv.lock.Lock()
 
 	// Write it to message log file.
-	_, err := recv.writeLog.Write(msg)
+	_, err := recv.writeLog.Write(binMsg.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	// Append newline character to just written message.
+	_, err = recv.writeLog.Write([]byte("\n"))
 	if err != nil {
 		return nil, err
 	}
@@ -218,14 +218,9 @@ func (recv *Receiver) IncomingInt(ctx context.Context, req interface{}, info *gr
 		recv.msgInLog <- struct{}{}
 	}
 
-	return noOpHdlr(ctx, req)
-}
-
-func (recv *Receiver) Incoming(ctx context.Context, msg *Msg) (*Closed, error) {
-
-	recv.logger.Log("msg", "[TODO] unary gRPC handler on Incoming() called")
-
-	return nil, nil
+	return &Conf{
+		Status: 0,
+	}, nil
 }
 
 // ApplyStoredMsgs waits for a signal on a channel that
@@ -320,6 +315,12 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			// Save length of just read message for later use.
 			msgRawLength := int64(len(msgRaw))
 
+			level.Info(recv.logger).Log("msg", fmt.Sprintf("[TODO] BEFORE last byte msgRaw: '%#v': '%s'", msgRaw[(len(msgRaw)-1)], msgRaw[(len(msgRaw)-1)]))
+			level.Info(recv.logger).Log("msg", fmt.Sprintf("[TODO] BEFORE msgRaw (%d): '%#v'", len(msgRaw), msgRaw))
+			msgRaw = msgRaw[:(len(msgRaw) - 1)]
+			level.Info(recv.logger).Log("msg", fmt.Sprintf("[TODO] AFTER last byte msgRaw: '%#v': '%s'", msgRaw[(len(msgRaw)-1)], msgRaw[(len(msgRaw)-1)]))
+			level.Info(recv.logger).Log("msg", fmt.Sprintf("[TODO] AFTER msgRaw (%d): '%#v'", len(msgRaw), msgRaw))
+
 			// Unmarshal read ProtoBuf into defined Msg struct.
 			msg := &Msg{}
 			err = proto.Unmarshal(msgRaw, msg)
@@ -327,6 +328,8 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to unmarshal read ProtoBuf into defined Msg struct: %v", err))
 				os.Exit(1)
 			}
+
+			level.Info(recv.logger).Log("msg", fmt.Sprintf("[TODO] Unmarshalled Msg: '%#v'", msg))
 
 			// Initially, set apply indicator to true. This means,
 			// that the message would be considered for further parsing.
@@ -359,10 +362,14 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			// parsed message. We therefore cycle to the next message.
 			if applyMsg {
 
+				level.Info(recv.logger).Log("msg", "[TODO] A")
+
 				// If this message is actually the next expected one,
 				// process its contents with CRDT logic. This ensures
 				// that message duplicates will get purged but not applied.
 				if msg.Vclock[msg.Replica] == (recv.vclock[msg.Replica] + 1) {
+
+					level.Info(recv.logger).Log("msg", "[TODO] B (REALLY APPLY)")
 
 					// Pass payload for higher-level interpretation
 					// to channel connected to node.
@@ -371,6 +378,8 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					// Wait for done signal from node.
 					<-recv.doneCRDTUpdChan
 				}
+
+				level.Info(recv.logger).Log("msg", "[TODO] C")
 
 				for node, value := range msg.Vclock {
 

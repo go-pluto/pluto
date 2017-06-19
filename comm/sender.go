@@ -12,7 +12,6 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -76,16 +75,6 @@ func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *t
 	// Prepare gRPC call options for later use.
 	sender.gRPCOptions = SenderOptions(sender.tlsConfig)
 
-	if name == "worker-1" {
-
-		if err := sender.TestGRPC(&Msg{
-			Operation: "ROFL",
-		}); err != nil {
-			sender.logger.Log("msg", fmt.Sprintf("gRPC test failed: '%#v'", err))
-			os.Exit(1)
-		}
-	}
-
 	// Start brokering routine in background.
 	go sender.BrokerMsgs()
 
@@ -100,26 +89,6 @@ func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *t
 	return sender.inc, nil
 }
 
-func (sender *Sender) TestGRPC(msg *Msg) error {
-
-	conn, err := grpc.Dial(sender.nodes["storage"], sender.gRPCOptions...)
-	if err != nil {
-		return errors.Wrap(err, "[TEST 1]")
-	}
-	defer conn.Close()
-
-	client := NewReceiverClient(conn)
-
-	closed, err := client.Incoming(context.Background(), msg)
-	if err != nil {
-		return errors.Wrap(err, "[TEST 2]")
-	}
-
-	level.Info(sender.logger).Log("msg", fmt.Sprintf("connection to server closed with: '%#v'", closed))
-
-	return nil
-}
-
 // BrokerMsgs awaits a CRDT message to send to downstream
 // replicas from one of the local processes on channel inc.
 // It stores the message for sending in a dedicated CRDT log
@@ -127,6 +96,7 @@ func (sender *Sender) TestGRPC(msg *Msg) error {
 func (sender *Sender) BrokerMsgs() {
 
 	for {
+
 		// Receive CRDT payload to send to other nodes
 		// on incoming channel.
 		payload, ok := <-sender.inc
@@ -155,7 +125,7 @@ func (sender *Sender) BrokerMsgs() {
 			}
 			data = append(data, '\n')
 
-			sender.logger.Log("msg", fmt.Sprintf("[TODO] all bytes of marshalled msg: '%#v' (last: '%#v')\n\tString representation: '%s'", data, data[:(len(data)-1)], data))
+			level.Info(sender.logger).Log("msg", fmt.Sprintf("data: '%#v'", data))
 
 			// Write it to message log file.
 			_, err = sender.writeLog.Write(data)
@@ -255,11 +225,9 @@ func (sender *Sender) SendMsgs() {
 			payload = payload[:(len(payload) - 1)]
 			sender.logger.Log("msg", fmt.Sprintf("[TODO] AFTER newline remove: '%#v'", payload))
 
-			// Unmarshal stored ProtoBuf Msg into Msg struct.
-			msg := &Msg{}
-			if err := proto.Unmarshal(payload, msg); err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("failed to unmarshal stored ProtoBuf Msg into Msg struct: %v", err))
-				os.Exit(1)
+			// Prepare BinMsg to send to other nodes.
+			binMsg := &BinMsg{
+				Data: payload,
 			}
 
 			// TODO: Parallelize this loop?
@@ -276,12 +244,14 @@ func (sender *Sender) SendMsgs() {
 				// Create new gRPC client stub.
 				client := NewReceiverClient(conn)
 
-				// Send msg to downstream replica.
-				_, err = client.Incoming(context.Background(), msg)
+				// Send BinMsg to downstream replica.
+				conf, err := client.Incoming(context.Background(), binMsg)
 				if err != nil {
 					level.Error(sender.logger).Log("msg", fmt.Sprintf("could not send downstream message to replica %s: %v", node, err))
 					os.Exit(1)
 				}
+
+				level.Info(sender.logger).Log("msg", fmt.Sprintf("[TODO] ANSWER TO SYNC TRANSPORT: '%#v'", conf))
 			}
 
 			// Lock mutex.
