@@ -4,12 +4,17 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	stdlog "log"
 	"os"
-	"strings"
+	"strconv"
 	"sync"
 
 	"crypto/tls"
+
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 // Structs
@@ -17,20 +22,18 @@ import (
 // Sender bundles information needed for sending
 // out sync messages via CRDTs.
 type Sender struct {
-	lock            *sync.Mutex
-	name            string
-	tlsConfig       *tls.Config
-	intlConnTimeout int
-	intlConnRetry   int
-	inc             chan string
-	msgInLog        chan struct{}
-	writeLog        *os.File
-	updLog          *os.File
-	incVClock       chan string
-	updVClock       chan map[string]int
-	nodes           map[string]string
-	wg              *sync.WaitGroup
-	shutdown        chan struct{}
+	lock        *sync.Mutex
+	logger      log.Logger
+	name        string
+	tlsConfig   *tls.Config
+	gRPCOptions []grpc.DialOption
+	inc         chan Msg
+	msgInLog    chan struct{}
+	writeLog    *os.File
+	updLog      *os.File
+	incVClock   chan string
+	updVClock   chan map[string]uint32
+	nodes       map[string]string
 }
 
 // Functions
@@ -40,48 +43,43 @@ type Sender struct {
 // with. It returns a channel local processes can put
 // CRDT changes into, so that those changes will be
 // communicated to connected nodes.
-func InitSender(name string, logFilePath string, tlsConfig *tls.Config, timeout int, retry int, incVClock chan string, updVClock chan map[string]int, downSender chan struct{}, nodes map[string]string) (chan string, error) {
+func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *tls.Config, incVClock chan string, updVClock chan map[string]uint32, downSender chan struct{}, nodes map[string]string) (chan Msg, error) {
 
 	// Create and initialize what we need for
 	// a CRDT sender routine.
 	sender := &Sender{
-		lock:            new(sync.Mutex),
-		name:            name,
-		tlsConfig:       tlsConfig,
-		intlConnTimeout: timeout,
-		intlConnRetry:   retry,
-		inc:             make(chan string),
-		msgInLog:        make(chan struct{}, 1),
-		incVClock:       incVClock,
-		updVClock:       updVClock,
-		nodes:           nodes,
-		wg:              new(sync.WaitGroup),
-		shutdown:        make(chan struct{}, 2),
+		lock:      &sync.Mutex{},
+		logger:    logger,
+		name:      name,
+		tlsConfig: tlsConfig,
+		inc:       make(chan Msg),
+		msgInLog:  make(chan struct{}, 1),
+		incVClock: incVClock,
+		updVClock: updVClock,
+		nodes:     nodes,
 	}
 
 	// Open log file descriptor for writing.
 	write, err := os.OpenFile(logFilePath, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
 	if err != nil {
-		return nil, fmt.Errorf("[comm.InitSender] Opening CRDT log file for writing failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[comm.InitSender] Opening CRDT log file for writing failed with: %v", err)
 	}
 	sender.writeLog = write
 
 	// Open log file descriptor for updating.
 	upd, err := os.OpenFile(logFilePath, os.O_RDWR, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("[comm.InitSender] Opening CRDT log file for updating failed with: %s\n", err.Error())
+		return nil, fmt.Errorf("[comm.InitSender] Opening CRDT log file for updating failed with: %v", err)
 	}
 	sender.updLog = upd
 
-	// Start eventual shutdown routine in background.
-	go sender.Shutdown(downSender)
+	// Prepare gRPC call options for later use.
+	sender.gRPCOptions = SenderOptions(sender.tlsConfig)
 
 	// Start brokering routine in background.
-	sender.wg.Add(1)
 	go sender.BrokerMsgs()
 
 	// Start sending routine in background.
-	sender.wg.Add(1)
 	go sender.SendMsgs()
 
 	// If we just started the application, perform an
@@ -92,31 +90,6 @@ func InitSender(name string, logFilePath string, tlsConfig *tls.Config, timeout 
 	return sender.inc, nil
 }
 
-// Shutdown awaits a sender global shutdown signal and
-// in turn instructs involved goroutines to finish and
-// clean up open files.
-func (sender *Sender) Shutdown(downSender chan struct{}) {
-
-	// Wait for signal.
-	<-downSender
-
-	stdlog.Printf("[comm.Shutdown] sender: shutting down...\n")
-
-	// Instruct brokering and sending routine to shut down
-	// and clean up their respective file descriptors.
-	sender.shutdown <- struct{}{}
-	sender.shutdown <- struct{}{}
-
-	// Close involved channels.
-	close(sender.inc)
-	close(sender.msgInLog)
-
-	// Wait for both to indicate finish.
-	sender.wg.Wait()
-
-	stdlog.Printf("[comm.Shutdown] sender: done!\n")
-}
-
 // BrokerMsgs awaits a CRDT message to send to downstream
 // replicas from one of the local processes on channel inc.
 // It stores the message for sending in a dedicated CRDT log
@@ -125,58 +98,58 @@ func (sender *Sender) BrokerMsgs() {
 
 	for {
 
-		select {
+		// Receive CRDT payload to send to other nodes
+		// on incoming channel.
+		payload, ok := <-sender.inc
+		if ok {
 
-		// Check if a shutdown signal was sent.
-		case <-sender.shutdown:
-
-			// If so, close file handler.
+			// Lock mutex.
 			sender.lock.Lock()
-			sender.writeLog.Close()
+
+			// Set this replica's name as sending part.
+			payload.Replica = sender.name
+
+			// Send this replica's name on incVClock channel to
+			// request an increment of its vector clock value.
+			sender.incVClock <- sender.name
+
+			// Wait for updated vector clock to be sent back
+			// on other defined channel.
+			payload.Vclock = <-sender.updVClock
+
+			// Marshal message according to ProtoBuf specification
+			// and add a trailing newline symbol.
+			data, err := proto.Marshal(&payload)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("failed to marshal enriched downstream Msg to ProtoBuf: %v", err))
+				os.Exit(1)
+			}
+
+			// Prepend binary message with length in bytes.
+			// TODO: Make this fast?
+			data = append([]byte(fmt.Sprintf("%d;", len(data))), data...)
+
+			// Write it to message log file.
+			_, err = sender.writeLog.Write(data)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("writing to CRDT log file failed with: %v", err))
+				os.Exit(1)
+			}
+
+			// Save to stable storage.
+			err = sender.writeLog.Sync()
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("syncing CRDT log file to stable storage failed with: %v", err))
+				os.Exit(1)
+			}
+
+			// Unlock mutex.
 			sender.lock.Unlock()
 
-			// Call done handler of wait group for this
-			// routine on exiting this function.
-			defer sender.wg.Done()
-			return
-
-		default:
-
-			// Receive CRDT payload to send to other nodes
-			// on incoming channel.
-			payload, ok := <-sender.inc
-
-			if ok {
-
-				// If payload does not end with a newline symbol,
-				// append one to it.
-				if strings.HasSuffix(payload, "\r\n") != true {
-					payload = fmt.Sprintf("%s\r\n", payload)
-				}
-
-				// Lock mutex.
-				sender.lock.Lock()
-
-				// Write it to message log file.
-				_, err := sender.writeLog.WriteString(payload)
-				if err != nil {
-					stdlog.Fatalf("[comm.BrokerMsgs] Writing to CRDT log file failed with: %s\n", err.Error())
-				}
-
-				// Save to stable storage.
-				err = sender.writeLog.Sync()
-				if err != nil {
-					stdlog.Fatalf("[comm.BrokerMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
-				}
-
-				// Unlock mutex.
-				sender.lock.Unlock()
-
-				// Inidicate consecutive loop iterations
-				// that a message is waiting in log.
-				if len(sender.msgInLog) < 1 {
-					sender.msgInLog <- struct{}{}
-				}
+			// Inidicate consecutive loop iterations
+			// that a message is waiting in log.
+			if len(sender.msgInLog) < 1 {
+				sender.msgInLog <- struct{}{}
 			}
 		}
 	}
@@ -189,185 +162,202 @@ func (sender *Sender) SendMsgs() {
 
 	for {
 
-		select {
+		// Wait for signal that new message was written to
+		// log file so that we can send it out.
+		_, ok := <-sender.msgInLog
+		if ok {
 
-		// Check if a shutdown signal was sent.
-		case <-sender.shutdown:
-
-			// If so, close file handler.
+			// Lock mutex.
 			sender.lock.Lock()
-			sender.updLog.Close()
+
+			// Most of the following commands are taking from
+			// this stackoverflow answer describing a way to
+			// pop the first line of a file and write back
+			// the remaining parts:
+			// http://stackoverflow.com/a/30948278
+			info, err := sender.updLog.Stat()
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not get CRDT log file information: %v", err))
+				os.Exit(1)
+			}
+
+			// Check if log file is empty and continue at next
+			// for loop iteration if that is the case.
+			if info.Size() == 0 {
+				sender.lock.Unlock()
+				continue
+			}
+
+			// Create a buffer of capacity of read file size.
+			buf := bytes.NewBuffer(make([]byte, 0, info.Size()))
+
+			// Reset position to beginning of file.
+			_, err = sender.updLog.Seek(0, os.SEEK_SET)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				os.Exit(1)
+			}
+
+			// Copy contents of log file to prepared buffer.
+			_, err = io.Copy(buf, sender.updLog)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not copy CRDT log file contents to buffer: %v", err))
+				os.Exit(1)
+			}
+
+			// Read byte amount of following binary message.
+			numBytesRaw, err := buf.ReadBytes(';')
+			if (err != nil) && (err != io.EOF) {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("error extracting number of bytes of first message in CRDT log file: %v", err))
+				os.Exit(1)
+			}
+
+			// Reset position to byte directly after message length separator.
+			_, err = sender.updLog.Seek(int64(len(numBytesRaw)), os.SEEK_SET)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not change position in CRDT log file: %v", err))
+				os.Exit(1)
+			}
+
+			// Convert string to number.
+			numBytes, err := strconv.ParseInt((string(numBytesRaw[:(len(numBytesRaw) - 1)])), 10, 64)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("failed to convert string to int indicating number of bytes: %v", err))
+				os.Exit(1)
+			}
+
+			// Reserve exactly enough space for current message
+			// in downstream BinMsg.
+			binMsg := &BinMsg{
+				Data: make([]byte, numBytes),
+			}
+
+			// Read oldest message from log file.
+			numRead, err := sender.updLog.Read(binMsg.Data)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("error during extraction of first message in CRDT log file: %v", err))
+				os.Exit(1)
+			}
+
+			// Reset position to beginning of file.
+			_, err = sender.updLog.Seek(0, os.SEEK_SET)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				os.Exit(1)
+			}
+
+			// Unlock mutex.
 			sender.lock.Unlock()
 
-			// Call done handler of wait group for this
-			// routine on exiting this function.
-			defer sender.wg.Done()
-			return
+			// Check number of read bytes.
+			if int64(numRead) != numBytes {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("expected message of length %d, but only read %d", numBytes, numRead))
+				os.Exit(1)
+			}
 
-		default:
+			// Calculate total space of stored message:
+			// number of bytes prefix + ';' + actual message.
+			msgSize := int64(len(numBytesRaw)) + numBytes
 
-			// Wait for signal that new message was written to
-			// log file so that we can send it out.
-			_, ok := <-sender.msgInLog
+			// TODO: Parallelize this loop?
+			for node, addr := range sender.nodes {
 
-			if ok {
-
-				// Lock mutex.
-				sender.lock.Lock()
-
-				// Most of the following commands are taking from
-				// this stackoverflow answer which describes a way
-				// to pop the first line of a file and write back
-				// the remaining parts:
-				// http://stackoverflow.com/a/30948278
-				info, err := sender.updLog.Stat()
+				// Connect to downstream replica.
+				conn, err := grpc.Dial(addr, sender.gRPCOptions...)
 				if err != nil {
-					stdlog.Fatalf("[comm.SendMsgs] Could not get CRDT log file information: %s\n", err.Error())
+					level.Error(sender.logger).Log("msg", fmt.Sprintf("could not connect to downstream replica %s: %v", node, err))
+					os.Exit(1)
 				}
+				defer conn.Close()
 
-				// Check if log file is empty and continue at next
-				// for loop iteration if that is the case.
-				if info.Size() == 0 {
-					sender.lock.Unlock()
-					continue
-				}
+				// Create new gRPC client stub.
+				client := NewReceiverClient(conn)
 
-				// Create a buffer of capacity of read file size.
-				buf := bytes.NewBuffer(make([]byte, 0, info.Size()))
-
-				// Reset position to beginning of file.
-				_, err = sender.updLog.Seek(0, os.SEEK_SET)
+				// Send BinMsg to downstream replica.
+				conf, err := client.Incoming(context.Background(), binMsg)
 				if err != nil {
-					stdlog.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
+					level.Error(sender.logger).Log("msg", fmt.Sprintf("could not send downstream message to replica %s: %v", node, err))
+					os.Exit(1)
 				}
 
-				// Copy contents of log file to prepared buffer.
-				_, err = io.Copy(buf, sender.updLog)
-				if err != nil {
-					stdlog.Fatalf("[comm.SendMsgs] Could not copy CRDT log file contents to buffer: %s\n", err.Error())
+				if conf.Status != 0 {
+					level.Error(sender.logger).Log("msg", fmt.Sprintf("sending downstream message to %s returned code: %d", node, conf.Status))
+					os.Exit(1)
 				}
+			}
 
-				// Read oldest message from log file.
-				payload, err := buf.ReadString('\n')
-				if (err != nil) && (err != io.EOF) {
-					stdlog.Fatalf("[comm.SendMsgs] Error during extraction of first line in CRDT log file: %s\n", err.Error())
-				}
+			// Lock mutex.
+			sender.lock.Lock()
 
-				// Reset position to beginning of file.
-				_, err = sender.updLog.Seek(0, os.SEEK_SET)
-				if err != nil {
-					stdlog.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
-				}
+			// Retrieve file information.
+			info, err = sender.updLog.Stat()
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not get CRDT log file information: %v", err))
+				os.Exit(1)
+			}
 
-				// Create a new message for message values.
-				msg := InitMessage()
+			// Create a buffer of capacity of read file size.
+			buf = bytes.NewBuffer(make([]byte, 0, (info.Size() - msgSize)))
 
-				// Set this node's name as sending part.
-				msg.Sender = sender.name
+			// Reset position to byte after first message in file.
+			_, err = sender.updLog.Seek(msgSize, os.SEEK_SET)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				os.Exit(1)
+			}
 
-				// Send this node's name on incVClock channel to
-				// request an increment of its vector clock value.
-				sender.incVClock <- sender.name
+			// Copy contents of log file to prepared buffer.
+			_, err = io.Copy(buf, sender.updLog)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not copy CRDT log file contents to buffer: %v", err))
+				os.Exit(1)
+			}
 
-				// Wait for updated vector clock to be sent back
-				// on other defined channel.
-				msg.VClock = <-sender.updVClock
+			// Reset position to beginning of file.
+			_, err = sender.updLog.Seek(0, os.SEEK_SET)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				os.Exit(1)
+			}
 
-				// Remove trailing newline symbol from payload.
-				msg.Payload = strings.TrimSpace(payload)
+			// Copy reduced buffer contents back to beginning
+			// of CRDT log file, effectively deleting the first line.
+			newNumOfBytes, err := io.Copy(sender.updLog, buf)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("error during copying buffer contents back to CRDT log file: %v", err))
+				os.Exit(1)
+			}
 
-				// Marshall message.
-				marshalledMsg := msg.String()
+			// Now, truncate log file size to exact amount
+			// of bytes copied from buffer.
+			err = sender.updLog.Truncate(newNumOfBytes)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not truncate CRDT log file: %v", err))
+				os.Exit(1)
+			}
 
-				// Unlock mutex.
-				sender.lock.Unlock()
+			// Sync changes to stable storage.
+			err = sender.updLog.Sync()
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("syncing CRDT log file to stable storage failed with: %v", err))
+				os.Exit(1)
+			}
 
-				for _, nodeAddr := range sender.nodes {
+			// Reset position to beginning of file.
+			_, err = sender.updLog.Seek(0, os.SEEK_SET)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				os.Exit(1)
+			}
 
-					// Connect to node.
-					conn, err := ReliableConnect(nodeAddr, sender.tlsConfig, sender.intlConnRetry)
-					if err != nil {
-						stdlog.Fatalf("[comm.SendMsgs] Failed to connect to %s: %v", nodeAddr, err)
-					}
+			// Unlock mutex.
+			sender.lock.Unlock()
 
-					// Send payload reliably to other nodes.
-					err = ReliableSend(conn, marshalledMsg, nodeAddr, sender.tlsConfig, sender.intlConnTimeout, sender.intlConnRetry)
-					if err != nil {
-						stdlog.Fatalf("[comm.SendMsgs] Failed to send to %s: %v", nodeAddr, err)
-					}
-				}
-
-				// Lock mutex.
-				sender.lock.Lock()
-
-				// Retrieve file information.
-				info, err = sender.updLog.Stat()
-				if err != nil {
-					stdlog.Fatalf("[comm.SendMsgs] Could not get CRDT log file information: %s\n", err.Error())
-				}
-
-				// Create a buffer of capacity of read file size.
-				buf = bytes.NewBuffer(make([]byte, 0, info.Size()))
-
-				// Reset position to beginning of file.
-				_, err = sender.updLog.Seek(0, os.SEEK_SET)
-				if err != nil {
-					stdlog.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
-				}
-
-				// Copy contents of log file to prepared buffer.
-				_, err = io.Copy(buf, sender.updLog)
-				if err != nil {
-					stdlog.Fatalf("[comm.SendMsgs] Could not copy CRDT log file contents to buffer: %s\n", err.Error())
-				}
-
-				// Read oldest message from log file.
-				_, err = buf.ReadString('\n')
-				if (err != nil) && (err != io.EOF) {
-					stdlog.Fatalf("[comm.SendMsgs] Error during extraction of first line in CRDT log file: %s\n", err.Error())
-				}
-
-				// Reset position to beginning of file.
-				_, err = sender.updLog.Seek(0, os.SEEK_SET)
-				if err != nil {
-					stdlog.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
-				}
-
-				// Copy reduced buffer contents back to beginning
-				// of CRDT log file, effectively deleting the first line.
-				newNumOfBytes, err := io.Copy(sender.updLog, buf)
-				if err != nil {
-					stdlog.Fatalf("[comm.SendMsgs] Error during copying buffer contents back to CRDT log file: %s\n", err.Error())
-				}
-
-				// Now, truncate log file size to exact amount
-				// of bytes copied from buffer.
-				err = sender.updLog.Truncate(newNumOfBytes)
-				if err != nil {
-					stdlog.Fatalf("[comm.SendMsgs] Could not truncate CRDT log file: %s\n", err.Error())
-				}
-
-				// Sync changes to stable storage.
-				err = sender.updLog.Sync()
-				if err != nil {
-					stdlog.Fatalf("[comm.SendMsgs] Syncing CRDT log file to stable storage failed with: %s\n", err.Error())
-				}
-
-				// Reset position to beginning of file.
-				_, err = sender.updLog.Seek(0, os.SEEK_SET)
-				if err != nil {
-					stdlog.Fatalf("[comm.SendMsgs] Could not reset position in CRDT log file: %s\n", err.Error())
-				}
-
-				// Unlock mutex.
-				sender.lock.Unlock()
-
-				// We do not know how many elements are waiting in the
-				// log file. Therefore attempt to send next one and if
-				// it does not exist, the loop iteration will abort.
-				if len(sender.msgInLog) < 1 {
-					sender.msgInLog <- struct{}{}
-				}
+			// We do not know how many elements are waiting in the
+			// log file. Therefore attempt to send next one and if
+			// it does not exist, the loop iteration will abort.
+			if len(sender.msgInLog) < 1 {
+				sender.msgInLog <- struct{}{}
 			}
 		}
 	}

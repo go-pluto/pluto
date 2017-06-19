@@ -231,25 +231,40 @@ func main() {
 	stdlog.Println("[crypto.GeneratePKI] Saved root-key.pem to disk")
 	stdlog.Println("[crypto.GeneratePKI] === Done generating root certificate ===")
 
+	host, _, err := net.SplitHostPort(config.Distributor.PublicMailAddr)
+	if err != nil {
+		stdlog.Fatalf("[crypto.GeneratePKI] failed to split host & port: %v", err)
+	}
+
 	// Generate distributor's internal key and signed certificate.
-	err = CreateNodeCert(*pathPrefix, "internal-distributor", *rsaBits, notBefore, notAfter, []string{config.Distributor.PublicIP}, rootCert, rootKey)
+	err = CreateNodeCert(*pathPrefix, "internal-distributor", *rsaBits, notBefore, notAfter, []string{host}, rootCert, rootKey)
 	if err != nil {
 		stdlog.Fatal(err)
 	}
 
 	for name, worker := range config.Workers {
 
+		host, _, err := net.SplitHostPort(worker.PublicMailAddr)
+		if err != nil {
+			stdlog.Fatalf("[crypto.GeneratePKI] failed to split host & port: %v", err)
+		}
+
 		// For each worker node, generate an internal key pair
 		// and a signed certificate.
-		err = CreateNodeCert(*pathPrefix, fmt.Sprintf("internal-%s", name), *rsaBits, notBefore, notAfter, []string{worker.PublicIP}, rootCert, rootKey)
+		err = CreateNodeCert(*pathPrefix, fmt.Sprintf("internal-%s", name), *rsaBits, notBefore, notAfter, []string{host}, rootCert, rootKey)
 		if err != nil {
 			stdlog.Fatal(err)
 		}
 	}
 
+	host, _, err = net.SplitHostPort(config.Storage.PublicMailAddr)
+	if err != nil {
+		stdlog.Fatalf("[crypto.GeneratePKI] failed to split host & port: %v", err)
+	}
+
 	// Generate the storage's internal key pair
 	// and signed certificate.
-	err = CreateNodeCert(*pathPrefix, "internal-storage", *rsaBits, notBefore, notAfter, []string{config.Storage.PublicIP}, rootCert, rootKey)
+	err = CreateNodeCert(*pathPrefix, "internal-storage", *rsaBits, notBefore, notAfter, []string{host}, rootCert, rootKey)
 	if err != nil {
 		stdlog.Fatal(err)
 	}

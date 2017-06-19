@@ -7,9 +7,8 @@ Greeting = "Pluto ready."
 HierarchySeparator = "."
 
 [Distributor]
-PublicIP = "127.0.0.1"
-ListenIP = "127.0.0.1"
-Port = "19933"
+PublicMailAddr = "127.0.0.1:19933"
+ListenMailAddr = "127.0.0.1:19933"
 AuthAdapter = "AuthFile"
 
     [Distributor.PublicTLS]
@@ -28,10 +27,10 @@ AuthAdapter = "AuthFile"
 [Workers]
 
     [Workers.worker-1]
-    PublicIP = "127.0.0.1"
-    ListenIP = "127.0.0.1"
-    MailPort = "20001"
-    SyncPort = "30001"
+    PublicMailAddr = "127.0.0.1:20001"
+    ListenMailAddr = "127.0.0.1:20001"
+    PublicSyncAddr = "127.0.0.1:30001"
+    ListenSyncAddr = "127.0.0.1:30001"
     UserStart = 1
     UserEnd = 10
     MaildirRoot = "private/Maildirs/worker-1/"
@@ -42,10 +41,10 @@ AuthAdapter = "AuthFile"
         KeyLoc = "private/internal-worker-1-key.pem"
 
 [Storage]
-PublicIP = "127.0.0.1"
-ListenIP = "127.0.0.1"
-MailPort = "21000"
-SyncPort = "31000"
+PublicMailAddr = "127.0.0.1:21000"
+ListenMailAddr = "127.0.0.1:21000"
+PublicSyncAddr = "127.0.0.1:31000"
+ListenSyncAddr = "127.0.0.1:31000"
 MaildirRoot = "private/Maildirs/storage/"
 CRDTLayerRoot = "private/crdt-layers/storage/"
 

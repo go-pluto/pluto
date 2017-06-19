@@ -1,11 +1,14 @@
 package main
 
+/*
 import (
+	"crypto/tls"
 	stdlog "log"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/numbleroot/pluto/crypto"
 	"github.com/numbleroot/pluto/distributor"
 	"github.com/numbleroot/pluto/storage"
 	"github.com/numbleroot/pluto/utils"
@@ -48,15 +51,21 @@ func TestMain(m *testing.M) {
 // nodes when appropriate signals are received.
 func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
-	intConn, err := NewInternalConnection(testEnv.Config.Distributor.InternalTLS.CertLoc, testEnv.Config.Distributor.InternalTLS.KeyLoc, testEnv.Config.RootCertLoc, testEnv.Config.IntlConnRetry)
-	if err != nil {
-		stdlog.Fatal(err)
-	}
-
 	go func() {
 
+		intlTLSConfig, err := crypto.NewInternalTLSConfig(testEnv.Config.Storage.TLS.CertLoc, testEnv.Config.Storage.TLS.KeyLoc, testEnv.Config.RootCertLoc)
+		if err != nil {
+			stdlog.Fatal(err)
+		}
+
+		// Create needed sockets. First, mail socket.
+		mailSocket, err := tls.Listen("tcp", testEnv.Config.Storage.ListenMailAddr, intlTLSConfig)
+		if err != nil {
+			stdlog.Fatal(err)
+		}
+
 		var storageS storage.Service
-		storageS = storage.NewService(intConn, testEnv.Config.Storage, testEnv.Config.Workers)
+		storageS = storage.NewService(&intlConn{intlTLSConfig, testEnv.Config.IntlConnRetry}, mailSocket, testEnv.Config.Storage, testEnv.Config.Workers)
 
 		go func() {
 
@@ -65,9 +74,8 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
 			stdlog.Printf("[utils.RunAllNodes] Closing storage socket")
 
-			//// Shut down storage node.
-			//storage.MailSocket.Close()
-			//storage.SyncSocket.Close()
+			// Shut down storage node.
+			mailSocket.Close()
 
 			// Signal back successful shutdown.
 			testEnv.DoneStorage <- struct{}{}
@@ -89,8 +97,19 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			stdlog.Fatal("can't find correct worker config")
 		}
 
+		intlTLSConfig, err := crypto.NewInternalTLSConfig(workerConfig.TLS.CertLoc, workerConfig.TLS.KeyLoc, testEnv.Config.RootCertLoc)
+		if err != nil {
+			stdlog.Fatal(err)
+		}
+
+		// Create needed sockets. First, mail socket.
+		mailSocket, err := tls.Listen("tcp", workerConfig.ListenMailAddr, intlTLSConfig)
+		if err != nil {
+			stdlog.Fatal(err)
+		}
+
 		var workerS worker.Service
-		workerS = worker.NewService(intConn, workerConfig, workerName)
+		workerS = worker.NewService(&intlConn{intlTLSConfig, testEnv.Config.IntlConnRetry}, mailSocket, workerConfig, workerName)
 
 		go func() {
 
@@ -99,9 +118,8 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
 			stdlog.Printf("[utils.RunAllNodes] Closing %s socket", workerName)
 
-			//// Shut down worker node.
-			//worker.MailSocket.Close()
-			//worker.SyncSocket.Close()
+			// Shut down worker node.
+			mailSocket.Close()
 
 			// Signal back successful shutdown.
 			testEnv.DoneWorker <- struct{}{}
@@ -123,13 +141,12 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			stdlog.Fatal(err)
 		}
 
-		conn, err := publicDistributorConn(testEnv.Config.Distributor)
+		intlTLSConfig, err := crypto.NewInternalTLSConfig(testEnv.Config.Distributor.InternalTLS.CertLoc, testEnv.Config.Distributor.InternalTLS.KeyLoc, testEnv.Config.RootCertLoc)
 		if err != nil {
 			stdlog.Fatal(err)
 		}
-		defer conn.Close()
 
-		distr := distributor.NewService(authenticator, intConn, testEnv.Config.Workers)
+		distr := distributor.NewService(authenticator, &intlConn{intlTLSConfig, testEnv.Config.IntlConnRetry}, testEnv.Config.Workers)
 
 		go func() {
 
@@ -142,8 +159,19 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			testEnv.DoneDistr <- struct{}{}
 		}()
 
+		publicTLSConfig, err := crypto.NewPublicTLSConfig(testEnv.Config.Distributor.PublicTLS.CertLoc, testEnv.Config.Distributor.PublicTLS.KeyLoc)
+		if err != nil {
+			stdlog.Fatal(err)
+		}
+
+		mailSocket, err := tls.Listen("tcp", testEnv.Config.Distributor.ListenMailAddr, publicTLSConfig)
+		if err != nil {
+			stdlog.Fatal(err)
+		}
+		defer mailSocket.Close()
+
 		// Run the distributor node.
-		if err := distr.Run(conn, testEnv.Config.IMAP.Greeting); err != nil {
+		if err := distr.Run(mailSocket, testEnv.Config.IMAP.Greeting); err != nil {
 			stdlog.Fatal(err)
 		}
 	}()
@@ -171,3 +199,4 @@ func TearDownNormalSetup(testEnv *utils.TestEnv) {
 	// Wait shortly.
 	time.Sleep(500 * time.Millisecond)
 }
+*/

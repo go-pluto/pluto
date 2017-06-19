@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
 	"bufio"
 	"fmt"
@@ -83,7 +84,7 @@ func TestCapability(t *testing.T) {
 	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive(false)
+	_, err = c.Receive()
 	if err != nil {
 		t.Errorf("[imap.TestCapability] Error during receiving initial distributor greeting: %s\n", err.Error())
 	}
@@ -99,7 +100,7 @@ func TestCapability(t *testing.T) {
 		}
 
 		// Receive options listed in CAPABILITY command.
-		capAnswer, err := c.Receive(false)
+		capAnswer, err := c.Receive()
 		if err != nil {
 			t.Errorf("[imap.TestCapability] Error during receiving table test CAPABILITY: %s\n", err.Error())
 		}
@@ -107,7 +108,7 @@ func TestCapability(t *testing.T) {
 		if i < 2 {
 
 			// Receive command termination message from distributor.
-			okAnswer, err := c.Receive(false)
+			okAnswer, err := c.Receive()
 			if err != nil {
 				t.Errorf("[imap.TestCapability] Error during receiving table test CAPABILITY: %s\n", err.Error())
 			}
@@ -123,7 +124,7 @@ func TestCapability(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	c.IncConn.Close()
 }
 
 // TestLogout executes a black-box table test on the
@@ -147,7 +148,7 @@ func TestLogout(t *testing.T) {
 		}
 
 		// Consume mandatory IMAP greeting.
-		_, err = c.Receive(false)
+		_, err = c.Receive()
 		if err != nil {
 			t.Errorf("[imap.TestLogout] Error during receiving initial distributor greeting: %s\n", err.Error())
 		}
@@ -159,7 +160,7 @@ func TestLogout(t *testing.T) {
 		}
 
 		// Receive logout response.
-		logoutAnswer, err := c.Receive(false)
+		logoutAnswer, err := c.Receive()
 		if err != nil {
 			t.Errorf("[imap.TestLogout] Error during receiving table test LOGOUT: %s\n", err.Error())
 		}
@@ -167,7 +168,7 @@ func TestLogout(t *testing.T) {
 		if i < 2 {
 
 			// Receive command termination message from distributor.
-			okAnswer, err := c.Receive(false)
+			okAnswer, err := c.Receive()
 			if err != nil {
 				t.Errorf("[imap.TestLogout] Error during receiving table test LOGOUT: %s\n", err.Error())
 			}
@@ -182,7 +183,7 @@ func TestLogout(t *testing.T) {
 		}
 
 		// At the end of each test, terminate connection.
-		err = c.Terminate()
+		err = c.IncConn.Close()
 		if err != nil {
 			stdlog.Fatal(err)
 		}
@@ -206,7 +207,7 @@ func TestStartTLS(t *testing.T) {
 	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive(false)
+	_, err = c.Receive()
 	if err != nil {
 		t.Errorf("[imap.TestStartTLS] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -220,7 +221,7 @@ func TestStartTLS(t *testing.T) {
 		}
 
 		// Receive go ahead signal for TLS negotiation.
-		answer, err := c.Receive(false)
+		answer, err := c.Receive()
 		if err != nil {
 			t.Errorf("[imap.TestStartTLS] Error during receiving table test LOGIN: %s\n", err.Error())
 		}
@@ -231,7 +232,7 @@ func TestStartTLS(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	c.IncConn.Close()
 }
 
 // TestLogin executes a black-box table test on the
@@ -251,7 +252,7 @@ func TestLogin(t *testing.T) {
 	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive(false)
+	_, err = c.Receive()
 	if err != nil {
 		t.Errorf("[imap.TestLogin] Error during receiving initial distributor greeting: %s\n", err.Error())
 	}
@@ -265,7 +266,7 @@ func TestLogin(t *testing.T) {
 		}
 
 		// Receive successful LOGIN message.
-		answer, err := c.Receive(false)
+		answer, err := c.Receive()
 		if err != nil {
 			t.Errorf("[imap.TestLogin] Error during receiving table test LOGIN: %s\n", err.Error())
 		}
@@ -276,5 +277,6 @@ func TestLogin(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	c.IncConn.Close()
 }
+*/

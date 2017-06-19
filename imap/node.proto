@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package imap;
+
+message Context {
+    string clientID = 1;
+    string userName = 2;
+    string respWorker = 3;
+}
+
+message Confirmation {
+    uint32 status = 1;
+}
+
+message Command {
+    string text = 1;
+    string clientID = 2;
+}
+
+message Reply {
+    string text = 1;
+    uint32 status = 2;
+}
+
+message Await {
+    string text = 1;
+    uint32 status = 2;
+    uint32 numBytes = 3;
+}
+
+message MailFile {
+    bytes content = 1;
+    string clientID = 2;
+}
+
+service Node {
+    rpc Prepare(Context) returns(Confirmation) {}
+    rpc Close(Context) returns(Confirmation) {}
+    rpc Select(Command) returns(Reply) {}
+    rpc Create(Command) returns(Reply) {}
+    rpc Delete(Command) returns(Reply) {}
+    rpc List(Command) returns(Reply) {}
+    rpc AppendBegin(Command) returns(Await) {}
+    rpc AppendEnd(MailFile) returns(Reply) {}
+    rpc Expunge(Command) returns(Reply) {}
+    rpc Store(Command) returns(Reply) {}
+}

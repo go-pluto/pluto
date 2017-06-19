@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
 	"bufio"
 	"fmt"
@@ -28,7 +29,7 @@ var selectTests = []struct {
 	in  string
 	out string
 }{
-	{"a LOGIN user0 password0", "a OK LOGIN completed"},
+	{"a LOGIN user10 password10", "a OK LOGIN completed"},
 	{"b SELECT INBOX", "* 0 EXISTS\r\n* 0 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\nb OK [READ-WRITE] SELECT completed"},
 	{"c SELECT", "c BAD Command SELECT was sent without a mailbox to select"},
 	{"d SELECT lol rofl nope", "d BAD Command SELECT was sent with multiple mailbox names instead of only one"},
@@ -181,7 +182,7 @@ func TestSelect(t *testing.T) {
 	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive(false)
+	_, err = c.Receive()
 	if err != nil {
 		t.Fatalf("[imap.TestSelect] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -197,7 +198,7 @@ func TestSelect(t *testing.T) {
 		}
 
 		// Receive answer to SELECT request.
-		firstAnswer, err := c.Receive(false)
+		firstAnswer, err := c.Receive()
 		if err != nil {
 			t.Fatalf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
 		}
@@ -210,7 +211,7 @@ func TestSelect(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive(false)
+			nextAnswer, err := c.Receive()
 			if err != nil {
 				t.Fatalf("[imap.TestSelect] Error during receiving table test SELECT: %s\n", err.Error())
 			}
@@ -226,7 +227,7 @@ func TestSelect(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	c.IncConn.Close()
 }
 
 // TestCreate executes a black-box table test on the
@@ -246,7 +247,7 @@ func TestCreate(t *testing.T) {
 	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive(false)
+	_, err = c.Receive()
 	if err != nil {
 		t.Fatalf("[imap.TestCreate] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -262,7 +263,7 @@ func TestCreate(t *testing.T) {
 		}
 
 		// Receive answer to CREATE request.
-		firstAnswer, err := c.Receive(false)
+		firstAnswer, err := c.Receive()
 		if err != nil {
 			t.Fatalf("[imap.TestCreate] Error during receiving table test CREATE: %s\n", err.Error())
 		}
@@ -275,7 +276,7 @@ func TestCreate(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive(false)
+			nextAnswer, err := c.Receive()
 			if err != nil {
 				t.Fatalf("[imap.TestCreate] Error during receiving table test CREATE: %s\n", err.Error())
 			}
@@ -291,7 +292,7 @@ func TestCreate(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	c.IncConn.Close()
 }
 
 // TestDelete executes a black-box table test on the
@@ -311,7 +312,7 @@ func TestDelete(t *testing.T) {
 	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive(false)
+	_, err = c.Receive()
 	if err != nil {
 		t.Fatalf("[imap.TestDelete] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -327,7 +328,7 @@ func TestDelete(t *testing.T) {
 		}
 
 		// Receive answer to DELETE request.
-		firstAnswer, err := c.Receive(false)
+		firstAnswer, err := c.Receive()
 		if err != nil {
 			t.Fatalf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
 		}
@@ -340,7 +341,7 @@ func TestDelete(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive(false)
+			nextAnswer, err := c.Receive()
 			if err != nil {
 				t.Fatalf("[imap.TestDelete] Error during receiving table test DELETE: %s\n", err.Error())
 			}
@@ -356,7 +357,7 @@ func TestDelete(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	c.IncConn.Close()
 }
 
 // TestList executes a black-box table test on the
@@ -376,7 +377,7 @@ func TestList(t *testing.T) {
 	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive(false)
+	_, err = c.Receive()
 	if err != nil {
 		t.Fatalf("[imap.TestList] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -392,7 +393,7 @@ func TestList(t *testing.T) {
 		}
 
 		// Receive answer to LIST request.
-		firstAnswer, err := c.Receive(false)
+		firstAnswer, err := c.Receive()
 		if err != nil {
 			t.Fatalf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
 		}
@@ -405,7 +406,7 @@ func TestList(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive(false)
+			nextAnswer, err := c.Receive()
 			if err != nil {
 				t.Fatalf("[imap.TestList] Error during receiving table test LIST: %s\n", err.Error())
 			}
@@ -421,7 +422,7 @@ func TestList(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	c.IncConn.Close()
 }
 
 // TestAppend executes a black-box table test on the
@@ -441,7 +442,7 @@ func TestAppend(t *testing.T) {
 	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive(false)
+	_, err = c.Receive()
 	if err != nil {
 		t.Fatalf("[imap.TestAppend] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -467,7 +468,7 @@ func TestAppend(t *testing.T) {
 		}
 
 		// Receive answer to APPEND request.
-		firstAnswer, err := c.Receive(false)
+		firstAnswer, err := c.Receive()
 		if err != nil {
 			t.Fatalf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
 		}
@@ -480,7 +481,7 @@ func TestAppend(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive(false)
+			nextAnswer, err := c.Receive()
 			if err != nil {
 				t.Fatalf("[imap.TestAppend] Error during receiving table test APPEND: %s\n", err.Error())
 			}
@@ -496,7 +497,7 @@ func TestAppend(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	c.IncConn.Close()
 }
 
 // TestStore executes a black-box table test on the
@@ -516,7 +517,7 @@ func TestStore(t *testing.T) {
 	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive(false)
+	_, err = c.Receive()
 	if err != nil {
 		t.Fatalf("[imap.TestStore] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -530,7 +531,7 @@ func TestStore(t *testing.T) {
 			// As the command prior to this command logged out
 			// the user, we have to terminate and re-establish
 			// the used connection.
-			c.Terminate()
+			c.IncConn.Close()
 
 			conn, err = tls.Dial("tcp", testEnv.Addr, testEnv.TLSConfig)
 			if err != nil {
@@ -544,7 +545,7 @@ func TestStore(t *testing.T) {
 			}
 
 			// Consume mandatory IMAP greeting.
-			_, err = c.Receive(false)
+			_, err = c.Receive()
 			if err != nil {
 				t.Fatalf("[imap.TestStore] Error during receiving initial server greeting: %s\n", err.Error())
 			}
@@ -573,7 +574,7 @@ func TestStore(t *testing.T) {
 		}
 
 		// Receive answer to STORE request.
-		firstAnswer, err := c.Receive(false)
+		firstAnswer, err := c.Receive()
 		if err != nil {
 			t.Fatalf("[imap.TestStore] Error during receiving table test STORE: %s\n", err.Error())
 		}
@@ -586,7 +587,7 @@ func TestStore(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive(false)
+			nextAnswer, err := c.Receive()
 			if err != nil {
 				t.Fatalf("[imap.TestStore] Error during receiving table test STORE: %s\n", err.Error())
 			}
@@ -602,7 +603,7 @@ func TestStore(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	c.IncConn.Close()
 }
 
 // TestExpunge executes a black-box table test on the
@@ -622,7 +623,7 @@ func TestExpunge(t *testing.T) {
 	}
 
 	// Consume mandatory IMAP greeting.
-	_, err = c.Receive(false)
+	_, err = c.Receive()
 	if err != nil {
 		t.Fatalf("[imap.TestExpunge] Error during receiving initial server greeting: %s\n", err.Error())
 	}
@@ -648,7 +649,7 @@ func TestExpunge(t *testing.T) {
 		}
 
 		// Receive answer to EXPUNGE request.
-		firstAnswer, err := c.Receive(false)
+		firstAnswer, err := c.Receive()
 		if err != nil {
 			t.Fatalf("[imap.TestExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 		}
@@ -661,7 +662,7 @@ func TestExpunge(t *testing.T) {
 			(strings.Contains(firstAnswer, "+ Ready for literal data") != true) {
 
 			// Receive next line from distributor.
-			nextAnswer, err := c.Receive(false)
+			nextAnswer, err := c.Receive()
 			if err != nil {
 				t.Fatalf("[imap.TestExpunge] Error during receiving table test EXPUNGE: %s\n", err.Error())
 			}
@@ -677,5 +678,6 @@ func TestExpunge(t *testing.T) {
 	}
 
 	// At the end of each test, terminate connection.
-	c.Terminate()
+	c.IncConn.Close()
 }
+*/

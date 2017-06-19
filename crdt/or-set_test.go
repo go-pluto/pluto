@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"strings"
 	"testing"
 
 	"io/ioutil"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // Variables
@@ -428,7 +429,7 @@ func TestAddEffect(t *testing.T) {
 func TestAdd(t *testing.T) {
 
 	// Use these variables to compare sent values.
-	var msg1, msg2, msg3, msg4 string
+	var msg1, msg2, msg3, msg4 []string
 
 	// Delete temporary test file on function exit.
 	defer os.Remove("test-crdt.log")
@@ -441,96 +442,53 @@ func TestAdd(t *testing.T) {
 
 	// Add defined values to set.
 
-	// v2
-	if s.Lookup(v2) == true {
-		t.Fatalf("[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true.", v2)
-	}
+	// v2.
+	assert.Equalf(t, false, s.Lookup(v2), "[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true", v2)
 
-	err = s.Add(v2, func(payload string) { msg1 = payload })
-	if err != nil {
-		t.Fatalf("[crdt.TestAdd] Expected Add() to return nil error but received: %v", err)
-	}
+	err = s.Add(v2, func(args ...string) { msg1 = args })
+	assert.Nilf(t, err, "[crdt.TestAdd] Expected Add() to return nil error but received: %v", err)
 
-	if s.Lookup(v2) != true {
-		t.Fatalf("[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false.", v2)
-	}
+	assert.Equalf(t, true, s.Lookup(v2), "[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false", v2)
 
-	// v4
-	if s.Lookup(v4) == true {
-		t.Fatalf("[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true.", v4)
-	}
+	// v4.
+	assert.Equalf(t, false, s.Lookup(v4), "[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true", v4)
 
-	err = s.Add(v4, func(payload string) { msg2 = payload })
-	if err != nil {
-		t.Fatalf("[crdt.TestAdd] Expected Add() to return nil error but received: %v", err)
-	}
+	err = s.Add(v4, func(args ...string) { msg2 = args })
+	assert.Nilf(t, err, "[crdt.TestAdd] Expected Add() to return nil error but received: %v", err)
 
-	if s.Lookup(v4) != true {
-		t.Fatalf("[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false.", v4)
-	}
+	assert.Equalf(t, true, s.Lookup(v4), "[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false", v4)
 
-	// v6
-	if s.Lookup(v6) == true {
-		t.Fatalf("[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true.", v6)
-	}
+	// v6.
+	assert.Equalf(t, false, s.Lookup(v6), "[crdt.TestAdd] Expected '%v' not to be in set but Lookup() returns true", v6)
 
-	err = s.Add(v6, func(payload string) { msg3 = payload })
-	if err != nil {
-		t.Fatalf("[crdt.TestAdd] Expected Add() to return nil error but received: %v", err)
-	}
+	err = s.Add(v6, func(args ...string) { msg3 = args })
+	assert.Nilf(t, err, "[crdt.TestAdd] Expected Add() to return nil error but received: %v", err)
 
-	if s.Lookup(v6) != true {
-		t.Fatalf("[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false.", v6)
-	}
+	assert.Equalf(t, true, s.Lookup(v6), "[crdt.TestAdd] Expected '%v' to be in set but Lookup() returns false", v6)
 
-	// Check sent messages for length.
-	// Minimal length = ';' + 36 UUID chars = 37 chars.
+	// Check received arguments.
 
-	if len(msg1) < 37 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to be at least 37 characters long but only got %d many.", msg1, len(msg1))
-	}
+	assert.Equal(t, 2, len(msg1), "[crdt.TestAdd] msg1 should be of length 2")
+	assert.Equal(t, 2, len(msg2), "[crdt.TestAdd] msg2 should be of length 2")
+	assert.Equal(t, 2, len(msg3), "[crdt.TestAdd] msg3 should be of length 2")
 
-	if len(msg2) < 37 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to be at least 37 characters long but only got %d many.", msg2, len(msg2))
-	}
+	assert.Equalf(t, v2, msg1[0], "[crdt.TestAdd] msg1[0] = '%v' should be equal to v2 = '%v'", msg1[0], v2)
+	assert.Equalf(t, v4, msg2[0], "[crdt.TestAdd] msg2[0] = '%v' should be equal to v4 = '%v'", msg2[0], v4)
+	assert.Equalf(t, v6, msg3[0], "[crdt.TestAdd] msg3[0] = '%v' should be equal to v6 = '%v'", msg3[0], v6)
 
-	if len(msg3) < 37 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to be at least 37 characters long but only got %d many.", msg3, len(msg3))
-	}
-
-	// Check that sent messages only contain one semicolon.
-	// This discovers possible non-escaped characters in payload.
-
-	parts1 := strings.Split(msg1, ";")
-	if len(parts1) != 2 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to contain exactly 1 semicolon but found %d instead.", msg1, (len(parts1) - 1))
-	}
-
-	parts2 := strings.Split(msg2, ";")
-	if len(parts2) != 2 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to contain exactly 1 semicolon but found %d instead.", msg2, (len(parts2) - 1))
-	}
-
-	parts3 := strings.Split(msg3, ";")
-	if len(parts3) != 2 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' to contain exactly 1 semicolon but found %d instead.", msg3, (len(parts3) - 1))
-	}
+	assert.Equalf(t, 36, len(msg1[1]), "[crdt.TestAdd] Expected tag of msg1 = '%s' to be of length 36 but was %d", msg1[1], len(msg1[1]))
+	assert.Equalf(t, 36, len(msg2[1]), "[crdt.TestAdd] Expected tag of msg2 = '%s' to be of length 36 but was %d", msg2[1], len(msg2[1]))
+	assert.Equalf(t, 36, len(msg3[1]), "[crdt.TestAdd] Expected tag of msg3 = '%s' to be of length 36 but was %d", msg3[1], len(msg3[1]))
 
 	// Test second add of an element that is
 	// already contained in set.
 
-	err = s.Add(v2, func(payload string) { msg4 = payload })
-	if err != nil {
-		t.Fatalf("[crdt.TestAdd] Expected Add() to return nil error but received: %v", err)
-	}
+	err = s.Add(v2, func(args ...string) { msg4 = args })
+	assert.Nilf(t, err, "[crdt.TestAdd] Expected Add() to return nil error but received: %v", err)
 
-	if len(s.elements) != 4 {
-		t.Fatalf("[crdt.TestAdd] Expected set to contain exactly 4 elements but found %d instead.", len(s.elements))
-	}
-
-	if msg1 == msg4 {
-		t.Fatalf("[crdt.TestAdd] Expected '%s' and '%s' not to be equal but comparison returned true.", msg1, msg4)
-	}
+	assert.Equalf(t, 4, len(s.elements), "[crdt.TestAdd] Expected set to contain exactly 4 elements but found %d instead", len(s.elements))
+	assert.Equalf(t, msg1[0], msg4[0], "[crdt.TestAdd] Expected values of msg1 and msg4 to be equal but '%s' != '%s'", msg1[0], msg4[0])
+	assert.NotEqualf(t, msg1[1], msg4[1], "[crdt.TestAdd] Expected tags of msg1 and msg4 not to be equal but '%s' == '%s'", msg1[1], msg4[1])
 }
 
 // TestRemoveEffect executes a white-box unit test
@@ -710,110 +668,59 @@ func TestRemoveEffect(t *testing.T) {
 func TestRemove(t *testing.T) {
 
 	// Use these variables to compare sent values.
-	var msg1, msg2 string
+	var msg1, msg2 []string
 
 	// Delete temporary test file on function exit.
 	defer os.Remove("test-crdt.log")
 
 	// Create new ORSet with associated file.
 	s, err := InitORSetWithFile("test-crdt.log")
-	if err != nil {
-		t.Fatalf("[crdt.TestRemove] Expected InitORSetWithFile() not to fail but got: %v", err)
-	}
+	assert.Nilf(t, err, "[crdt.TestRemove] Expected InitORSetWithFile() not to fail but got: %v", err)
 
 	// Attempt to delete non-existing value.
-	err = s.Remove(v1, func(payload string) {})
-	if err.Error() != "element to be removed not found in set" {
-		t.Fatalf("[crdt.TestRemove] Expected Remove() to return error 'element to be removed not found in set' but received '%v'", err)
-	}
+	err = s.Remove(v1, func(args ...string) {})
+	assert.Equal(t, "element to be removed not found in set", err.Error(), "[crdt.TestRemove] Expected Remove() to return error 'element to be removed not found in set' but received '%v'", err)
 
 	// In order to delete keys, we need to add some first.
 
-	err = s.Add(v2, func(payload string) {})
-	if err != nil {
-		t.Fatalf("[crdt.TestRemove] Expected Add() to return nil error but received: %v", err)
-	}
+	err = s.Add(v2, func(args ...string) {})
+	assert.Nilf(t, err, "[crdt.TestRemove] Expected Add() to return nil error but received: %v", err)
 
-	err = s.Add(v3, func(payload string) {})
-	if err != nil {
-		t.Fatalf("[crdt.TestRemove] Expected Add() to return nil error but received: %v", err)
-	}
+	err = s.Add(v3, func(args ...string) {})
+	assert.Nilf(t, err, "[crdt.TestRemove] Expected Add() to return nil error but received: %v", err)
 
-	err = s.Add(v4, func(payload string) {})
-	if err != nil {
-		t.Fatalf("[crdt.TestRemove] Expected Add() to return nil error but received: %v", err)
-	}
+	err = s.Add(v4, func(args ...string) {})
+	assert.Nilf(t, err, "[crdt.TestRemove] Expected Add() to return nil error but received: %v", err)
 
-	err = s.Add(v2, func(payload string) {})
-	if err != nil {
-		t.Fatalf("[crdt.TestRemove] Expected Add() to return nil error but received: %v", err)
-	}
+	err = s.Add(v2, func(args ...string) {})
+	assert.Nilf(t, err, "[crdt.TestRemove] Expected Add() to return nil error but received: %v", err)
 
-	err = s.Add(v2, func(payload string) {})
-	if err != nil {
-		t.Fatalf("[crdt.TestRemove] Expected Add() to return nil error but received: %v", err)
-	}
+	err = s.Add(v2, func(args ...string) {})
+	assert.Nilf(t, err, "[crdt.TestRemove] Expected Add() to return nil error but received: %v", err)
 
-	err = s.Add(v2, func(payload string) {})
-	if err != nil {
-		t.Fatalf("[crdt.TestRemove] Expected Add() to return nil error but received: %v", err)
-	}
+	err = s.Add(v2, func(args ...string) {})
+	assert.Nilf(t, err, "[crdt.TestRemove] Expected Add() to return nil error but received: %v", err)
 
 	// Delete value that is only present once in set.
-	err = s.Remove(v3, func(payload string) { msg1 = payload })
-	if err != nil {
-		t.Fatalf("[crdt.TestRemove] Expected Remove() to return nil error but received: %v", err)
-	}
+	err = s.Remove(v3, func(args ...string) { msg1 = args })
+	assert.Nilf(t, err, "[crdt.TestRemove] Expected Remove() to return nil error but received: %v", err)
 
-	if len(s.elements) != 5 {
-		t.Fatalf("[crdt.TestRemove] Expected 5 elements in set but only found %d.", len(s.elements))
-	}
+	assert.Equalf(t, 5, len(s.elements), "[crdt.TestRemove] Expected 5 elements in set but only found %d", len(s.elements))
 
-	if s.Lookup(v2) != true {
-		t.Fatalf("[crdt.TestRemove] Expected '%v' to be in set but Lookup() returns false.", v2)
-	}
+	assert.Equalf(t, true, s.Lookup(v2), "[crdt.TestRemove] Expected '%v' to be in set but Lookup() returns false", v2)
+	assert.Equalf(t, false, s.Lookup(v3), "[crdt.TestRemove] Expected '%v' not to be in set but Lookup() returns true", v3)
+	assert.Equalf(t, true, s.Lookup(v4), "[crdt.TestRemove] Expected '%v' to be in set but Lookup() returns false", v4)
 
-	if s.Lookup(v3) == true {
-		t.Fatalf("[crdt.TestRemove] Expected '%v' not to be in set but Lookup() returns true.", v3)
-	}
-
-	if s.Lookup(v4) != true {
-		t.Fatalf("[crdt.TestRemove] Expected '%v' to be in set but Lookup() returns false.", v4)
-	}
-
-	// Split message at delimiter symbols and check for correct length.
-	// This should discover unescaped delimiters in the payload.
-	parts1 := strings.Split(msg1, ";")
-	if len(parts1) != 2 {
-		t.Fatalf("[crdt.TestRemove] Expected '%s' to contain exactly 2 semicola but found %d instead.", msg1, len(parts1))
-	}
+	assert.Equalf(t, 2, len(msg1), "[crdt.TestRemove] Expected msg1 to contain exactly 2 elements but found %d", len(msg1))
 
 	// Delete all tags corresponding to value v2.
-	err = s.Remove(v2, func(payload string) { msg2 = payload })
-	if err != nil {
-		t.Fatalf("[crdt.TestRemove] Expected Remove() to return nil error but received: %v", err)
-	}
+	err = s.Remove(v2, func(args ...string) { msg2 = args })
+	assert.Nilf(t, err, "[crdt.TestRemove] Expected Remove() to return nil error but received: %v", err)
 
-	if len(s.elements) != 1 {
-		t.Fatalf("[crdt.TestRemove] Expected 1 elements in set but only found %d.", len(s.elements))
-	}
+	assert.Equalf(t, 1, len(s.elements), "[crdt.TestRemove] Expected 1 element in set but found %d", len(s.elements))
+	assert.Equalf(t, false, s.Lookup(v2), "[crdt.TestRemove] Expected '%v' not to be in set but Lookup() returns true", v2)
+	assert.Equalf(t, false, s.Lookup(v3), "[crdt.TestRemove] Expected '%v' not to be in set but Lookup() returns true", v3)
+	assert.Equalf(t, true, s.Lookup(v4), "[crdt.TestRemove] Expected '%v' to be in set but Lookup() returns false", v4)
 
-	if s.Lookup(v2) == true {
-		t.Fatalf("[crdt.TestRemove] Expected '%v' not to be in set but Lookup() returns true.", v2)
-	}
-
-	if s.Lookup(v3) == true {
-		t.Fatalf("[crdt.TestRemove] Expected '%v' not to be in set but Lookup() returns true.", v3)
-	}
-
-	if s.Lookup(v4) != true {
-		t.Fatalf("[crdt.TestRemove] Expected '%v' to be in set but Lookup() returns false.", v4)
-	}
-
-	// Split message at delimiter symbols and check for correct length.
-	// This should discover unescaped delimiters in the payload.
-	parts2 := strings.Split(msg2, ";")
-	if len(parts2) != 8 {
-		t.Fatalf("[crdt.TestRemove] Expected '%s' to contain exactly 7 semicola but found %d instead.", msg2, (len(parts2) - 1))
-	}
+	assert.Equalf(t, 8, len(msg2), "[crdt.TestRemove] Expected msg2 to contain exactly 8 elements but found %d", len(msg2))
 }
