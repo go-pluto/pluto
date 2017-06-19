@@ -68,10 +68,14 @@ message Msg {
     COPY copy = 10;
 }
 
-message Closed {
+message BinMsg {
+    bytes data = 1;
+}
+
+message Conf {
     uint32 status = 1;
 }
 
 service Receiver {
-    rpc Incoming(Msg) returns(Closed) {}
+    rpc Incoming(BinMsg) returns(Conf) {}
 }
