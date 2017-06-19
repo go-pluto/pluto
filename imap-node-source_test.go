@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
 	"bufio"
 	"fmt"
@@ -679,3 +680,4 @@ func TestExpunge(t *testing.T) {
 	// At the end of each test, terminate connection.
 	c.IncConn.Close()
 }
+*/

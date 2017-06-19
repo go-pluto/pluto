@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"sync"
 
 	"crypto/tls"
@@ -123,9 +124,10 @@ func (sender *Sender) BrokerMsgs() {
 				level.Error(sender.logger).Log("msg", fmt.Sprintf("failed to marshal enriched downstream Msg to ProtoBuf: %v", err))
 				os.Exit(1)
 			}
-			data = append(data, '\n')
 
-			level.Info(sender.logger).Log("msg", fmt.Sprintf("data: '%#v'", data))
+			// Prepend binary message with length in bytes.
+			// TODO: Make this fast?
+			data = append([]byte(fmt.Sprintf("%d;", len(data))), data...)
 
 			// Write it to message log file.
 			_, err = sender.writeLog.Write(data)
@@ -203,10 +205,37 @@ func (sender *Sender) SendMsgs() {
 				os.Exit(1)
 			}
 
-			// Read oldest message from log file.
-			payload, err := buf.ReadBytes('\n')
+			// Read byte amount of following binary message.
+			numBytesRaw, err := buf.ReadBytes(';')
 			if (err != nil) && (err != io.EOF) {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("error during extraction of first line in CRDT log file: %v", err))
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("error extracting number of bytes of first message in CRDT log file: %v", err))
+				os.Exit(1)
+			}
+
+			// Reset position to byte directly after message length separator.
+			_, err = sender.updLog.Seek(int64(len(numBytesRaw)), os.SEEK_SET)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not change position in CRDT log file: %v", err))
+				os.Exit(1)
+			}
+
+			// Convert string to number.
+			numBytes, err := strconv.ParseInt((string(numBytesRaw[:(len(numBytesRaw) - 1)])), 10, 64)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("failed to convert string to int indicating number of bytes: %v", err))
+				os.Exit(1)
+			}
+
+			// Reserve exactly enough space for current message
+			// in downstream BinMsg.
+			binMsg := &BinMsg{
+				Data: make([]byte, numBytes),
+			}
+
+			// Read oldest message from log file.
+			numRead, err := sender.updLog.Read(binMsg.Data)
+			if err != nil {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("error during extraction of first message in CRDT log file: %v", err))
 				os.Exit(1)
 			}
 
@@ -220,15 +249,15 @@ func (sender *Sender) SendMsgs() {
 			// Unlock mutex.
 			sender.lock.Unlock()
 
-			sender.logger.Log("msg", fmt.Sprintf("[TODO] BEFORE newline remove: '%#v'", payload))
-			// Remove trailing newline symbol from payload.
-			payload = payload[:(len(payload) - 1)]
-			sender.logger.Log("msg", fmt.Sprintf("[TODO] AFTER newline remove: '%#v'", payload))
-
-			// Prepare BinMsg to send to other nodes.
-			binMsg := &BinMsg{
-				Data: payload,
+			// Check number of read bytes.
+			if int64(numRead) != numBytes {
+				level.Error(sender.logger).Log("msg", fmt.Sprintf("expected message of length %d, but only read %d", numBytes, numRead))
+				os.Exit(1)
 			}
+
+			// Calculate total space of stored message:
+			// number of bytes prefix + ';' + actual message.
+			msgSize := int64(len(numBytesRaw)) + numBytes
 
 			// TODO: Parallelize this loop?
 			for node, addr := range sender.nodes {
@@ -251,7 +280,10 @@ func (sender *Sender) SendMsgs() {
 					os.Exit(1)
 				}
 
-				level.Info(sender.logger).Log("msg", fmt.Sprintf("[TODO] ANSWER TO SYNC TRANSPORT: '%#v'", conf))
+				if conf.Status != 0 {
+					level.Error(sender.logger).Log("msg", fmt.Sprintf("sending downstream message to %s returned code: %d", node, conf.Status))
+					os.Exit(1)
+				}
 			}
 
 			// Lock mutex.
@@ -265,10 +297,10 @@ func (sender *Sender) SendMsgs() {
 			}
 
 			// Create a buffer of capacity of read file size.
-			buf = bytes.NewBuffer(make([]byte, 0, info.Size()))
+			buf = bytes.NewBuffer(make([]byte, 0, (info.Size() - msgSize)))
 
-			// Reset position to beginning of file.
-			_, err = sender.updLog.Seek(0, os.SEEK_SET)
+			// Reset position to byte after first message in file.
+			_, err = sender.updLog.Seek(msgSize, os.SEEK_SET)
 			if err != nil {
 				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
 				os.Exit(1)
@@ -278,13 +310,6 @@ func (sender *Sender) SendMsgs() {
 			_, err = io.Copy(buf, sender.updLog)
 			if err != nil {
 				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not copy CRDT log file contents to buffer: %v", err))
-				os.Exit(1)
-			}
-
-			// Read oldest message from log file.
-			_, err = buf.ReadString('\n')
-			if (err != nil) && (err != io.EOF) {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("error during extraction of first line in CRDT log file: %v", err))
 				os.Exit(1)
 			}
 

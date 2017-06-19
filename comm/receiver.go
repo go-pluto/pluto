@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -186,19 +187,15 @@ func (recv *Receiver) TriggerMsgApplier() {
 // a trigger is sent to the application routine.
 func (recv *Receiver) Incoming(ctx context.Context, binMsg *BinMsg) (*Conf, error) {
 
-	level.Info(recv.logger).Log("msg", fmt.Sprintf("[TODO] INCOMING BINMSG: '%#v'", binMsg))
+	// Prepend binary message with length in bytes.
+	// TODO: Make this fast?
+	data := append([]byte(fmt.Sprintf("%d;", len(binMsg.Data))), binMsg.Data...)
 
 	// Lock mutex.
 	recv.lock.Lock()
 
 	// Write it to message log file.
-	_, err := recv.writeLog.Write(binMsg.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	// Append newline character to just written message.
-	_, err = recv.writeLog.Write([]byte("\n"))
+	_, err := recv.writeLog.Write(data)
 	if err != nil {
 		return nil, err
 	}
@@ -305,21 +302,38 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				os.Exit(1)
 			}
 
-			// Read current message at head position from log file.
-			msgRaw, err := buf.ReadBytes('\n')
+			// Read byte amount of following binary message.
+			numBytesRaw, err := buf.ReadBytes(';')
 			if (err != nil) && (err != io.EOF) {
-				level.Error(recv.logger).Log("msg", fmt.Sprintf("error during extraction of first line in CRDT log file: %v", err))
+				level.Error(recv.logger).Log("msg", fmt.Sprintf("error extracting number of bytes of first message in CRDT log file: %v", err))
 				os.Exit(1)
 			}
 
-			// Save length of just read message for later use.
-			msgRawLength := int64(len(msgRaw))
+			// Convert string to number.
+			numBytes, err := strconv.ParseInt((string(numBytesRaw[:(len(numBytesRaw) - 1)])), 10, 64)
+			if err != nil {
+				level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to convert string to int indicating number of bytes: %v", err))
+				os.Exit(1)
+			}
 
-			level.Info(recv.logger).Log("msg", fmt.Sprintf("[TODO] BEFORE last byte msgRaw: '%#v': '%s'", msgRaw[(len(msgRaw)-1)], msgRaw[(len(msgRaw)-1)]))
-			level.Info(recv.logger).Log("msg", fmt.Sprintf("[TODO] BEFORE msgRaw (%d): '%#v'", len(msgRaw), msgRaw))
-			msgRaw = msgRaw[:(len(msgRaw) - 1)]
-			level.Info(recv.logger).Log("msg", fmt.Sprintf("[TODO] AFTER last byte msgRaw: '%#v': '%s'", msgRaw[(len(msgRaw)-1)], msgRaw[(len(msgRaw)-1)]))
-			level.Info(recv.logger).Log("msg", fmt.Sprintf("[TODO] AFTER msgRaw (%d): '%#v'", len(msgRaw), msgRaw))
+			// Reserve exactly enough space for current message.
+			msgRaw := make([]byte, numBytes)
+
+			// Read current message from buffer of log file.
+			numRead, err := buf.Read(msgRaw)
+			if err != nil {
+				level.Error(recv.logger).Log("msg", fmt.Sprintf("error during extraction of current message in CRDT log file: %v", err))
+				os.Exit(1)
+			}
+
+			if int64(numRead) != numBytes {
+				level.Error(recv.logger).Log("msg", fmt.Sprintf("expected message of length %d, but only read %d", numBytes, numRead))
+				os.Exit(1)
+			}
+
+			// Calculate total space of stored message:
+			// number of bytes prefix + ';' + actual message.
+			msgSize := int64(len(numBytesRaw)) + numBytes
 
 			// Unmarshal read ProtoBuf into defined Msg struct.
 			msg := &Msg{}
@@ -328,8 +342,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to unmarshal read ProtoBuf into defined Msg struct: %v", err))
 				os.Exit(1)
 			}
-
-			level.Info(recv.logger).Log("msg", fmt.Sprintf("[TODO] Unmarshalled Msg: '%#v'", msg))
 
 			// Initially, set apply indicator to true. This means,
 			// that the message would be considered for further parsing.
@@ -362,14 +374,10 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			// parsed message. We therefore cycle to the next message.
 			if applyMsg {
 
-				level.Info(recv.logger).Log("msg", "[TODO] A")
-
 				// If this message is actually the next expected one,
 				// process its contents with CRDT logic. This ensures
 				// that message duplicates will get purged but not applied.
 				if msg.Vclock[msg.Replica] == (recv.vclock[msg.Replica] + 1) {
-
-					level.Info(recv.logger).Log("msg", "[TODO] B (REALLY APPLY)")
 
 					// Pass payload for higher-level interpretation
 					// to channel connected to node.
@@ -378,8 +386,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					// Wait for done signal from node.
 					<-recv.doneCRDTUpdChan
 				}
-
-				level.Info(recv.logger).Log("msg", "[TODO] C")
 
 				for node, value := range msg.Vclock {
 
@@ -405,7 +411,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				}
 
 				// Copy reduced buffer contents back to current position
-				// of CRDT log file, effectively deleting the read line.
+				// of CRDT log file, effectively deleting the read message.
 				newNumOfBytes, err := io.Copy(recv.updLog, buf)
 				if err != nil {
 					level.Error(recv.logger).Log("msg", fmt.Sprintf("error during copying buffer contents back to CRDT log file: %v", err))
@@ -441,7 +447,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 
 				// Set position of head to byte after just read message,
 				// effectively delaying execution of that message.
-				_, err = recv.updLog.Seek((curOffset + msgRawLength), os.SEEK_SET)
+				_, err = recv.updLog.Seek((curOffset + msgSize), os.SEEK_SET)
 				if err != nil {
 					level.Error(recv.logger).Log("msg", fmt.Sprintf("error while moving position in CRDT log file to next line: %v", err))
 					os.Exit(1)

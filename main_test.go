@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
 	"crypto/tls"
 	stdlog "log"
@@ -198,3 +199,4 @@ func TearDownNormalSetup(testEnv *utils.TestEnv) {
 	// Wait shortly.
 	time.Sleep(500 * time.Millisecond)
 }
+*/
