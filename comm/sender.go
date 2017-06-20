@@ -43,7 +43,7 @@ type Sender struct {
 // with. It returns a channel local processes can put
 // CRDT changes into, so that those changes will be
 // communicated to connected nodes.
-func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *tls.Config, incVClock chan string, updVClock chan map[string]uint32, downSender chan struct{}, nodes map[string]string) (chan Msg, error) {
+func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *tls.Config, incVClock chan string, updVClock chan map[string]uint32, nodes map[string]string) (chan Msg, error) {
 
 	// Create and initialize what we need for
 	// a CRDT sender routine.

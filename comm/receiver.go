@@ -36,6 +36,7 @@ type Receiver struct {
 	updVClock        chan map[string]uint32
 	vclock           map[string]uint32
 	vclockLog        *os.File
+	stopTrigger      chan struct{}
 	applyCRDTUpdChan chan Msg
 	doneCRDTUpdChan  chan struct{}
 	nodes            []string
@@ -46,7 +47,7 @@ type Receiver struct {
 // InitReceiver initializes above struct and sets
 // default values. It starts involved background
 // routines and send initial channel trigger.
-func InitReceiver(logger log.Logger, name string, logFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan Msg, doneCRDTUpdChan chan struct{}, downRecv chan struct{}, nodes []string) (chan string, chan map[string]uint32, error) {
+func InitReceiver(logger log.Logger, name string, logFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan Msg, doneCRDTUpdChan chan struct{}, nodes []string) (chan string, chan map[string]uint32, error) {
 
 	// Create and initialize new struct.
 	recv := &Receiver{
@@ -59,6 +60,7 @@ func InitReceiver(logger log.Logger, name string, logFilePath string, vclockLogP
 		incVClock:        make(chan string),
 		updVClock:        make(chan map[string]uint32),
 		vclock:           make(map[string]uint32),
+		stopTrigger:      make(chan struct{}),
 		applyCRDTUpdChan: applyCRDTUpdChan,
 		doneCRDTUpdChan:  doneCRDTUpdChan,
 		nodes:            nodes,
@@ -127,7 +129,7 @@ func InitReceiver(logger log.Logger, name string, logFilePath string, vclockLogP
 	recv.msgInLog <- struct{}{}
 
 	// Start triggering msgInLog events periodically.
-	go recv.TriggerMsgApplier()
+	go recv.TriggerMsgApplier(5)
 
 	return recv.incVClock, recv.updVClock, nil
 }
@@ -155,10 +157,10 @@ func (recv *Receiver) StartGRPCRecv() error {
 // an msgInLog event when duration elapsed. Supposed
 // to routinely poke the ApplyStoredMsgs into checking
 // for unprocessed messages in log.
-func (recv *Receiver) TriggerMsgApplier() {
+func (recv *Receiver) TriggerMsgApplier(waitSeconds time.Duration) {
 
 	// Specify duration to wait between triggers.
-	triggerD := 5 * time.Second
+	triggerD := waitSeconds * time.Second
 
 	// Create a timer that waits for one second
 	// to elapse and then fires.
@@ -166,17 +168,27 @@ func (recv *Receiver) TriggerMsgApplier() {
 
 	for {
 
-		_, ok := <-triggerT.C
-		if ok {
+		select {
 
-			// If buffered channel indicating an arrived
-			// msg is not full yet, make it full.
-			if len(recv.msgInLog) < 1 {
-				recv.msgInLog <- struct{}{}
+		case <-recv.stopTrigger:
+
+			// If stop channel was activated,
+			// shut down trigger and return.
+			triggerT.Stop()
+			return
+
+		case _, ok := <-triggerT.C:
+			if ok {
+
+				// If buffered channel indicating an arrived
+				// msg is not full yet, make it full.
+				if len(recv.msgInLog) < 1 {
+					recv.msgInLog <- struct{}{}
+				}
+
+				// Renew timer.
+				triggerT.Reset(triggerD)
 			}
-
-			// Renew timer.
-			triggerT.Reset(triggerD)
 		}
 	}
 }
