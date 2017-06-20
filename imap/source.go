@@ -217,16 +217,16 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 	if err != nil {
 
 		// Perform clean up.
-		stdlog.Printf("[imap.Create] Fail: %v", err)
-		stdlog.Printf("[imap.Create] Removing just created Maildir completely...")
+		stdlog.Printf("fail: %v", err)
+		stdlog.Printf("removing just created Maildir completely...")
 
 		// Attempt to remove Maildir.
 		err = posMaildir.Remove()
 		if err != nil {
-			stdlog.Printf("[imap.Create] ... failed to remove Maildir: %v", err)
-			stdlog.Printf("[imap.Create] Exiting")
+			stdlog.Printf("... failed to remove Maildir: %v", err)
+			stdlog.Printf("exiting")
 		} else {
-			stdlog.Printf("[imap.Create] ... done - exiting")
+			stdlog.Printf("... done - exiting")
 		}
 
 		os.Exit(1)
@@ -257,23 +257,23 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 	if err != nil {
 
 		// Perform clean up.
-		stdlog.Printf("[imap.Create] Fail: %v", err)
-		stdlog.Printf("[imap.Create] Removing added CRDT from mailbox structure...")
+		stdlog.Printf("fail: %v", err)
+		stdlog.Printf("removing added CRDT from mailbox structure...")
 
 		// Remove just added CRDT of new maildir from mailbox structure
 		// and corresponding contents slice.
 		delete(node.MailboxStructure[s.UserName], posMailbox)
 		delete(node.MailboxContents[s.UserName], posMailbox)
 
-		stdlog.Printf("[imap.Create] ... done. Removing just created Maildir completely...")
+		stdlog.Printf("... done - removing just created Maildir completely...")
 
 		// Attempt to remove Maildir.
 		err = posMaildir.Remove()
 		if err != nil {
-			stdlog.Printf("[imap.Create] ... failed to remove Maildir: %v", err)
-			stdlog.Printf("[imap.Create] Exiting")
+			stdlog.Printf("... failed to remove Maildir: %v", err)
+			stdlog.Printf("exiting")
 		} else {
-			stdlog.Printf("[imap.Create] ... done - exiting")
+			stdlog.Printf("... done - exiting")
 		}
 
 		os.Exit(1)
@@ -377,7 +377,7 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 
 		// Otherwise, this is a write-back error of the updated CRDT
 		// log file. Reverting actions were already taken, log error.
-		stdlog.Printf("[imap.Delete] Failed to remove elements from user's main CRDT: %v", err)
+		stdlog.Printf("failed to remove elements from user's main CRDT: %v", err)
 
 		os.Exit(1)
 	}
@@ -711,15 +711,15 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	if err != nil {
 
 		// Perform clean up.
-		stdlog.Printf("[imap.Append] Fail: %v", err)
-		stdlog.Printf("[imap.Append] Removing just appended mail message...")
+		stdlog.Printf("fail: %v", err)
+		stdlog.Printf("removing just appended mail message...")
 
 		err := os.Remove(mailFileNamePath)
 		if err != nil {
-			stdlog.Printf("[imap.Append] ... failed: %v", err)
-			stdlog.Printf("[imap.Append] Exiting")
+			stdlog.Printf("... failed: %v", err)
+			stdlog.Printf("exiting")
 		} else {
-			stdlog.Printf("[imap.Append] ... done - exiting")
+			stdlog.Printf("... done - exiting")
 		}
 
 		os.Exit(1)
@@ -846,7 +846,7 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
-				stdlog.Printf("[imap.Expunge] Failed to remove mails from user's selected mailbox CRDT: %v", err)
+				stdlog.Printf("failed to remove mails from user's selected mailbox CRDT: %v", err)
 				node.Lock.Unlock()
 				os.Exit(1)
 			}
@@ -1135,7 +1135,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
-				stdlog.Printf("[imap.Store] Failed to remove old mail name from selected mailbox CRDT: %v", err)
+				stdlog.Printf("failed to remove old mail name from selected mailbox CRDT: %v", err)
 				node.Lock.Unlock()
 				os.Exit(1)
 			}
@@ -1162,7 +1162,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
-				stdlog.Printf("[imap.Store] Failed to add renamed mail name to selected mailbox CRDT: %v", err)
+				stdlog.Printf("failed to add renamed mail name to selected mailbox CRDT: %v", err)
 				node.Lock.Unlock()
 				os.Exit(1)
 			}

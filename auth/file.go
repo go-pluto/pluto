@@ -41,7 +41,7 @@ func NewFile(file string, sep string) (*File, error) {
 	// Open file with authentication information.
 	handle, err := os.Open(file)
 	if err != nil {
-		return nil, fmt.Errorf("[auth.NewFile] Could not open supplied authentication file: %v", err)
+		return nil, fmt.Errorf("could not open supplied authentication file: %v", err)
 	}
 	defer handle.Close()
 
@@ -71,7 +71,7 @@ func NewFile(file string, sep string) (*File, error) {
 
 	// If the scanner ended with an error, report it.
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("[auth.NewFile] Experienced error while scanning authentication file: %v", err)
+		return nil, fmt.Errorf("experienced error while scanning authentication file: %v", err)
 	}
 
 	// Sort users list to search it efficiently later on.

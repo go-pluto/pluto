@@ -67,21 +67,21 @@ func InitReceiver(logger log.Logger, name string, logFilePath string, vclockLogP
 	// Open log file descriptor for writing.
 	write, err := os.OpenFile(logFilePath, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
 	if err != nil {
-		return nil, nil, fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for writing failed with: %v", err)
+		return nil, nil, fmt.Errorf("opening CRDT log file for writing failed with: %v", err)
 	}
 	recv.writeLog = write
 
 	// Open log file descriptor for updating.
 	upd, err := os.OpenFile(logFilePath, os.O_RDWR, 0600)
 	if err != nil {
-		return nil, nil, fmt.Errorf("[comm.InitReceiver] Opening CRDT log file for updating failed with: %v", err)
+		return nil, nil, fmt.Errorf("opening CRDT log file for updating failed with: %v", err)
 	}
 	recv.updLog = upd
 
 	// Initially, reset position in update file to beginning.
 	_, err = recv.updLog.Seek(0, os.SEEK_SET)
 	if err != nil {
-		return nil, nil, fmt.Errorf("[comm.InitReceiver] Could not reset position in update CRDT log file: %v", err)
+		return nil, nil, fmt.Errorf("could not reset position in update CRDT log file: %v", err)
 	}
 
 	// Initially set vector clock entries to 0.
@@ -95,20 +95,20 @@ func InitReceiver(logger log.Logger, name string, logFilePath string, vclockLogP
 	// Open log file of last known vector clock values.
 	vclockLog, err := os.OpenFile(vclockLogPath, (os.O_CREATE | os.O_RDWR), 0600)
 	if err != nil {
-		return nil, nil, fmt.Errorf("[comm.InitReceiver] Opening vector clock log failed with: %v", err)
+		return nil, nil, fmt.Errorf("opening vector clock log failed with: %v", err)
 	}
 	recv.vclockLog = vclockLog
 
 	// Initially, reset position in vector clock file to beginning.
 	_, err = recv.vclockLog.Seek(0, os.SEEK_SET)
 	if err != nil {
-		return nil, nil, fmt.Errorf("[comm.InitReceiver] Could not reset position in vector clock log: %v", err)
+		return nil, nil, fmt.Errorf("could not reset position in vector clock log: %v", err)
 	}
 
 	// If vector clock entries were preserved, set them.
 	err = recv.SetVClockEntries()
 	if err != nil {
-		return nil, nil, fmt.Errorf("[comm.InitReceiver] Reading in stored vector clock entries failed: %v", err)
+		return nil, nil, fmt.Errorf("reading in stored vector clock entries failed: %v", err)
 	}
 
 	// Start routine in background that takes care of

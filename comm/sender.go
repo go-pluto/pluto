@@ -62,14 +62,14 @@ func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *t
 	// Open log file descriptor for writing.
 	write, err := os.OpenFile(logFilePath, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
 	if err != nil {
-		return nil, fmt.Errorf("[comm.InitSender] Opening CRDT log file for writing failed with: %v", err)
+		return nil, fmt.Errorf("opening CRDT log file for writing failed with: %v", err)
 	}
 	sender.writeLog = write
 
 	// Open log file descriptor for updating.
 	upd, err := os.OpenFile(logFilePath, os.O_RDWR, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("[comm.InitSender] Opening CRDT log file for updating failed with: %v", err)
+		return nil, fmt.Errorf("opening CRDT log file for updating failed with: %v", err)
 	}
 	sender.updLog = upd
 

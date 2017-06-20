@@ -38,7 +38,7 @@ func NewPublicTLSConfig(certPath string, keyPath string) (*tls.Config, error) {
 	// only certificate into config.
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
 	if err != nil {
-		return nil, fmt.Errorf("[crypto.NewPublicTLSConfig] Failed to load TLS cert and key: %v", err)
+		return nil, fmt.Errorf("failed to load TLS cert and key: %v", err)
 	}
 	config.Certificates[0] = cert
 
@@ -81,24 +81,24 @@ func NewInternalTLSConfig(certPath string, keyPath string, rootCertPath string) 
 	// via path in arguments.
 	rootCert, err := ioutil.ReadFile(rootCertPath)
 	if err != nil {
-		return nil, fmt.Errorf("[crypto.NewInternalTLSConfig] Reading root certificate into memory failed with: %v", err)
+		return nil, fmt.Errorf("reading root certificate into memory failed with: %v", err)
 	}
 
 	// Append root certificate to root CA pool.
 	if ok := config.RootCAs.AppendCertsFromPEM(rootCert); !ok {
-		return nil, fmt.Errorf("[crypto.NewInternalTLSConfig] Failed to append root certificate to root CA pool: %v", err)
+		return nil, fmt.Errorf("failed to append root certificate to root CA pool: %v", err)
 	}
 
 	// Append root certificate to client CA pool.
 	if ok := config.ClientCAs.AppendCertsFromPEM(rootCert); !ok {
-		return nil, fmt.Errorf("[crypto.NewInternalTLSConfig] Failed to append root certificate to client CA pool: %v", err)
+		return nil, fmt.Errorf("failed to append root certificate to client CA pool: %v", err)
 	}
 
 	// Put certificate specified via arguments as the
 	// only certificate into config.
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
 	if err != nil {
-		return nil, fmt.Errorf("[crypto.NewInternalTLSConfig] Failed to load TLS cert and key: %v", err)
+		return nil, fmt.Errorf("failed to load TLS cert and key: %v", err)
 	}
 	config.Certificates[0] = cert
 

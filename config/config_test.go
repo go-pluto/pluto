@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/numbleroot/pluto/config"
+	"github.com/stretchr/testify/assert"
 )
 
 // Functions
@@ -16,27 +17,19 @@ func TestLoadConfig(t *testing.T) {
 
 	// Try to load a broken config file. This should fail.
 	_, err := config.LoadConfig("test-broken-config.toml")
-	if err == nil {
-		t.Fatal("[config.TestLoadConfig] Expected fail while loading 'test-broken-config.toml' but received 'nil' error.")
-	}
+	assert.NotNilf(t, err, "expected LoadConfig() to return non-nil error while loading 'test-broken-config.toml' but error was nil")
 
 	// Now load a valid config.
 	conf, err := config.LoadConfig("../test-config.toml")
-	if err != nil {
-		t.Fatalf("[config.TestLoadConfig] Expected success while loading 'test-config.toml' but received: '%s'\n", err.Error())
-	}
+	assert.Nilf(t, err, "expected LoadConfig() to return nil error while loading valid config but received: %v", err)
 
 	// Retrieve absolute path of pluto directory.
 	absPlutoPath, err := filepath.Abs("../")
-	if err != nil {
-		t.Fatalf("[config.TestLoadConfig] Expected to retrieve absolute path of pluto directory with success but error says: %s\n", err.Error())
-	}
+	assert.Nilf(t, err, "expected to find absolute pluto path with nil error but received: %v", err)
 
 	// Build correct cert location path.
 	absCertLoc := filepath.Join(absPlutoPath, "private/public-distributor-cert.pem")
 
 	// Check for test success.
-	if conf.Distributor.PublicTLS.CertLoc != absCertLoc {
-		t.Fatalf("[config.TestLoadConfig] Expected '%s' but received '%s'\n", absCertLoc, conf.Distributor.PublicTLS.CertLoc)
-	}
+	assert.Equalf(t, absCertLoc, conf.Distributor.PublicTLS.CertLoc, "expected certificate path to be '%s' but found '%s'", absCertLoc, conf.Distributor.PublicTLS.CertLoc)
 }

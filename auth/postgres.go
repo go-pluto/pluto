@@ -49,7 +49,7 @@ func NewPostgresAuthenticator(ip string, port uint16, db string, user string, pa
 	// Connect to PostgreSQL database based on above config.
 	conn, err := pgx.Connect(connConfig)
 	if err != nil {
-		return nil, fmt.Errorf("[auth.NewPostgresAuthenticator] Could not connect to specified PostgreSQL database: %v", err)
+		return nil, fmt.Errorf("could not connect to specified PostgreSQL database: %v", err)
 	}
 
 	return &PostgresAuthenticator{

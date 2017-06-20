@@ -48,6 +48,7 @@ func NewPlutoMetrics(distributorAddr string) *PlutoMetrics {
 }
 
 func runPromHTTP(addr string) {
+
 	if addr == "" {
 		return
 	}
