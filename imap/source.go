@@ -50,7 +50,7 @@ func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Command SELECT cannot be executed in this state\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command SELECT cannot be executed in this state", req.Tag),
 		}, nil
 	}
 
@@ -59,7 +59,7 @@ func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (
 		// If no mailbox to select was specified in payload,
 		// this is a client error. Return BAD statement.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command SELECT was sent without a mailbox to select", req.Tag),
 		}, nil
 	}
 
@@ -71,7 +71,7 @@ func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (
 		// If there were more than two names supplied to select,
 		// this is a client error. Return BAD statement.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command SELECT was sent with multiple mailbox names instead of only one", req.Tag),
 		}, nil
 	}
 
@@ -94,7 +94,7 @@ func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (
 		// If specified maildir did not turn out to be a valid one,
 		// this is a client error. Return NO statement.
 		return &Reply{
-			Text: fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder\r\n", req.Tag),
+			Text: fmt.Sprintf("%s NO SELECT failure, not a valid Maildir folder", req.Tag),
 		}, nil
 	}
 
@@ -122,7 +122,7 @@ func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (
 			// Return an vague explanation error to caller in
 			// error case and indicate failure to distributor.
 			return &Reply{
-				Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+				Text:   "* BAD Internal server error, sorry. Closing connection.",
 				Status: 1,
 			}, fmt.Errorf("error while retrieving flags for mail: %v", err)
 		}
@@ -137,7 +137,7 @@ func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (
 
 	// Send answer to requesting client.
 	return &Reply{
-		Text: fmt.Sprintf("* %d EXISTS\r\n* %d RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\n%s OK [READ-WRITE] SELECT completed\r\n", len(selMailboxContents), recentMails, req.Tag),
+		Text: fmt.Sprintf("* %d EXISTS\r\n* %d RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\n%s OK [READ-WRITE] SELECT completed", len(selMailboxContents), recentMails, req.Tag),
 	}, nil
 }
 
@@ -151,7 +151,7 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag),
 		}, nil
 	}
 
@@ -163,7 +163,7 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 		// If payload did not contain exactly one element,
 		// this is a client error. Return BAD statement.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Command CREATE was not sent with exactly one parameter\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command CREATE was not sent with exactly one parameter", req.Tag),
 		}, nil
 	}
 
@@ -176,7 +176,7 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 		// If mailbox to-be-created was named INBOX,
 		// this is a client error. Return NO response.
 		return &Reply{
-			Text: fmt.Sprintf("%s NO New mailbox cannot be named INBOX\r\n", req.Tag),
+			Text: fmt.Sprintf("%s NO New mailbox cannot be named INBOX", req.Tag),
 		}, nil
 	}
 
@@ -198,7 +198,7 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 		// If mailbox to-be-created already exists for user,
 		// this is a client error. Return NO response.
 		return &Reply{
-			Text: fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox\r\n", req.Tag),
+			Text: fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox", req.Tag),
 		}, nil
 	}
 
@@ -207,7 +207,7 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 	if err != nil {
 
 		return &Reply{
-			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Text:   "* BAD Internal server error, sorry. Closing connection.",
 			Status: 1,
 		}, fmt.Errorf("error while creating Maildir for new mailbox: %v", err)
 	}
@@ -280,7 +280,7 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 	}
 
 	return &Reply{
-		Text: fmt.Sprintf("%s OK CREATE completed\r\n", req.Tag),
+		Text: fmt.Sprintf("%s OK CREATE completed", req.Tag),
 	}, nil
 }
 
@@ -294,7 +294,7 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Command DELETE cannot be executed in this state\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command DELETE cannot be executed in this state", req.Tag),
 		}, nil
 	}
 
@@ -306,7 +306,7 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 		// If payload did not contain exactly one element,
 		// this is a client error. Return BAD statement.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Command DELETE was not sent with exactly one parameter\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command DELETE was not sent with exactly one parameter", req.Tag),
 		}, nil
 	}
 
@@ -319,7 +319,7 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 		// If mailbox to-be-deleted was named INBOX,
 		// this is a client error. Return NO response.
 		return &Reply{
-			Text: fmt.Sprintf("%s NO Forbidden to delete INBOX\r\n", req.Tag),
+			Text: fmt.Sprintf("%s NO Forbidden to delete INBOX", req.Tag),
 		}, nil
 	}
 
@@ -371,7 +371,7 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 			// Check if error was caused by client, trying to
 			// delete an non-existent mailbox.
 			return &Reply{
-				Text: fmt.Sprintf("%s NO Cannot delete folder that does not exist\r\n", req.Tag),
+				Text: fmt.Sprintf("%s NO Cannot delete folder that does not exist", req.Tag),
 			}, nil
 		}
 
@@ -393,7 +393,7 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 
 		// TODO: Maybe think about better way to clean up here?
 		return &Reply{
-			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Text:   "* BAD Internal server error, sorry. Closing connection.",
 			Status: 1,
 		}, fmt.Errorf("error while deleting CRDT file of mailbox: %v", err)
 	}
@@ -405,13 +405,13 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 
 		// TODO: Maybe think about better way to clean up here?
 		return &Reply{
-			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Text:   "* BAD Internal server error, sorry. Closing connection.",
 			Status: 1,
 		}, fmt.Errorf("error while deleting Maildir: %v", err)
 	}
 
 	return &Reply{
-		Text: fmt.Sprintf("%s OK DELETE completed\r\n", req.Tag),
+		Text: fmt.Sprintf("%s OK DELETE completed", req.Tag),
 	}, nil
 }
 
@@ -425,7 +425,7 @@ func (node *IMAPNode) List(s *Session, req *Request, syncChan chan comm.Msg) (*R
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Command LIST cannot be executed in this state\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command LIST cannot be executed in this state", req.Tag),
 		}, nil
 	}
 
@@ -437,7 +437,7 @@ func (node *IMAPNode) List(s *Session, req *Request, syncChan chan comm.Msg) (*R
 		// If payload did not contain between exactly two elements,
 		// this is a client error. Return BAD statement.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Command LIST was not sent with exactly two arguments\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command LIST was not sent with exactly two arguments", req.Tag),
 		}, nil
 	}
 
@@ -446,7 +446,7 @@ func (node *IMAPNode) List(s *Session, req *Request, syncChan chan comm.Msg) (*R
 		// If second argument is not one of two wildcards,
 		// this is a client error. Return BAD statement.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Command LIST needs either '%%' or '*' as mailbox name\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command LIST needs either '%%' or '*' as mailbox name", req.Tag),
 		}, nil
 	}
 
@@ -491,9 +491,9 @@ func (node *IMAPNode) List(s *Session, req *Request, syncChan chan comm.Msg) (*R
 	}
 
 	if answer == "" {
-		answer = fmt.Sprintf("%s OK LIST completed\r\n", req.Tag)
+		answer = fmt.Sprintf("%s OK LIST completed", req.Tag)
 	} else {
-		answer = fmt.Sprintf("%s%s OK LIST completed\r\n", answer, req.Tag)
+		answer = fmt.Sprintf("%s%s OK LIST completed", answer, req.Tag)
 	}
 
 	return &Reply{
@@ -513,7 +513,7 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
 		return &Await{
-			Text: fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command APPEND cannot be executed in this state", req.Tag),
 		}, nil
 	}
 
@@ -527,7 +527,7 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 		// elements, this is a client error.
 		// Return BAD statement.
 		return &Await{
-			Text: fmt.Sprintf("%s BAD Command APPEND was not sent with appropriate number of parameters\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command APPEND was not sent with appropriate number of parameters", req.Tag),
 		}, nil
 	}
 
@@ -570,7 +570,7 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 			// Parsing flags from APPEND request produced
 			// an error. Return tagged BAD response.
 			return &Await{
-				Text: fmt.Sprintf("%s BAD %s\r\n", req.Tag, err.Error()),
+				Text: fmt.Sprintf("%s BAD %s", req.Tag, err.Error()),
 			}, nil
 		}
 
@@ -593,7 +593,7 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 		// If we were not able to parse out the number,
 		// it was probably a client error. Send tagged BAD.
 		return &Await{
-			Text: fmt.Sprintf("%s BAD Command APPEND did not contain proper literal data byte number\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command APPEND did not contain proper literal data byte number", req.Tag),
 		}, nil
 	}
 
@@ -619,12 +619,12 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 		// If mailbox to append message to does not exist,
 		// this is a client error. Return NO response.
 		return &Await{
-			Text: fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist\r\n", req.Tag),
+			Text: fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag),
 		}, nil
 	}
 
 	return &Await{
-		Text:     "+ Ready for literal data\r\n",
+		Text:     "+ Ready for literal data",
 		NumBytes: uint32(numBytes),
 	}, nil
 }
@@ -633,8 +633,6 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 // prior AppendBegin.
 func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.Msg) (*Reply, error) {
 
-	// TODO: Check if APPEND even in progress for this node.
-
 	defer node.Lock.Unlock()
 
 	// Open a new Maildir delivery.
@@ -642,7 +640,7 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	if err != nil {
 
 		return &Reply{
-			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Text:   "* BAD Internal server error, sorry. Closing connection.",
 			Status: 1,
 		}, fmt.Errorf("error during delivery creation: %v", err)
 	}
@@ -652,7 +650,7 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	if err != nil {
 
 		return &Reply{
-			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Text:   "* BAD Internal server error, sorry. Closing connection.",
 			Status: 1,
 		}, fmt.Errorf("error during writing message during delivery: %v", err)
 	}
@@ -662,7 +660,7 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	if err != nil {
 
 		return &Reply{
-			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Text:   "* BAD Internal server error, sorry. Closing connection.",
 			Status: 1,
 		}, fmt.Errorf("error finishing delivery of new message: %v", err)
 	}
@@ -672,7 +670,7 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	if err != nil {
 
 		return &Reply{
-			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Text:   "* BAD Internal server error, sorry. Closing connection.",
 			Status: 1,
 		}, fmt.Errorf("error executing Unseen() on recently delivered messages: %v", err)
 	}
@@ -682,7 +680,7 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	if err != nil {
 
 		return &Reply{
-			Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+			Text:   "* BAD Internal server error, sorry. Closing connection.",
 			Status: 1,
 		}, fmt.Errorf("error finding file name of new message: %v", err)
 	}
@@ -727,7 +725,7 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 		os.Exit(1)
 	}
 
-	answer := fmt.Sprintf("%s OK APPEND completed\r\n", s.AppendInProg.Tag)
+	answer := fmt.Sprintf("%s OK APPEND completed", s.AppendInProg.Tag)
 
 	// Delete in-progress-object after APPEND is done.
 	s.AppendInProg = nil
@@ -748,7 +746,7 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD No mailbox selected to expunge\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD No mailbox selected to expunge", req.Tag),
 		}, nil
 	}
 
@@ -757,7 +755,7 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 		// If payload was not empty to EXPUNGE command,
 		// this is a client error. Return BAD statement.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Command EXPUNGE was sent with extra parameters\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command EXPUNGE was sent with extra parameters", req.Tag),
 		}, nil
 	}
 
@@ -800,7 +798,7 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 				node.Lock.Unlock()
 
 				return &Reply{
-					Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+					Text:   "* BAD Internal server error, sorry. Closing connection.",
 					Status: 1,
 				}, fmt.Errorf("error retrieving flags for expunging mails: %v", err)
 			}
@@ -863,7 +861,7 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 				node.Lock.Unlock()
 
 				return &Reply{
-					Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+					Text:   "* BAD Internal server error, sorry. Closing connection.",
 					Status: 1,
 				}, fmt.Errorf("error while removing expunged mail file from stable storage: %v", err)
 			}
@@ -890,9 +888,9 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 	}
 
 	if answer == "" {
-		answer = fmt.Sprintf("%s OK EXPUNGE completed\r\n", req.Tag)
+		answer = fmt.Sprintf("%s OK EXPUNGE completed", req.Tag)
 	} else {
-		answer = fmt.Sprintf("%s%s OK EXPUNGE completed\r\n", answer, req.Tag)
+		answer = fmt.Sprintf("%s%s OK EXPUNGE completed", answer, req.Tag)
 	}
 
 	return &Reply{
@@ -915,7 +913,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 		// command was executed, this is a client error.
 		// Send tagged BAD response.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD No mailbox selected for store\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD No mailbox selected for store", req.Tag),
 		}, nil
 	}
 
@@ -928,7 +926,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 		// elements, this is a client error.
 		// Return BAD statement.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Command STORE was not sent with three parameters\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Command STORE was not sent with three parameters", req.Tag),
 		}, nil
 	}
 
@@ -943,7 +941,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 		// supported ones, this is a client error.
 		// Send tagged BAD response.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD Unknown data item type specified\r\n", req.Tag),
+			Text: fmt.Sprintf("%s BAD Unknown data item type specified", req.Tag),
 		}, nil
 	}
 
@@ -960,7 +958,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 		// Parsing flags from STORE request produced
 		// an error. Return tagged BAD response.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD %s\r\n", req.Tag, err.Error()),
+			Text: fmt.Sprintf("%s BAD %s", req.Tag, err.Error()),
 		}, nil
 	}
 
@@ -995,7 +993,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 		// Parsing sequence numbers from STORE request produced
 		// an error. Return tagged BAD response.
 		return &Reply{
-			Text: fmt.Sprintf("%s BAD %s\r\n", req.Tag, err.Error()),
+			Text: fmt.Sprintf("%s BAD %s", req.Tag, err.Error()),
 		}, nil
 	}
 
@@ -1040,7 +1038,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 			node.Lock.Unlock()
 
 			return &Reply{
-				Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+				Text:   "* BAD Internal server error, sorry. Closing connection.",
 				Status: 1,
 			}, fmt.Errorf("error while reading in mail file content in STORE operation: %v", err)
 		}
@@ -1052,7 +1050,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 			node.Lock.Unlock()
 
 			return &Reply{
-				Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+				Text:   "* BAD Internal server error, sorry. Closing connection.",
 				Status: 1,
 			}, fmt.Errorf("error while retrieving flags from mail file: %v", err)
 		}
@@ -1107,7 +1105,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 				node.Lock.Unlock()
 
 				return &Reply{
-					Text:   "* BAD Internal server error, sorry. Closing connection.\r\n",
+					Text:   "* BAD Internal server error, sorry. Closing connection.",
 					Status: 1,
 				}, fmt.Errorf("error renaming mail file in STORE operation: %v", err)
 			}
@@ -1253,9 +1251,9 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 	}
 
 	if answer == "" {
-		answer = fmt.Sprintf("%s OK STORE completed\r\n", req.Tag)
+		answer = fmt.Sprintf("%s OK STORE completed", req.Tag)
 	} else {
-		answer = fmt.Sprintf("%s%s OK STORE completed\r\n", answer, req.Tag)
+		answer = fmt.Sprintf("%s%s OK STORE completed", answer, req.Tag)
 	}
 
 	return &Reply{

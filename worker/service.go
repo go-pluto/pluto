@@ -368,6 +368,14 @@ func (s *service) AppendEnd(ctx context.Context, mailFile *imap.MailFile) (*imap
 	// exactly one device session (thus, no locking).
 	sess := s.sessions[mailFile.ClientID]
 
+	// Make sure that an APPEND is actually in progress.
+	if sess.AppendInProg == nil {
+
+		return &imap.Reply{
+			Status: 1,
+		}, fmt.Errorf("no APPEND in progress for client %s but AppendEnd was invoked", mailFile.ClientID)
+	}
+
 	// Forward gathered info to IMAP function.
 	reply, err := s.imapNode.AppendEnd(sess, mailFile.Content, s.SyncSendChan)
 

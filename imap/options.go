@@ -70,7 +70,7 @@ func DistributorOptions(tlsConfig *tls.Config) []grpc.DialOption {
 	comp := grpc.NewGZIPCompressor()
 	decomp := grpc.NewGZIPDecompressor()
 
-	// TODO: Think about well functioning backoff
+	// TODO: Think about well-functioning backoff
 	//       strategy to use in clients.
 	// boff := grpc.BackoffConfig{}
 

@@ -349,7 +349,7 @@ func (s *service) Logout(c *Connection, req *imap.Request) bool {
 		})
 		if (err != nil) || (conf.Status != 0) {
 
-			c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+			c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 			if err != nil {
 				level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Close() to internal node %s: %v", c.RespWorker, err))
@@ -423,7 +423,7 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 	// Find worker node responsible for this connection.
 	respWorker, err := s.auther.GetWorkerForUser(s.workers, id)
 	if err != nil {
-		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
 		level.Error(s.logger).Log("msg", fmt.Sprintf("error finding worker for user %s with ID %d: %v", userCredentials[0], id, err))
 		return false
 	}
@@ -450,7 +450,7 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 	})
 	if (err != nil) || (conf.Status != 0) {
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 		if err != nil {
 			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Prepare() to internal node %s: %v", c.RespWorker, err))
@@ -511,7 +511,7 @@ func (s *service) ProxySelect(c *Connection, rawReq string) bool {
 	})
 	if (err != nil) || (reply.Status != 0) {
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 		if err != nil {
 			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying SELECT to internal node %s: %v", c.RespWorker, err))
@@ -544,7 +544,7 @@ func (s *service) ProxyCreate(c *Connection, rawReq string) bool {
 	})
 	if (err != nil) || (reply.Status != 0) {
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 		if err != nil {
 			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying CREATE to internal node %s: %v", c.RespWorker, err))
@@ -577,7 +577,7 @@ func (s *service) ProxyDelete(c *Connection, rawReq string) bool {
 	})
 	if (err != nil) || (reply.Status != 0) {
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 		if err != nil {
 			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying DELETE to internal node %s: %v", c.RespWorker, err))
@@ -610,7 +610,7 @@ func (s *service) ProxyList(c *Connection, rawReq string) bool {
 	})
 	if (err != nil) || (reply.Status != 0) {
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 		if err != nil {
 			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying LIST to internal node %s: %v", c.RespWorker, err))
@@ -636,6 +636,8 @@ func (s *service) ProxyList(c *Connection, rawReq string) bool {
 // storage node.
 func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 
+	// TODO: Add failover for all IMAP gRPC connections.
+
 	// Send the begin part of the APPEND request via gRPC.
 	await, err := c.gRPCClient.AppendBegin(context.Background(), &imap.Command{
 		Text:     rawReq,
@@ -643,7 +645,7 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 	})
 	if (err != nil) || (await.Status != 0) {
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 		if err != nil {
 			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying begin part of APPEND to internal node %s: %v", c.RespWorker, err))
@@ -684,7 +686,7 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 	})
 	if (err != nil) || (reply.Status != 0) {
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 		if err != nil {
 			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying end part of APPEND to internal node %s: %v", c.RespWorker, err))
@@ -717,7 +719,7 @@ func (s *service) ProxyExpunge(c *Connection, rawReq string) bool {
 	})
 	if (err != nil) || (reply.Status != 0) {
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 		if err != nil {
 			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying EXPUNGE to internal node %s: %v", c.RespWorker, err))
@@ -750,7 +752,7 @@ func (s *service) ProxyStore(c *Connection, rawReq string) bool {
 	})
 	if (err != nil) || (reply.Status != 0) {
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.\r\n")
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 		if err != nil {
 			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying STORE to internal node %s: %v", c.RespWorker, err))
