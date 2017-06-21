@@ -13,7 +13,7 @@ import (
 // Set the maximum number of bytes a message is allowed to
 // carry to (256 * 1024 * 1024 B) + 2048 B (buffer) > 256 MiB.
 // Symmetric - send and receive option.
-var maxMsgSize int = 268437504
+var maxMsgSize = 268437504
 
 // NodeOptions returns a list of gRPC server
 // options that the IMAP node uses for RPCs.
