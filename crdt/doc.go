@@ -7,7 +7,7 @@ CAUTION! Consider these two requirements:
   other replicas to be reliable and causally-ordered as provided by, for example,
   pluto's package comm.
 * Access to the functions this package provides is expected to be synchronized
-  explicitely by some outside measures, e.g. by wrapping calls to this package
+  explicitly by some outside measures, e.g. by wrapping calls to this package
   with a mutex lock if concurrent access is possible. This package does not(!)
   synchronize access by itself.
 

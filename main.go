@@ -172,7 +172,7 @@ func main() {
 		// Run an HTTP server in a goroutine to expose this distributor's metrics.
 		go runPromHTTP(conf.Distributor.PrometheusAddr)
 
-		auther, err := initAuthenticator(conf)
+		authenticator, err := initAuthenticator(conf)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to initialize an authenticator",
@@ -214,7 +214,7 @@ func main() {
 		}
 
 		var distrS distributor.Service
-		distrS = distributor.NewService(logger, auther, intlTLSConfig, conf.Workers)
+		distrS = distributor.NewService(logger, authenticator, intlTLSConfig, conf.Workers)
 		distrS = distributor.NewLoggingService(distrS, logger)
 		distrS = distributor.NewMetricsService(distrS, plutoMetrics.Distributor.Logins, plutoMetrics.Distributor.Logouts)
 

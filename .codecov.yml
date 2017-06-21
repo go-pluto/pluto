@@ -13,6 +13,10 @@ coverage:
         threshold: 20
     patch: false
     changes: false
+ignore:
+  - "vendor"
+  - "**.proto"
+  - "**.pb.go"
 comment:
   behavior: default
   layout: header, diff

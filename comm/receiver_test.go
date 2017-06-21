@@ -73,7 +73,7 @@ func TestTriggerMsgApplier(t *testing.T) {
 
 	numSignals := 0
 
-	for _ = range recv.msgInLog {
+	for range recv.msgInLog {
 		numSignals++
 	}
 

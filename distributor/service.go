@@ -20,11 +20,11 @@ import (
 // Structs
 
 type service struct {
-	logger      log.Logger
-	auther      Authenticator
-	tlsConfig   *tls.Config
-	workers     map[string]config.Worker
-	gRPCOptions []grpc.DialOption
+	logger        log.Logger
+	authenticator Authenticator
+	tlsConfig     *tls.Config
+	workers       map[string]config.Worker
+	gRPCOptions   []grpc.DialOption
 }
 
 // Interfaces
@@ -111,14 +111,14 @@ type Service interface {
 // NewService takes in all required parameters for spinning
 // up a new distributor node and returns a service struct for
 // this node type wrapping all information.
-func NewService(logger log.Logger, auther Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker) Service {
+func NewService(logger log.Logger, authenticator Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker) Service {
 
 	return &service{
-		logger:      logger,
-		auther:      auther,
-		tlsConfig:   tlsConfig,
-		workers:     workers,
-		gRPCOptions: imap.DistributorOptions(tlsConfig),
+		logger:        logger,
+		authenticator: authenticator,
+		tlsConfig:     tlsConfig,
+		workers:       workers,
+		gRPCOptions:   imap.DistributorOptions(tlsConfig),
 	}
 }
 
@@ -406,7 +406,7 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 	}
 
 	// Perform the actual authentication.
-	id, clientID, err := s.auther.AuthenticatePlain(userCredentials[0], userCredentials[1], c.ClientAddr)
+	id, clientID, err := s.authenticator.AuthenticatePlain(userCredentials[0], userCredentials[1], c.ClientAddr)
 	if err != nil {
 
 		// If supplied credentials failed to authenticate client,
@@ -421,7 +421,7 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 	}
 
 	// Find worker node responsible for this connection.
-	respWorker, err := s.auther.GetWorkerForUser(s.workers, id)
+	respWorker, err := s.authenticator.GetWorkerForUser(s.workers, id)
 	if err != nil {
 		c.Send("* BAD Internal server error, sorry. Closing connection.")
 		level.Error(s.logger).Log("msg", fmt.Sprintf("error finding worker for user %s with ID %d: %v", userCredentials[0], id, err))

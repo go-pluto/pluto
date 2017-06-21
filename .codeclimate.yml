@@ -11,6 +11,6 @@ ratings:
     - "**.go"
 
 exclude_paths:
-- "vendor/**"
+- "vendor"
 - "**.proto"
 - "**.pb.go"
