@@ -37,6 +37,7 @@ type Receiver struct {
 	vclock           map[string]uint32
 	vclockLog        *os.File
 	stopTrigger      chan struct{}
+	stopApply        chan struct{}
 	applyCRDTUpdChan chan Msg
 	doneCRDTUpdChan  chan struct{}
 	nodes            []string
@@ -61,6 +62,7 @@ func InitReceiver(logger log.Logger, name string, logFilePath string, vclockLogP
 		updVClock:        make(chan map[string]uint32),
 		vclock:           make(map[string]uint32),
 		stopTrigger:      make(chan struct{}),
+		stopApply:        make(chan struct{}),
 		applyCRDTUpdChan: applyCRDTUpdChan,
 		doneCRDTUpdChan:  doneCRDTUpdChan,
 		nodes:            nodes,
@@ -240,240 +242,246 @@ func (recv *Receiver) ApplyStoredMsgs() {
 
 	for {
 
+		select {
+
+		case <-recv.stopApply:
+			return
+
 		// Wait for signal that new message was written to
 		// log file so that we can process it.
-		_, ok := <-recv.msgInLog
-		if ok {
+		case _, ok := <-recv.msgInLog:
+			if ok {
 
-			// Lock mutex.
-			recv.lock.Lock()
+				// Lock mutex.
+				recv.lock.Lock()
 
-			// Most of the following commands are taking from
-			// this stackoverflow answer describing a way to
-			// pop the first line of a file and write back
-			// the remaining parts:
-			// http://stackoverflow.com/a/30948278
-			info, err := recv.updLog.Stat()
-			if err != nil {
-				level.Error(recv.logger).Log("msg", fmt.Sprintf("could not get CRDT log file information: %v", err))
-				os.Exit(1)
-			}
-
-			// Store accessed file size for multiple use.
-			logSize := info.Size()
-
-			// Check if log file is empty and continue at next
-			// for loop iteration if that is the case.
-			if logSize == 0 {
-				recv.lock.Unlock()
-				continue
-			}
-
-			// Save current position of head for later use.
-			curOffset, err := recv.updLog.Seek(0, os.SEEK_CUR)
-			if err != nil {
-				level.Error(recv.logger).Log("msg", fmt.Sprintf("error while retrieving current head position in CRDT log file: %v", err))
-				os.Exit(1)
-			}
-
-			// Calculate size of needed buffer.
-			bufferSize := logSize - curOffset
-
-			// Account for case when offset reached end of log file
-			// or accidentally the current offset is bigger than the
-			// log file's size.
-			if logSize <= curOffset {
-
-				// Reset position to beginning of file.
-				_, err = recv.updLog.Seek(0, os.SEEK_SET)
+				// Most of the following commands are taking from
+				// this stackoverflow answer describing a way to
+				// pop the first line of a file and write back
+				// the remaining parts:
+				// http://stackoverflow.com/a/30948278
+				info, err := recv.updLog.Stat()
 				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("could not get CRDT log file information: %v", err))
 					os.Exit(1)
 				}
 
-				// Unlock log file mutex.
-				recv.lock.Unlock()
+				// Store accessed file size for multiple use.
+				logSize := info.Size()
 
-				// Send signal again to check for next log items.
-				if len(recv.msgInLog) < 1 {
-					recv.msgInLog <- struct{}{}
+				// Check if log file is empty and continue at next
+				// for loop iteration if that is the case.
+				if logSize == 0 {
+					recv.lock.Unlock()
+					continue
 				}
 
-				// Go to next loop iteration.
-				continue
-			}
+				// Save current position of head for later use.
+				curOffset, err := recv.updLog.Seek(0, os.SEEK_CUR)
+				if err != nil {
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("error while retrieving current head position in CRDT log file: %v", err))
+					os.Exit(1)
+				}
 
-			// Create a buffer of capacity of read file size
-			// minus the current head position offset.
-			buf := bytes.NewBuffer(make([]byte, 0, bufferSize))
+				// Calculate size of needed buffer.
+				bufferSize := logSize - curOffset
 
-			// Copy contents of log file to prepared buffer.
-			_, err = io.Copy(buf, recv.updLog)
-			if err != nil {
-				level.Error(recv.logger).Log("msg", fmt.Sprintf("could not copy CRDT log file contents to buffer: %v", err))
-				os.Exit(1)
-			}
+				// Account for case when offset reached end of log file
+				// or accidentally the current offset is bigger than the
+				// log file's size.
+				if logSize <= curOffset {
 
-			// Read byte amount of following binary message.
-			numBytesRaw, err := buf.ReadBytes(';')
-			if (err != nil) && (err != io.EOF) {
-				level.Error(recv.logger).Log("msg", fmt.Sprintf("error extracting number of bytes of first message in CRDT log file: %v", err))
-				os.Exit(1)
-			}
-
-			// Convert string to number.
-			numBytes, err := strconv.ParseInt((string(numBytesRaw[:(len(numBytesRaw) - 1)])), 10, 64)
-			if err != nil {
-				level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to convert string to int indicating number of bytes: %v", err))
-				os.Exit(1)
-			}
-
-			// Reserve exactly enough space for current message.
-			msgRaw := make([]byte, numBytes)
-
-			// Read current message from buffer of log file.
-			numRead, err := buf.Read(msgRaw)
-			if err != nil {
-				level.Error(recv.logger).Log("msg", fmt.Sprintf("error during extraction of current message in CRDT log file: %v", err))
-				os.Exit(1)
-			}
-
-			if int64(numRead) != numBytes {
-				level.Error(recv.logger).Log("msg", fmt.Sprintf("expected message of length %d, but only read %d", numBytes, numRead))
-				os.Exit(1)
-			}
-
-			// Calculate total space of stored message:
-			// number of bytes prefix + ';' + actual message.
-			msgSize := int64(len(numBytesRaw)) + numBytes
-
-			// Unmarshal read ProtoBuf into defined Msg struct.
-			msg := &Msg{}
-			err = proto.Unmarshal(msgRaw, msg)
-			if err != nil {
-				level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to unmarshal read ProtoBuf into defined Msg struct: %v", err))
-				os.Exit(1)
-			}
-
-			// Initially, set apply indicator to true. This means,
-			// that the message would be considered for further parsing.
-			applyMsg := true
-
-			// Check if this message is an already received or
-			// the expected next one from the sending node.
-			// If not, set indicator to false.
-			if (msg.Vclock[msg.Replica] != recv.vclock[msg.Replica]) &&
-				(msg.Vclock[msg.Replica] != (recv.vclock[msg.Replica] + 1)) {
-				applyMsg = false
-			}
-
-			for node, value := range msg.Vclock {
-
-				if node != msg.Replica {
-
-					// Next, range over all received vector clock values
-					// and check if they do not exceed the locally stored
-					// values for these nodes.
-					if value > recv.vclock[node] {
-						applyMsg = false
-						break
+					// Reset position to beginning of file.
+					_, err = recv.updLog.Seek(0, os.SEEK_SET)
+					if err != nil {
+						level.Error(recv.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+						os.Exit(1)
 					}
+
+					// Unlock log file mutex.
+					recv.lock.Unlock()
+
+					// Send signal again to check for next log items.
+					if len(recv.msgInLog) < 1 {
+						recv.msgInLog <- struct{}{}
+					}
+
+					// Go to next loop iteration.
+					continue
 				}
-			}
 
-			// If this indicator is false, there are messages not yet
-			// processed at this node that causally precede the just
-			// parsed message. We therefore cycle to the next message.
-			if applyMsg {
+				// Create a buffer of capacity of read file size
+				// minus the current head position offset.
+				buf := bytes.NewBuffer(make([]byte, 0, bufferSize))
 
-				// If this message is actually the next expected one,
-				// process its contents with CRDT logic. This ensures
-				// that message duplicates will get purged but not applied.
-				if msg.Vclock[msg.Replica] == (recv.vclock[msg.Replica] + 1) {
+				// Copy contents of log file to prepared buffer.
+				_, err = io.Copy(buf, recv.updLog)
+				if err != nil {
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("could not copy CRDT log file contents to buffer: %v", err))
+					os.Exit(1)
+				}
 
-					// Pass payload for higher-level interpretation
-					// to channel connected to node.
-					recv.applyCRDTUpdChan <- *msg
+				// Read byte amount of following binary message.
+				numBytesRaw, err := buf.ReadBytes(';')
+				if (err != nil) && (err != io.EOF) {
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("error extracting number of bytes of first message in CRDT log file: %v", err))
+					os.Exit(1)
+				}
 
-					// Wait for done signal from node.
-					<-recv.doneCRDTUpdChan
+				// Convert string to number.
+				numBytes, err := strconv.ParseInt((string(numBytesRaw[:(len(numBytesRaw) - 1)])), 10, 64)
+				if err != nil {
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to convert string to int indicating number of bytes: %v", err))
+					os.Exit(1)
+				}
+
+				// Reserve exactly enough space for current message.
+				msgRaw := make([]byte, numBytes)
+
+				// Read current message from buffer of log file.
+				numRead, err := buf.Read(msgRaw)
+				if err != nil {
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("error during extraction of current message in CRDT log file: %v", err))
+					os.Exit(1)
+				}
+
+				if int64(numRead) != numBytes {
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("expected message of length %d, but only read %d", numBytes, numRead))
+					os.Exit(1)
+				}
+
+				// Calculate total space of stored message:
+				// number of bytes prefix + ';' + actual message.
+				msgSize := int64(len(numBytesRaw)) + numBytes
+
+				// Unmarshal read ProtoBuf into defined Msg struct.
+				msg := &Msg{}
+				err = proto.Unmarshal(msgRaw, msg)
+				if err != nil {
+					level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to unmarshal read ProtoBuf into defined Msg struct: %v", err))
+					os.Exit(1)
+				}
+
+				// Initially, set apply indicator to true. This means,
+				// that the message would be considered for further parsing.
+				applyMsg := true
+
+				// Check if this message is an already received or
+				// the expected next one from the sending node.
+				// If not, set indicator to false.
+				if (msg.Vclock[msg.Replica] != recv.vclock[msg.Replica]) &&
+					(msg.Vclock[msg.Replica] != (recv.vclock[msg.Replica] + 1)) {
+					applyMsg = false
 				}
 
 				for node, value := range msg.Vclock {
 
-					// Adjust local vector clock to continue with pair-wise
-					// maximum of the vector clock elements.
-					if value > recv.vclock[node] {
-						recv.vclock[node] = value
+					if node != msg.Replica {
+
+						// Next, range over all received vector clock values
+						// and check if they do not exceed the locally stored
+						// values for these nodes.
+						if value > recv.vclock[node] {
+							applyMsg = false
+							break
+						}
 					}
 				}
 
-				// Save updated vector clock to log file.
-				err := recv.SaveVClockEntries()
-				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("saving updated vector clock to file failed: %v", err))
-					os.Exit(1)
+				// If this indicator is false, there are messages not yet
+				// processed at this node that causally precede the just
+				// parsed message. We therefore cycle to the next message.
+				if applyMsg {
+
+					// If this message is actually the next expected one,
+					// process its contents with CRDT logic. This ensures
+					// that message duplicates will get purged but not applied.
+					if msg.Vclock[msg.Replica] == (recv.vclock[msg.Replica] + 1) {
+
+						// Pass payload for higher-level interpretation
+						// to channel connected to node.
+						recv.applyCRDTUpdChan <- *msg
+
+						// Wait for done signal from node.
+						<-recv.doneCRDTUpdChan
+					}
+
+					for node, value := range msg.Vclock {
+
+						// Adjust local vector clock to continue with pair-wise
+						// maximum of the vector clock elements.
+						if value > recv.vclock[node] {
+							recv.vclock[node] = value
+						}
+					}
+
+					// Save updated vector clock to log file.
+					err := recv.SaveVClockEntries()
+					if err != nil {
+						level.Error(recv.logger).Log("msg", fmt.Sprintf("saving updated vector clock to file failed: %v", err))
+						os.Exit(1)
+					}
+
+					// Reset head position to curOffset saved at beginning of loop.
+					_, err = recv.updLog.Seek(curOffset, os.SEEK_SET)
+					if err != nil {
+						level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to reset updLog head to saved position: %v", err))
+						os.Exit(1)
+					}
+
+					// Copy reduced buffer contents back to current position
+					// of CRDT log file, effectively deleting the read message.
+					newNumOfBytes, err := io.Copy(recv.updLog, buf)
+					if err != nil {
+						level.Error(recv.logger).Log("msg", fmt.Sprintf("error during copying buffer contents back to CRDT log file: %v", err))
+						os.Exit(1)
+					}
+
+					// Now, truncate log file size to (curOffset + newNumOfBytes),
+					// reducing the file size by length of handled message.
+					err = recv.updLog.Truncate((curOffset + newNumOfBytes))
+					if err != nil {
+						level.Error(recv.logger).Log("msg", fmt.Sprintf("could not truncate CRDT log file: %v", err))
+						os.Exit(1)
+					}
+
+					// Sync changes to stable storage.
+					err = recv.updLog.Sync()
+					if err != nil {
+						level.Error(recv.logger).Log("msg", fmt.Sprintf("syncing CRDT log file to stable storage failed with: %v", err))
+						os.Exit(1)
+					}
+
+					// Reset position to beginning of file because the
+					// chances are high that we now can proceed in order
+					// of CRDT message log file.
+					_, err = recv.updLog.Seek(0, os.SEEK_SET)
+					if err != nil {
+						level.Error(recv.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+						os.Exit(1)
+					}
+				} else {
+
+					level.Warn(recv.logger).Log("msg", "message was out of order, taking next one")
+
+					// Set position of head to byte after just read message,
+					// effectively delaying execution of that message.
+					_, err = recv.updLog.Seek((curOffset + msgSize), os.SEEK_SET)
+					if err != nil {
+						level.Error(recv.logger).Log("msg", fmt.Sprintf("error while moving position in CRDT log file to next line: %v", err))
+						os.Exit(1)
+					}
 				}
 
-				// Reset head position to curOffset saved at beginning of loop.
-				_, err = recv.updLog.Seek(curOffset, os.SEEK_SET)
-				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to reset updLog head to saved position: %v", err))
-					os.Exit(1)
+				// Unlock mutex.
+				recv.lock.Unlock()
+
+				// We do not know how many elements are waiting in the
+				// log file. Therefore attempt to process next one and
+				// if it does not exist, the loop iteration will abort.
+				if len(recv.msgInLog) < 1 {
+					recv.msgInLog <- struct{}{}
 				}
-
-				// Copy reduced buffer contents back to current position
-				// of CRDT log file, effectively deleting the read message.
-				newNumOfBytes, err := io.Copy(recv.updLog, buf)
-				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("error during copying buffer contents back to CRDT log file: %v", err))
-					os.Exit(1)
-				}
-
-				// Now, truncate log file size to (curOffset + newNumOfBytes),
-				// reducing the file size by length of handled message.
-				err = recv.updLog.Truncate((curOffset + newNumOfBytes))
-				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("could not truncate CRDT log file: %v", err))
-					os.Exit(1)
-				}
-
-				// Sync changes to stable storage.
-				err = recv.updLog.Sync()
-				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("syncing CRDT log file to stable storage failed with: %v", err))
-					os.Exit(1)
-				}
-
-				// Reset position to beginning of file because the
-				// chances are high that we now can proceed in order
-				// of CRDT message log file.
-				_, err = recv.updLog.Seek(0, os.SEEK_SET)
-				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
-					os.Exit(1)
-				}
-			} else {
-
-				level.Warn(recv.logger).Log("msg", "message was out of order, taking next one")
-
-				// Set position of head to byte after just read message,
-				// effectively delaying execution of that message.
-				_, err = recv.updLog.Seek((curOffset + msgSize), os.SEEK_SET)
-				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("error while moving position in CRDT log file to next line: %v", err))
-					os.Exit(1)
-				}
-			}
-
-			// Unlock mutex.
-			recv.lock.Unlock()
-
-			// We do not know how many elements are waiting in the
-			// log file. Therefore attempt to process next one and
-			// if it does not exist, the loop iteration will abort.
-			if len(recv.msgInLog) < 1 {
-				recv.msgInLog <- struct{}{}
 			}
 		}
 	}
