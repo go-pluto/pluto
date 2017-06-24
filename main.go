@@ -170,7 +170,7 @@ func main() {
 	if *distributorFlag {
 
 		// Run an HTTP server in a goroutine to expose this distributor's metrics.
-		go runPromHTTP(conf.Distributor.PrometheusAddr)
+		go runPromHTTP(logger, conf.Distributor.PrometheusAddr)
 
 		authenticator, err := initAuthenticator(conf)
 		if err != nil {
