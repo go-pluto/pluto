@@ -3,6 +3,8 @@ package main
 import (
 	"net/http"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/go-kit/kit/metrics"
 	"github.com/go-kit/kit/metrics/discard"
 	"github.com/go-kit/kit/metrics/prometheus"
@@ -47,12 +49,17 @@ func NewPlutoMetrics(distributorAddr string) *PlutoMetrics {
 	return m
 }
 
-func runPromHTTP(addr string) {
+func runPromHTTP(logger log.Logger, addr string) {
 
 	if addr == "" {
+		level.Debug(logger).Log("msg", "prometheus addr is empty, not exposing prometheus metrics")
 		return
 	}
 
 	http.Handle("/metrics", prom.UninstrumentedHandler())
-	http.ListenAndServe(addr, nil)
+
+	level.Info(logger).Log("msg", "prometheus handler listening", "addr", addr)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		level.Warn(logger).Log("msg", "failed to serve prometheus metrics", "err", err)
+	}
 }
