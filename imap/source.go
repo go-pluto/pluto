@@ -518,6 +518,7 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 	}
 
 	// Split payload on every space character.
+	// TODO: Fix this for multiple (\Flag1 \Flag2) as parameter.
 	appendArgs := strings.Split(req.Payload, " ")
 	lenAppendArgs := len(appendArgs)
 

@@ -315,9 +315,6 @@ func (s *service) Capability(c *Connection, req *imap.Request) bool {
 		return false
 	}
 
-	// TODO: Change returned capabilities based on IMAP state of
-	//       connection, e.g. more capabilities if authenticated.
-
 	return true
 }
 
@@ -637,6 +634,8 @@ func (s *service) ProxyList(c *Connection, rawReq string) bool {
 func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 
 	// TODO: Add failover for all IMAP gRPC connections.
+
+	// TODO: Fix connection close by client during this Proxy function.
 
 	// Send the begin part of the APPEND request via gRPC.
 	await, err := c.gRPCClient.AppendBegin(context.Background(), &imap.Command{

@@ -15,6 +15,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Structs
@@ -259,32 +261,73 @@ func (sender *Sender) SendMsgs() {
 			// number of bytes prefix + ';' + actual message.
 			msgSize := int64(len(numBytesRaw)) + numBytes
 
-			// TODO: Parallelize this loop?
+			wg := &sync.WaitGroup{}
+
+			// Prepare buffered completion channel for routines.
+			retStatus := make(chan string, len(sender.nodes))
+
 			for node, addr := range sender.nodes {
 
-				// Connect to downstream replica.
-				conn, err := grpc.Dial(addr, sender.gRPCOptions...)
-				if err != nil {
-					level.Error(sender.logger).Log("msg", fmt.Sprintf("could not connect to downstream replica %s: %v", node, err))
-					os.Exit(1)
-				}
-				defer conn.Close()
+				wg.Add(1)
 
-				// Create new gRPC client stub.
-				client := NewReceiverClient(conn)
+				go func(retStatus chan string, node string, addr string, opts []grpc.DialOption, binMsg *BinMsg, logger log.Logger) {
 
-				// Send BinMsg to downstream replica.
-				conf, err := client.Incoming(context.Background(), binMsg)
-				if err != nil {
-					level.Error(sender.logger).Log("msg", fmt.Sprintf("could not send downstream message to replica %s: %v", node, err))
-					os.Exit(1)
-				}
+					defer wg.Done()
 
-				if conf.Status != 0 {
-					level.Error(sender.logger).Log("msg", fmt.Sprintf("sending downstream message to %s returned code: %d", node, conf.Status))
-					os.Exit(1)
-				}
+					// Connect to downstream replica.
+					conn, err := grpc.Dial(addr, opts...)
+					for err != nil {
+						level.Debug(logger).Log("msg", fmt.Sprintf("failed to dial to %s (%s), trying again...", node, addr))
+						conn, err = grpc.Dial(addr, opts...)
+					}
+
+					level.Debug(logger).Log("msg", fmt.Sprintf("dialled to %s (%s)", node, addr))
+
+					// Create new gRPC client stub.
+					client := NewReceiverClient(conn)
+
+					// Send BinMsg to downstream replica.
+					conf, err := client.Incoming(context.Background(), binMsg)
+					for err != nil {
+
+						// If we received an error, examine it and
+						// take appropriate action.
+						stat, ok := status.FromError(err)
+						if ok && (stat.Code() == codes.Unavailable) {
+							level.Debug(logger).Log("msg", fmt.Sprintf("downstream replica %s (%s) unavailable during Incoming(), trying again...", node, addr))
+							conf, err = client.Incoming(context.Background(), binMsg)
+						} else {
+							retStatus <- fmt.Sprintf("permanent error for sending downstream message to replica %s: %v", node, err)
+							return
+						}
+					}
+
+					if conf.Status != 0 {
+						retStatus <- fmt.Sprintf("sending downstream message to %s returned code: %d", node, conf.Status)
+					}
+
+					// Indicate success via channel.
+					retStatus <- "0"
+				}(retStatus, node, addr, sender.gRPCOptions, binMsg, sender.logger)
 			}
+
+			for i := 0; i < len(sender.nodes); i++ {
+
+				// Wait and check received string on channel.
+				retStat := <-retStatus
+				if retStat != "0" {
+					level.Error(sender.logger).Log("msg", retStat)
+					os.Exit(1)
+				}
+
+				level.Debug(sender.logger).Log("msg", fmt.Sprintf("retStat %d: %s", i, retStat))
+			}
+
+			// Wait for all routines to having completed
+			// the synchronization successfully.
+			wg.Wait()
+
+			level.Debug(sender.logger).Log("msg", "all done")
 
 			// Lock mutex.
 			sender.lock.Lock()
