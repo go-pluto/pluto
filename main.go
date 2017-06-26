@@ -244,6 +244,9 @@ func main() {
 			os.Exit(1)
 		}
 
+		// Run an HTTP server in a goroutine to expose this distributor's metrics.
+		go runPromHTTP(logger, workerConfig.PrometheusAddr)
+
 		// Create all non-existent files and folders for
 		// all users this worker is responsible for.
 		if err := createUserFiles(workerConfig.CRDTLayerRoot, workerConfig.MaildirRoot, workerConfig.UserStart, workerConfig.UserEnd); err != nil {
@@ -349,6 +352,9 @@ func main() {
 		}
 
 	} else if *storageFlag {
+
+		// Run an HTTP server in a goroutine to expose this distributor's metrics.
+		go runPromHTTP(logger, conf.Storage.PrometheusAddr)
 
 		tlsConfig, err := crypto.NewInternalTLSConfig(conf.Storage.TLS.CertLoc, conf.Storage.TLS.KeyLoc, conf.RootCertLoc)
 		if err != nil {
