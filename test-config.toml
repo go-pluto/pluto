@@ -1,6 +1,4 @@
 RootCertLoc = "private/root-cert.pem"
-IntlConnTimeout = 50
-IntlConnRetry = 100
 
 [IMAP]
 Greeting = "Pluto ready."
