@@ -2,11 +2,11 @@ package imap
 
 import (
 	"fmt"
-	stdlog "log"
 	"os"
 
 	"path/filepath"
 
+	"github.com/go-kit/kit/log/level"
 	"github.com/numbleroot/maildir"
 	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/crdt"
@@ -47,7 +47,8 @@ func (node *IMAPNode) ApplyCreate(msg comm.Msg) {
 		// Create a new Maildir on stable storage.
 		err = maildir.Dir(posMaildir).Create()
 		if err != nil {
-			stdlog.Fatalf("maildir for new mailbox could not be created: %v", err)
+			level.Error(node.Logger).Log("msg", fmt.Sprintf("maildir for new mailbox could not be created: %v", err))
+			os.Exit(1)
 		}
 	}
 
@@ -66,17 +67,15 @@ func (node *IMAPNode) ApplyCreate(msg comm.Msg) {
 		if err != nil {
 
 			// Perform clean up.
-			stdlog.Printf("downstream CREATE fail: %v", err)
+			level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during downstream CREATE execution, will clean up: %v", err))
 
 			if !maildirExisted {
-
-				stdlog.Printf("maildir did not exist, removing...")
 
 				// Only remove created Maildir if it did
 				// not exist prior to this function's entrance.
 				err = maildir.Dir(posMaildir).Remove()
 				if err != nil {
-					stdlog.Printf("... failed: %v", err)
+					level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove created Maildir: %v", err))
 				}
 			}
 
@@ -103,20 +102,17 @@ func (node *IMAPNode) ApplyCreate(msg comm.Msg) {
 	err = userMainCRDT.AddEffect(createUpd.AddMailbox.Value, createUpd.AddMailbox.Tag, true)
 	if err != nil {
 
-		// Perform clean up.
-		stdlog.Printf("CREATE fail: %v", err)
+		level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during downstream CREATE execution, will clean up: %v", err))
 
 		// If it did not exist, remove the just
 		// added CRDT from structure map.
 		if !structureExisted {
-			stdlog.Printf("CRDT did not exist in structure map, removing...")
 			delete(node.MailboxStructure[createUpd.User], createUpd.Mailbox)
 		}
 
 		// If it did not exist, remove the just
 		// added slice from contents map.
 		if !contentsExisted {
-			stdlog.Printf("slice did not exist in contents map, removing...")
 			delete(node.MailboxContents[createUpd.User], createUpd.Mailbox)
 		}
 
@@ -124,11 +120,9 @@ func (node *IMAPNode) ApplyCreate(msg comm.Msg) {
 		// the created Maildir.
 		if !maildirExisted {
 
-			stdlog.Printf("maildir did not exist, removing...")
-
 			err = maildir.Dir(posMaildir).Remove()
 			if err != nil {
-				stdlog.Printf("... failed: %v", err)
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove created Maildir: %v", err))
 			}
 		}
 
@@ -136,11 +130,9 @@ func (node *IMAPNode) ApplyCreate(msg comm.Msg) {
 		// the created CRDT file.
 		if !crdtFileExisted {
 
-			stdlog.Printf("CRDT file did not exist, removing...")
-
 			err = os.Remove(posMailboxCRDTPath)
 			if err != nil {
-				stdlog.Fatalf("CRDT file of mailbox could not be deleted: %v", err)
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove CRDT file of mailbox: %v", err))
 			}
 		}
 
@@ -175,7 +167,8 @@ func (node *IMAPNode) ApplyDelete(msg comm.Msg) {
 	// Remove received pairs from user's main CRDT.
 	err := userMainCRDT.RemoveEffect(rmElements, true)
 	if err != nil {
-		stdlog.Fatalf("failed to remove elements from user's main CRDT: %v", err)
+		level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove elements from user's main CRDT: %v", err))
+		os.Exit(1)
 	}
 
 	// Remove CRDT from structure map if present.
@@ -195,7 +188,8 @@ func (node *IMAPNode) ApplyDelete(msg comm.Msg) {
 
 		err = os.Remove(delMailboxCRDTPath)
 		if err != nil {
-			stdlog.Fatalf("CRDT file of mailbox could not be deleted: %v", err)
+			level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove CRDT file of mailbox: %v", err))
+			os.Exit(1)
 		}
 	}
 
@@ -206,7 +200,8 @@ func (node *IMAPNode) ApplyDelete(msg comm.Msg) {
 
 		err = maildir.Dir(delMaildir).Remove()
 		if err != nil {
-			stdlog.Fatalf("Maildir could not be deleted: %v", err)
+			level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove Maildir: %v", err))
+			os.Exit(1)
 		}
 	}
 }
@@ -246,20 +241,19 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 			// If so, place file content at correct location.
 			appendFile, err := os.Create(appendFileName)
 			if err != nil {
-				stdlog.Fatalf("failed to create file for mail to append: %v", err)
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to create file for mail to append: %v", err))
+				os.Exit(1)
 			}
 
 			_, err = appendFile.Write(appendUpd.AddMail.Contents)
 			if err != nil {
 
-				// Perform clean up.
-				stdlog.Printf("APPEND fail: %v", err)
-				stdlog.Printf("removing just created mail file...")
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during downstream APPEND execution, will clean up: %v", err))
 
 				// Remove just created mail file.
 				err = os.Remove(appendFileName)
 				if err != nil {
-					stdlog.Printf("... failed: %v", err)
+					level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove created mail file: %v", err))
 				}
 
 				os.Exit(1)
@@ -269,14 +263,12 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 			err = appendFile.Sync()
 			if err != nil {
 
-				// Perform clean up.
-				stdlog.Printf("APPEND fail: %v", err)
-				stdlog.Printf("removing just created mail file...")
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during downstream APPEND execution, will clean up: %v", err))
 
 				// Remove just created mail file.
 				err = os.Remove(appendFileName)
 				if err != nil {
-					stdlog.Printf("... failed: %v", err)
+					level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove created mail file: %v", err))
 				}
 
 				os.Exit(1)
@@ -289,14 +281,12 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 			err = userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true)
 			if err != nil {
 
-				// Perform clean up.
-				stdlog.Printf("APPEND fail: %v", err)
-				stdlog.Printf("removing just created mail file...")
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during downstream APPEND execution, will clean up: %v", err))
 
 				// Remove just created mail file.
 				err = os.Remove(appendFileName)
 				if err != nil {
-					stdlog.Printf("... failed: %v", err)
+					level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove created mail file: %v", err))
 				}
 
 				os.Exit(1)
@@ -306,7 +296,8 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 			// Add new mail to mailbox' CRDT.
 			err := userMailboxCRDT.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true)
 			if err != nil {
-				stdlog.Fatalf("APPEND fail: %v", err)
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during downstream APPEND execution: %v", err))
+				os.Exit(1)
 			}
 		}
 	}
@@ -350,7 +341,8 @@ func (node *IMAPNode) ApplyExpunge(msg comm.Msg) {
 		// Delete supplied elements from mailbox.
 		err := userMailboxCRDT.RemoveEffect(rmElements, true)
 		if err != nil {
-			stdlog.Fatalf("failed to remove mail elements from respective mailbox CRDT: %v", err)
+			level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove mail elements from respective mailbox CRDT: %v", err))
+			os.Exit(1)
 		}
 
 		// Check if just removed elements marked all
@@ -360,7 +352,8 @@ func (node *IMAPNode) ApplyExpunge(msg comm.Msg) {
 			// If that is the case, remove the file.
 			err := os.Remove(delFileName)
 			if err != nil {
-				stdlog.Fatalf("failed to remove underlying mail file during EXPUNGE update: %v", err)
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove underlying mail file during downstream EXPUNGE execution: %v", err))
+				os.Exit(1)
 			}
 		}
 
@@ -423,7 +416,8 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 		// Delete supplied elements from mailbox.
 		err := userMailboxCRDT.RemoveEffect(rmElements, true)
 		if err != nil {
-			stdlog.Fatalf("failed to remove mail elements from respective mailbox CRDT: %v", err)
+			level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove mail elements from respective mailbox CRDT: %v", err))
+			os.Exit(1)
 		}
 
 		// Check if just removed elements marked all
@@ -433,7 +427,8 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 			// If that is the case, remove the file.
 			err := os.Remove(delFileName)
 			if err != nil {
-				stdlog.Fatalf("failed to remove underlying mail file during STORE update: %v", err)
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove underlying mail file during downstream STORE execution: %v", err))
+				os.Exit(1)
 			}
 		}
 
@@ -445,20 +440,19 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 			// content at correct location.
 			storeFile, err := os.Create(storeFileName)
 			if err != nil {
-				stdlog.Fatalf("failed to create file for mail of STORE operation: %v", err)
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to create mail file during downstream STORE execution: %v", err))
+				os.Exit(1)
 			}
 
 			_, err = storeFile.Write(storeUpd.AddMail.Contents)
 			if err != nil {
 
-				// Perform clean up.
-				stdlog.Printf("STORE fail: %v", err)
-				stdlog.Printf("removing just created mail file...")
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during downstream STORE execution, will clean up: %v", err))
 
 				// Remove just created mail file.
 				err = os.Remove(storeFileName)
 				if err != nil {
-					stdlog.Printf("... failed: %v", err)
+					level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove created mail file: %v", err))
 				}
 
 				os.Exit(1)
@@ -468,14 +462,12 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 			err = storeFile.Sync()
 			if err != nil {
 
-				// Perform clean up.
-				stdlog.Printf("STORE fail: %v", err)
-				stdlog.Printf("removing just created mail file...")
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during downstream STORE execution, will clean up: %v", err))
 
 				// Remove just created mail file.
 				err = os.Remove(storeFileName)
 				if err != nil {
-					stdlog.Printf("... failed: %v", err)
+					level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove created mail file: %v", err))
 				}
 
 				os.Exit(1)
@@ -485,14 +477,12 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 			err = userMailboxCRDT.AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true)
 			if err != nil {
 
-				// Perform clean up.
-				stdlog.Printf("STORE fail: %v", err)
-				stdlog.Printf("removing just created mail file...")
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during downstream STORE execution, will clean up: %v", err))
 
 				// Remove just created mail file.
 				err = os.Remove(storeFileName)
 				if err != nil {
-					stdlog.Printf("... failed: %v", err)
+					level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove created mail file: %v", err))
 				}
 
 				os.Exit(1)
@@ -502,7 +492,8 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 			// Add renamed mail to mailbox' CRDT.
 			err = userMailboxCRDT.AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true)
 			if err != nil {
-				stdlog.Fatalf("STORE fail: %v", err)
+				level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during downstream STORE execution: %v", err))
+				os.Exit(1)
 			}
 		}
 

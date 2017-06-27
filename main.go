@@ -244,7 +244,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Run an HTTP server in a goroutine to expose this distributor's metrics.
+		// Run an HTTP server in a goroutine to expose this worker's metrics.
 		go runPromHTTP(logger, workerConfig.PrometheusAddr)
 
 		// Create all non-existent files and folders for
@@ -267,11 +267,11 @@ func main() {
 		}
 
 		var workerS worker.Service
-		workerS = worker.NewService(tlsConfig, conf, *workerFlag)
+		workerS = worker.NewService(logger, tlsConfig, conf, *workerFlag)
 		workerS = worker.NewLoggingService(workerS, logger)
 
 		// Create needed synchronization socket used by gRPC.
-		syncSocket, err := net.Listen("tcp", workerConfig.ListenSyncAddr) //, tlsConfig)
+		syncSocket, err := net.Listen("tcp", workerConfig.ListenSyncAddr)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", fmt.Sprintf("failed to open synchronization socket on %s", *workerFlag),
@@ -328,7 +328,7 @@ func main() {
 		}
 
 		// Create socket for gRPC IMAP connections.
-		mailSocket, err := net.Listen("tcp", workerConfig.ListenMailAddr) //, tlsConfig)
+		mailSocket, err := net.Listen("tcp", workerConfig.ListenMailAddr)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", fmt.Sprintf("failed to open socket for proxied mail traffic on %s", *workerFlag),
@@ -353,7 +353,7 @@ func main() {
 
 	} else if *storageFlag {
 
-		// Run an HTTP server in a goroutine to expose this distributor's metrics.
+		// Run an HTTP server in a goroutine to expose this storage's metrics.
 		go runPromHTTP(logger, conf.Storage.PrometheusAddr)
 
 		tlsConfig, err := crypto.NewInternalTLSConfig(conf.Storage.TLS.CertLoc, conf.Storage.TLS.KeyLoc, conf.RootCertLoc)
@@ -366,11 +366,11 @@ func main() {
 		}
 
 		var storageS storage.Service
-		storageS = storage.NewService(tlsConfig, conf, conf.Workers)
+		storageS = storage.NewService(logger, tlsConfig, conf, conf.Workers)
 		storageS = storage.NewLoggingService(storageS, logger)
 
 		// Create needed synchronization socket used by gRPC.
-		syncSocket, err := net.Listen("tcp", conf.Storage.ListenSyncAddr) //, tlsConfig)
+		syncSocket, err := net.Listen("tcp", conf.Storage.ListenSyncAddr)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to open synchronization socket on storage",
@@ -445,7 +445,7 @@ func main() {
 		}
 
 		// Create socket for gRPC IMAP connections.
-		mailSocket, err := net.Listen("tcp", conf.Storage.ListenMailAddr) //, tlsConfig)
+		mailSocket, err := net.Listen("tcp", conf.Storage.ListenMailAddr)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to open socket for proxied mail traffic on storage",

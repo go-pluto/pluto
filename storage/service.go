@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"path/filepath"
 
+	"github.com/go-kit/kit/log"
 	"github.com/numbleroot/pluto/comm"
 	"github.com/numbleroot/pluto/config"
 	"github.com/numbleroot/pluto/crdt"
@@ -91,10 +92,11 @@ type Service interface {
 // NewService takes in all required parameters for spinning
 // up a new storage node, runs initialization code, and returns
 // a service struct for this node type wrapping all information.
-func NewService(tlsConfig *tls.Config, config *config.Config, workers map[string]config.Worker) Service {
+func NewService(logger log.Logger, tlsConfig *tls.Config, config *config.Config, workers map[string]config.Worker) Service {
 
 	return &service{
 		imapNode: &imap.IMAPNode{
+			Logger:             logger,
 			Lock:               &sync.RWMutex{},
 			MailboxStructure:   make(map[string]map[string]*crdt.ORSet),
 			MailboxContents:    make(map[string]map[string][]string),
