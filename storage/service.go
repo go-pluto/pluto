@@ -143,7 +143,7 @@ func (s *service) findFiles() error {
 	// Find all files below this node's CRDT root layer.
 	userFolders, err := filepath.Glob(filepath.Join(s.imapNode.CRDTLayerRoot, "*"))
 	if err != nil {
-		return fmt.Errorf("[imap.InitStorage] Globbing for CRDT folders of users failed with: %v", err)
+		return fmt.Errorf("globbing for CRDT folders of users failed with: %v", err)
 	}
 
 	for _, folder := range userFolders {
@@ -151,7 +151,7 @@ func (s *service) findFiles() error {
 		// Retrieve information about accessed file.
 		folderInfo, err := os.Stat(folder)
 		if err != nil {
-			return fmt.Errorf("[imap.InitStorage] Error during stat'ing possible user CRDT folder: %v", err)
+			return fmt.Errorf("error during stat'ing possible user CRDT folder: %v", err)
 		}
 
 		// Only consider folders for building up CRDT map.
@@ -163,7 +163,7 @@ func (s *service) findFiles() error {
 			// Read in mailbox structure CRDT from file.
 			userMainCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, "mailbox-structure.log"))
 			if err != nil {
-				return fmt.Errorf("[imap.InitStorage] Reading CRDT failed: %v", err)
+				return fmt.Errorf("reading CRDT failed: %v", err)
 			}
 
 			// Store main CRDT in designated map for user name.
@@ -182,7 +182,7 @@ func (s *service) findFiles() error {
 				// Read in each mailbox CRDT from file.
 				userMailboxCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, fmt.Sprintf("%s.log", userMailbox)))
 				if err != nil {
-					return fmt.Errorf("[imap.InitStorage] Reading CRDT failed: %v", err)
+					return fmt.Errorf("reading CRDT failed: %v", err)
 				}
 
 				// Store each read-in CRDT in map under the respective

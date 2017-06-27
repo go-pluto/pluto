@@ -526,7 +526,7 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 
 	// Make space for tracking environment characteristics
 	// for this command from AppendBegin to AppendEnd.
-	s.AppendInProg = &AppendInProg{
+	appendInProg := &AppendInProg{
 		Tag: req.Tag,
 	}
 
@@ -534,30 +534,30 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 	switch lenAppendArgs {
 
 	case 2:
-		s.AppendInProg.Mailbox = appendArgs[0]
+		appendInProg.Mailbox = appendArgs[0]
 		numBytesRaw = appendArgs[1]
 
 	case 3:
-		s.AppendInProg.Mailbox = appendArgs[0]
-		s.AppendInProg.FlagsRaw = appendArgs[1]
+		appendInProg.Mailbox = appendArgs[0]
+		appendInProg.FlagsRaw = appendArgs[1]
 		numBytesRaw = appendArgs[2]
 
 	case 4:
-		s.AppendInProg.Mailbox = appendArgs[0]
-		s.AppendInProg.FlagsRaw = appendArgs[1]
-		s.AppendInProg.DateTimeRaw = appendArgs[2]
+		appendInProg.Mailbox = appendArgs[0]
+		appendInProg.FlagsRaw = appendArgs[1]
+		appendInProg.DateTimeRaw = appendArgs[2]
 		numBytesRaw = appendArgs[3]
 	}
 
 	// If user specified inbox, set it accordingly.
-	if strings.ToUpper(s.AppendInProg.Mailbox) == "INBOX" {
-		s.AppendInProg.Mailbox = "INBOX"
+	if strings.ToUpper(appendInProg.Mailbox) == "INBOX" {
+		appendInProg.Mailbox = "INBOX"
 	}
 
 	// If flags were supplied, parse them.
-	if s.AppendInProg.FlagsRaw != "" {
+	if appendInProg.FlagsRaw != "" {
 
-		_, err := ParseFlags(s.AppendInProg.FlagsRaw)
+		_, err := ParseFlags(appendInProg.FlagsRaw)
 		if err != nil {
 
 			// Parsing flags from APPEND request produced
@@ -571,7 +571,7 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 	}
 
 	// If date-time was supplied, parse it.
-	if s.AppendInProg.DateTimeRaw != "" {
+	if appendInProg.DateTimeRaw != "" {
 		// TODO: Parse time and do something with it.
 	}
 
@@ -591,10 +591,10 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 	}
 
 	// Construct path to maildir on node.
-	if s.AppendInProg.Mailbox == "INBOX" {
-		s.AppendInProg.Maildir = maildir.Dir(s.UserMaildirPath)
+	if appendInProg.Mailbox == "INBOX" {
+		appendInProg.Maildir = maildir.Dir(s.UserMaildirPath)
 	} else {
-		s.AppendInProg.Maildir = maildir.Dir(filepath.Join(s.UserMaildirPath, s.AppendInProg.Mailbox))
+		appendInProg.Maildir = maildir.Dir(filepath.Join(s.UserMaildirPath, appendInProg.Mailbox))
 	}
 
 	// Lock node exclusively to make execution
@@ -605,7 +605,7 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 	// conveniently use it hereafter.
 	userMainCRDT := node.MailboxStructure[s.UserName]["Structure"]
 
-	if userMainCRDT.Lookup(s.AppendInProg.Mailbox) != true {
+	if userMainCRDT.Lookup(appendInProg.Mailbox) != true {
 
 		node.Lock.Unlock()
 
@@ -615,6 +615,9 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 			Text: fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag),
 		}, nil
 	}
+
+	// Store created appendInProg context in session.
+	s.AppendInProg = appendInProg
 
 	return &Await{
 		Text:     "+ Ready for literal data",
@@ -627,6 +630,12 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.Msg) (*Reply, error) {
 
 	defer node.Lock.Unlock()
+	defer func() {
+		// TODO: Remove logs.
+		node.Logger.Log("msg", fmt.Sprintf("[TODO] BEFORE DEFERRED NIL: %#v", s.AppendInProg))
+		s.AppendInProg = nil
+		node.Logger.Log("msg", fmt.Sprintf("[TODO] AFTER DEFERRED NIL: %#v", s.AppendInProg))
+	}()
 
 	// Open a new Maildir delivery.
 	appDelivery, err := s.AppendInProg.Maildir.NewDelivery()
@@ -703,7 +712,6 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	})
 	if err != nil {
 
-		// Perform clean up.
 		level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during source APPEND execution, will clean up: %v", err))
 
 		err := os.Remove(mailFileNamePath)
@@ -715,9 +723,6 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	}
 
 	answer := fmt.Sprintf("%s OK APPEND completed", s.AppendInProg.Tag)
-
-	// Delete in-progress-object after APPEND is done.
-	s.AppendInProg = nil
 
 	return &Reply{
 		Text: answer,
