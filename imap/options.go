@@ -70,13 +70,6 @@ func DistributorOptions(tlsConfig *tls.Config) []grpc.DialOption {
 	comp := grpc.NewGZIPCompressor()
 	decomp := grpc.NewGZIPDecompressor()
 
-	// TODO: Think about well-functioning backoff
-	//       strategy to use in clients.
-	// boff := grpc.BackoffConfig{}
-
-	// Set the dial timeout to quit trying after exceeded.
-	timeout := 20 * time.Second
-
 	// These call options will be used for every call
 	// via this connection.
 	callOpts := []grpc.CallOption{
@@ -107,10 +100,9 @@ func DistributorOptions(tlsConfig *tls.Config) []grpc.DialOption {
 	return []grpc.DialOption{
 		grpc.WithCompressor(comp),
 		grpc.WithDecompressor(decomp),
-		// grpc.WithBackoffConfig(boff),
+		grpc.WithBackoffMaxDelay(3 * time.Second),
 		grpc.WithBlock(),
-		grpc.WithTimeout(timeout),
-		grpc.FailOnNonTempDialError(true),
+		grpc.WithTimeout(17 * time.Second),
 		grpc.WithDefaultCallOptions(callOpts...),
 		grpc.WithKeepaliveParams(kaParams),
 		// grpc.WithStatsHandler(stats),

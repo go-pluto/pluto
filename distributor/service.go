@@ -15,6 +15,8 @@ import (
 	"github.com/numbleroot/pluto/imap"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Structs
@@ -24,6 +26,7 @@ type service struct {
 	authenticator Authenticator
 	tlsConfig     *tls.Config
 	workers       map[string]config.Worker
+	storageAddr   string
 	gRPCOptions   []grpc.DialOption
 }
 
@@ -111,13 +114,14 @@ type Service interface {
 // NewService takes in all required parameters for spinning
 // up a new distributor node and returns a service struct for
 // this node type wrapping all information.
-func NewService(logger log.Logger, authenticator Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker) Service {
+func NewService(logger log.Logger, authenticator Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker, storageAddr string) Service {
 
 	return &service{
 		logger:        logger,
 		authenticator: authenticator,
 		tlsConfig:     tlsConfig,
 		workers:       workers,
+		storageAddr:   storageAddr,
 		gRPCOptions:   imap.DistributorOptions(tlsConfig),
 	}
 }
@@ -184,22 +188,22 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 
 				level.Debug(s.logger).Log("msg", fmt.Sprintf("client at %s disconnected", c.ClientAddr))
 
-				// If so and if a worker was already assigned,
-				// inform the worker about the disconnect.
+				// If so and if a node was already assigned,
+				// inform the node about the disconnect.
 				if c.IsAuthorized {
 
-					// Signal to worker node that session is done.
+					// Signal to node that session is done.
 					conf, err := c.gRPCClient.Close(context.Background(), &imap.Context{
 						ClientID:   c.ClientID,
 						UserName:   c.UserName,
-						RespWorker: c.RespWorker,
+						RespWorker: c.PrimaryNode,
 					})
 					if (err != nil) || (conf.Status != 0) {
 
 						if err != nil {
-							level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Close() to internal node %s: %v", c.RespWorker, err))
+							level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Close() to internal node %s: %v", c.ActualNode, err))
 						} else if conf.Status != 0 {
-							level.Error(s.logger).Log("msg", fmt.Sprintf("sending Close() to internal node %s returned error", c.RespWorker))
+							level.Error(s.logger).Log("msg", fmt.Sprintf("sending Close() to internal node %s returned error", c.ActualNode))
 						}
 					}
 				}
@@ -279,7 +283,7 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 		// Executed command above indicated failure in
 		// operation. Return from function.
 		if !cmdOK {
-			return
+			break
 		}
 	}
 
@@ -342,16 +346,16 @@ func (s *service) Logout(c *Connection, req *imap.Request) bool {
 		conf, err := c.gRPCClient.Close(context.Background(), &imap.Context{
 			ClientID:   c.ClientID,
 			UserName:   c.UserName,
-			RespWorker: c.RespWorker,
+			RespWorker: c.PrimaryNode,
 		})
 		if (err != nil) || (conf.Status != 0) {
 
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 			if err != nil {
-				level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Close() to internal node %s: %v", c.RespWorker, err))
+				level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Close() to internal node %s: %v", c.ActualNode, err))
 			} else if conf.Status != 0 {
-				level.Error(s.logger).Log("msg", fmt.Sprintf("sending Close() to internal node %s returned error", c.RespWorker))
+				level.Error(s.logger).Log("msg", fmt.Sprintf("sending Close() to internal node %s returned error", c.ActualNode))
 			}
 
 			return false
@@ -425,36 +429,47 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 		return false
 	}
 
-	// Connect to responsible worker or storage node.
-	conn, err := grpc.Dial(s.workers[respWorker].PublicMailAddr, s.gRPCOptions...)
-	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("[FAILOVER RELEVANT???] could not connect to internal node %s: %#v", respWorker, err))
-		return false
-	}
+	// Prepary needed node names and addresses.
+	c.PrimaryNode = respWorker
+	c.PrimaryAddr = s.workers[respWorker].PublicMailAddr
+	c.SecondaryNode = "storage"
+	c.SecondaryAddr = s.storageAddr
+
+	// Connect to reachable node.
+	c.Connect(s.gRPCOptions, s.logger, false)
 
 	// Save context to connection struct.
-	c.gRPCClient = imap.NewNodeClient(conn)
 	c.IsAuthorized = true
 	c.ClientID = clientID
 	c.UserName = userCredentials[0]
-	c.RespWorker = respWorker
 
-	// Send worker or storage context of to-come client connection.
-	conf, err := c.gRPCClient.Prepare(context.Background(), &imap.Context{
+	// Prepare payload to send.
+	payload := &imap.Context{
 		ClientID:   c.ClientID,
 		UserName:   c.UserName,
-		RespWorker: c.RespWorker,
-	})
-	if (err != nil) || (conf.Status != 0) {
+		RespWorker: c.PrimaryNode,
+	}
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.")
+	// Send worker or storage context of to-come client connection.
+	conf, err := c.gRPCClient.Prepare(context.Background(), payload)
+	for err != nil {
 
-		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Prepare() to internal node %s: %v", c.RespWorker, err))
-		} else if conf.Status != 0 {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("sending Prepare() to internal node %s returned error", c.RespWorker))
+		// Check received gRPC error.
+		stat, ok := status.FromError(err)
+		if ok && (stat.Code() == codes.Unavailable) {
+			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during Prepare(), reconnecting...", c.ActualNode, c.ActualAddr))
+			c.Connect(s.gRPCOptions, s.logger, false)
+			conf, err = c.gRPCClient.Prepare(context.Background(), payload)
+		} else {
+			c.Send("* BAD Internal server error, sorry. Closing connection.")
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Prepare() to internal node %s: %v", c.ActualNode, err))
+			return false
 		}
+	}
 
+	if conf.Status != 0 {
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Prepare() to internal node %s returned error", c.ActualNode))
 		return false
 	}
 
@@ -501,21 +516,32 @@ func (s *service) StartTLS(c *Connection, req *imap.Request) bool {
 // storage node.
 func (s *service) ProxySelect(c *Connection, rawReq string) bool {
 
-	// Send the request via gRPC.
-	reply, err := c.gRPCClient.Select(context.Background(), &imap.Command{
+	// Prepare payload to send.
+	payload := &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-	})
-	if (err != nil) || (reply.Status != 0) {
+	}
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.")
+	// Send the request via gRPC.
+	reply, err := c.gRPCClient.Select(context.Background(), payload)
+	for err != nil {
 
-		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying SELECT to internal node %s: %v", c.RespWorker, err))
-		} else if reply.Status != 0 {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying SELECT to internal node %s returned error", c.RespWorker))
+		// Check received gRPC error.
+		stat, ok := status.FromError(err)
+		if ok && (stat.Code() == codes.Unavailable) {
+			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during ProxySelect(), reconnecting...", c.ActualNode, c.ActualAddr))
+			c.Connect(s.gRPCOptions, s.logger, true)
+			reply, err = c.gRPCClient.Select(context.Background(), payload)
+		} else {
+			c.Send("* BAD Internal server error, sorry. Closing connection.")
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Select() to internal node %s: %v", c.ActualNode, err))
+			return false
 		}
+	}
 
+	if reply.Status != 0 {
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Select() to internal node %s returned error", c.ActualNode))
 		return false
 	}
 
@@ -534,21 +560,32 @@ func (s *service) ProxySelect(c *Connection, rawReq string) bool {
 // storage node.
 func (s *service) ProxyCreate(c *Connection, rawReq string) bool {
 
-	// Send the request via gRPC.
-	reply, err := c.gRPCClient.Create(context.Background(), &imap.Command{
+	// Prepare payload to send.
+	payload := &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-	})
-	if (err != nil) || (reply.Status != 0) {
+	}
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.")
+	// Send the request via gRPC.
+	reply, err := c.gRPCClient.Create(context.Background(), payload)
+	for err != nil {
 
-		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying CREATE to internal node %s: %v", c.RespWorker, err))
-		} else if reply.Status != 0 {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying CREATE to internal node %s returned error", c.RespWorker))
+		// Check received gRPC error.
+		stat, ok := status.FromError(err)
+		if ok && (stat.Code() == codes.Unavailable) {
+			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during ProxyCreate(), reconnecting...", c.ActualNode, c.ActualAddr))
+			c.Connect(s.gRPCOptions, s.logger, true)
+			reply, err = c.gRPCClient.Create(context.Background(), payload)
+		} else {
+			c.Send("* BAD Internal server error, sorry. Closing connection.")
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Create() to internal node %s: %v", c.ActualNode, err))
+			return false
 		}
+	}
 
+	if reply.Status != 0 {
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Create() to internal node %s returned error", c.ActualNode))
 		return false
 	}
 
@@ -567,21 +604,32 @@ func (s *service) ProxyCreate(c *Connection, rawReq string) bool {
 // storage node.
 func (s *service) ProxyDelete(c *Connection, rawReq string) bool {
 
-	// Send the request via gRPC.
-	reply, err := c.gRPCClient.Delete(context.Background(), &imap.Command{
+	// Prepare payload to send.
+	payload := &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-	})
-	if (err != nil) || (reply.Status != 0) {
+	}
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.")
+	// Send the request via gRPC.
+	reply, err := c.gRPCClient.Delete(context.Background(), payload)
+	for err != nil {
 
-		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying DELETE to internal node %s: %v", c.RespWorker, err))
-		} else if reply.Status != 0 {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying DELETE to internal node %s returned error", c.RespWorker))
+		// Check received gRPC error.
+		stat, ok := status.FromError(err)
+		if ok && (stat.Code() == codes.Unavailable) {
+			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during ProxyDelete(), reconnecting...", c.ActualNode, c.ActualAddr))
+			c.Connect(s.gRPCOptions, s.logger, true)
+			reply, err = c.gRPCClient.Delete(context.Background(), payload)
+		} else {
+			c.Send("* BAD Internal server error, sorry. Closing connection.")
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Delete() to internal node %s: %v", c.ActualNode, err))
+			return false
 		}
+	}
 
+	if reply.Status != 0 {
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Delete() to internal node %s returned error", c.ActualNode))
 		return false
 	}
 
@@ -600,21 +648,32 @@ func (s *service) ProxyDelete(c *Connection, rawReq string) bool {
 // storage node.
 func (s *service) ProxyList(c *Connection, rawReq string) bool {
 
-	// Send the request via gRPC.
-	reply, err := c.gRPCClient.List(context.Background(), &imap.Command{
+	// Prepare payload to send.
+	payload := &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-	})
-	if (err != nil) || (reply.Status != 0) {
+	}
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.")
+	// Send the request via gRPC.
+	reply, err := c.gRPCClient.List(context.Background(), payload)
+	for err != nil {
 
-		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying LIST to internal node %s: %v", c.RespWorker, err))
-		} else if reply.Status != 0 {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying LIST to internal node %s returned error", c.RespWorker))
+		// Check received gRPC error.
+		stat, ok := status.FromError(err)
+		if ok && (stat.Code() == codes.Unavailable) {
+			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during ProxyList(), reconnecting...", c.ActualNode, c.ActualAddr))
+			c.Connect(s.gRPCOptions, s.logger, true)
+			reply, err = c.gRPCClient.List(context.Background(), payload)
+		} else {
+			c.Send("* BAD Internal server error, sorry. Closing connection.")
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending List() to internal node %s: %v", c.ActualNode, err))
+			return false
 		}
+	}
 
+	if reply.Status != 0 {
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending List() to internal node %s returned error", c.ActualNode))
 		return false
 	}
 
@@ -633,25 +692,34 @@ func (s *service) ProxyList(c *Connection, rawReq string) bool {
 // storage node.
 func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 
-	// TODO: Add failover for all IMAP gRPC connections.
-
 	// TODO: Fix connection close by client during this Proxy function.
 
-	// Send the begin part of the APPEND request via gRPC.
-	await, err := c.gRPCClient.AppendBegin(context.Background(), &imap.Command{
+	// Prepare payload to send.
+	payload := &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-	})
-	if (err != nil) || (await.Status != 0) {
+	}
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.")
+	// Send the begin part of the APPEND request via gRPC.
+	await, err := c.gRPCClient.AppendBegin(context.Background(), payload)
+	for err != nil {
 
-		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying begin part of APPEND to internal node %s: %v", c.RespWorker, err))
-		} else if await.Status != 0 {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying begin part of APPEND to internal node %s returned error", c.RespWorker))
+		// Check received gRPC error.
+		stat, ok := status.FromError(err)
+		if ok && (stat.Code() == codes.Unavailable) {
+			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during begin part of ProxyAppend(), reconnecting...", c.ActualNode, c.ActualAddr))
+			c.Connect(s.gRPCOptions, s.logger, true)
+			await, err = c.gRPCClient.AppendBegin(context.Background(), payload)
+		} else {
+			c.Send("* BAD Internal server error, sorry. Closing connection.")
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending AppendBegin() to internal node %s: %v", c.ActualNode, err))
+			return false
 		}
+	}
 
+	if await.Status != 0 {
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendBegin() to internal node %s returned error", c.ActualNode))
 		return false
 	}
 
@@ -688,9 +756,9 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 		c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying end part of APPEND to internal node %s: %v", c.RespWorker, err))
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending AppendEnd() to internal node %s: %v", c.ActualNode, err))
 		} else if reply.Status != 0 {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying end part of APPEND to internal node %s returned error", c.RespWorker))
+			level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendEnd() to internal node %s returned error", c.ActualNode))
 		}
 
 		return false
@@ -711,21 +779,32 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 // storage node.
 func (s *service) ProxyExpunge(c *Connection, rawReq string) bool {
 
-	// Send the request via gRPC.
-	reply, err := c.gRPCClient.Expunge(context.Background(), &imap.Command{
+	// Prepare payload to send.
+	payload := &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-	})
-	if (err != nil) || (reply.Status != 0) {
+	}
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.")
+	// Send the request via gRPC.
+	reply, err := c.gRPCClient.Expunge(context.Background(), payload)
+	for err != nil {
 
-		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying EXPUNGE to internal node %s: %v", c.RespWorker, err))
-		} else if reply.Status != 0 {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying EXPUNGE to internal node %s returned error", c.RespWorker))
+		// Check received gRPC error.
+		stat, ok := status.FromError(err)
+		if ok && (stat.Code() == codes.Unavailable) {
+			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during ProxyExpunge(), reconnecting...", c.ActualNode, c.ActualAddr))
+			c.Connect(s.gRPCOptions, s.logger, true)
+			reply, err = c.gRPCClient.Expunge(context.Background(), payload)
+		} else {
+			c.Send("* BAD Internal server error, sorry. Closing connection.")
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Expunge() to internal node %s: %v", c.ActualNode, err))
+			return false
 		}
+	}
 
+	if reply.Status != 0 {
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Expunge() to internal node %s returned error", c.ActualNode))
 		return false
 	}
 
@@ -744,21 +823,32 @@ func (s *service) ProxyExpunge(c *Connection, rawReq string) bool {
 // storage node.
 func (s *service) ProxyStore(c *Connection, rawReq string) bool {
 
-	// Send the request via gRPC.
-	reply, err := c.gRPCClient.Store(context.Background(), &imap.Command{
+	// Prepare payload to send.
+	payload := &imap.Command{
 		Text:     rawReq,
 		ClientID: c.ClientID,
-	})
-	if (err != nil) || (reply.Status != 0) {
+	}
 
-		c.Send("* BAD Internal server error, sorry. Closing connection.")
+	// Send the request via gRPC.
+	reply, err := c.gRPCClient.Store(context.Background(), payload)
+	for err != nil {
 
-		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error proxying STORE to internal node %s: %v", c.RespWorker, err))
-		} else if reply.Status != 0 {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("proxying STORE to internal node %s returned error", c.RespWorker))
+		// Check received gRPC error.
+		stat, ok := status.FromError(err)
+		if ok && (stat.Code() == codes.Unavailable) {
+			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during ProxyStore(), reconnecting...", c.ActualNode, c.ActualAddr))
+			c.Connect(s.gRPCOptions, s.logger, true)
+			reply, err = c.gRPCClient.Store(context.Background(), payload)
+		} else {
+			c.Send("* BAD Internal server error, sorry. Closing connection.")
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Store() to internal node %s: %v", c.ActualNode, err))
+			return false
 		}
+	}
 
+	if reply.Status != 0 {
+		c.Send("* BAD Internal server error, sorry. Closing connection.")
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Store() to internal node %s returned error", c.ActualNode))
 		return false
 	}
 

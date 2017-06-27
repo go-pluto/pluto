@@ -7,7 +7,11 @@ import (
 
 	"crypto/tls"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/numbleroot/pluto/imap"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 // Structs
@@ -17,14 +21,19 @@ import (
 // a pluto node that only authenticates and proxies
 // IMAP connections.
 type Connection struct {
-	gRPCClient   imap.NodeClient
-	IncConn      *tls.Conn
-	IncReader    *bufio.Reader
-	IsAuthorized bool
-	ClientID     string
-	ClientAddr   string
-	UserName     string
-	RespWorker   string
+	gRPCClient    imap.NodeClient
+	IncConn       *tls.Conn
+	IncReader     *bufio.Reader
+	IsAuthorized  bool
+	ClientID      string
+	ClientAddr    string
+	UserName      string
+	PrimaryNode   string
+	PrimaryAddr   string
+	SecondaryNode string
+	SecondaryAddr string
+	ActualNode    string
+	ActualAddr    string
 }
 
 // Functions
@@ -54,4 +63,45 @@ func (c *Connection) Receive() (string, error) {
 	}
 
 	return strings.TrimRight(text, "\r\n"), nil
+}
+
+// Connect to primary node or fail over to secondary node
+// in case of an error. If failover fails as well, go back
+// to primary node.
+func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrepare bool) {
+
+	c.ActualNode = c.PrimaryNode
+	c.ActualAddr = c.PrimaryAddr
+
+	conn, err := grpc.Dial(c.PrimaryAddr, opts...)
+	for err != nil {
+
+		level.Debug(logger).Log("msg", fmt.Sprintf("failed to dial to %s (%s), failing over to %s...", c.PrimaryNode, c.PrimaryAddr, c.SecondaryNode))
+		c.ActualNode = c.SecondaryNode
+		c.ActualAddr = c.SecondaryAddr
+
+		conn, err = grpc.Dial(c.SecondaryAddr, opts...)
+		if err != nil {
+
+			level.Debug(logger).Log("msg", fmt.Sprintf("failed to dial to %s (%s), trying %s again...", c.SecondaryNode, c.SecondaryAddr, c.PrimaryNode))
+			c.ActualNode = c.PrimaryNode
+			c.ActualAddr = c.PrimaryAddr
+
+			conn, err = grpc.Dial(c.PrimaryAddr, opts...)
+		}
+	}
+
+	level.Debug(logger).Log("msg", fmt.Sprintf("dialled to %s (%s)", c.ActualNode, c.ActualAddr))
+
+	c.gRPCClient = imap.NewNodeClient(conn)
+
+	// If specified, send connected node context of to-come client connection.
+	if sendPrepare {
+
+		_, _ = c.gRPCClient.Prepare(context.Background(), &imap.Context{
+			ClientID:   c.ClientID,
+			UserName:   c.UserName,
+			RespWorker: c.PrimaryNode,
+		})
+	}
 }

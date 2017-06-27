@@ -119,7 +119,7 @@ func TestCapability(t *testing.T) {
 		}
 
 		if answer != tt.out {
-			t.Fatalf("[imap.TestCapability] Expected '%#v' but received '%#v'\n", tt.out, answer)
+			t.Fatalf("[imap.TestCapability] Expected '%s' but received '%s'\n", tt.out, answer)
 		}
 	}
 

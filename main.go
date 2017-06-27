@@ -214,7 +214,7 @@ func main() {
 		}
 
 		var distrS distributor.Service
-		distrS = distributor.NewService(logger, authenticator, intlTLSConfig, conf.Workers)
+		distrS = distributor.NewService(logger, authenticator, intlTLSConfig, conf.Workers, conf.Storage.PublicMailAddr)
 		distrS = distributor.NewLoggingService(distrS, logger)
 		distrS = distributor.NewMetricsService(distrS, plutoMetrics.Distributor.Logins, plutoMetrics.Distributor.Logouts)
 
