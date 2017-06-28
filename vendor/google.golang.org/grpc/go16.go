@@ -1,6 +1,7 @@
 // +build go1.6,!go1.7
 
 /*
+ *
  * Copyright 2016 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -55,7 +56,7 @@ func toRPCErr(err error) error {
 	case transport.StreamError:
 		return status.Error(e.Code, e.Desc)
 	case transport.ConnectionError:
-		return status.Error(codes.Internal, e.Desc)
+		return status.Error(codes.Unavailable, e.Desc)
 	default:
 		switch err {
 		case context.DeadlineExceeded:

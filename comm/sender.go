@@ -319,15 +319,11 @@ func (sender *Sender) SendMsgs() {
 					level.Error(sender.logger).Log("msg", retStat)
 					os.Exit(1)
 				}
-
-				level.Debug(sender.logger).Log("msg", fmt.Sprintf("retStat %d: %s", i, retStat))
 			}
 
 			// Wait for all routines to having completed
 			// the synchronization successfully.
 			wg.Wait()
-
-			level.Debug(sender.logger).Log("msg", "all done")
 
 			// Lock mutex.
 			sender.lock.Lock()
