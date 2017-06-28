@@ -631,10 +631,7 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 
 	defer node.Lock.Unlock()
 	defer func() {
-		// TODO: Remove logs.
-		node.Logger.Log("msg", fmt.Sprintf("[TODO] BEFORE DEFERRED NIL: %#v", s.AppendInProg))
 		s.AppendInProg = nil
-		node.Logger.Log("msg", fmt.Sprintf("[TODO] AFTER DEFERRED NIL: %#v", s.AppendInProg))
 	}()
 
 	// Open a new Maildir delivery.

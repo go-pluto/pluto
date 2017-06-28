@@ -77,6 +77,10 @@ type Service interface {
 	// prior AppendBegin.
 	AppendEnd(ctx context.Context, comd *imap.MailFile) (*imap.Reply, error)
 
+	// AppendAbort removes meta data tracking an in-progress
+	// APPEND command from an internal node in case of client error.
+	AppendAbort(ctx context.Context, abort *imap.Abort) (*imap.Confirmation, error)
+
 	// Expunge deletes messages permanently from currently
 	// selected mailbox that have been flagged as Deleted
 	// prior to calling this function.
@@ -382,6 +386,25 @@ func (s *service) AppendEnd(ctx context.Context, mailFile *imap.MailFile) (*imap
 	reply, err := s.imapNode.AppendEnd(sess, mailFile.Content, s.SyncSendChan)
 
 	return reply, err
+}
+
+// AppendAbort removes meta data tracking an in-progress
+// APPEND command from an internal node in case of client error.
+func (s *service) AppendAbort(ctx context.Context, abort *imap.Abort) (*imap.Confirmation, error) {
+
+	// Retrieve active IMAP connection context
+	// from map of all known to this node.
+	// Note: ClientID is expected to truly identify
+	// exactly one device session (thus, no locking).
+	sess := s.sessions[abort.ClientID]
+
+	// Remove in-progress meta data.
+	sess.AppendInProg = nil
+	s.imapNode.Lock.Unlock()
+
+	return &imap.Confirmation{
+		Status: 0,
+	}, nil
 }
 
 // Expunge deletes messages permanently from currently

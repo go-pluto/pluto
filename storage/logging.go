@@ -210,6 +210,25 @@ func (s *loggingService) AppendEnd(ctx context.Context, mailFile *imap.MailFile)
 	return reply, err
 }
 
+// AppendAbort wraps this service's AppendAbort
+// method with added logging capabilities.
+func (s *loggingService) AppendAbort(ctx context.Context, abort *imap.Abort) (*imap.Confirmation, error) {
+
+	conf, err := s.service.AppendAbort(ctx, abort)
+
+	logger := log.With(s.logger,
+		"method", "APPEND (abort)",
+	)
+
+	if err != nil {
+		level.Info(logger).Log("msg", "failed to abort APPEND (failover) correctly")
+	} else {
+		level.Debug(logger).Log()
+	}
+
+	return conf, err
+}
+
 // Expunge wraps this service's Expunge method
 // with added logging capabilities.
 func (s *loggingService) Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {

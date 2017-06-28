@@ -692,8 +692,6 @@ func (s *service) ProxyList(c *Connection, rawReq string) bool {
 // storage node.
 func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 
-	// TODO: Fix connection close by client during this Proxy function.
-
 	// Prepare payload to send.
 	payload := &imap.Command{
 		Text:     rawReq,
@@ -726,7 +724,21 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 	// Pass on either error or continuation response to client.
 	err = c.Send(await.Text)
 	if err != nil {
+
 		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending begin APPEND answer to client %s: %v", c.ClientAddr, err))
+
+		// Signal connected internal node that client aborted APPEND.
+		conf, err := c.gRPCClient.AppendAbort(context.Background(), &imap.Abort{
+			ClientID: c.ClientID,
+		})
+
+		if err != nil {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending AppendAbort() to internal node %s: %v", c.ActualNode, err))
+		}
+		if conf.Status != 0 {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendAbort() to internal node %s returned error", c.ActualNode))
+		}
+
 		return false
 	}
 
@@ -742,7 +754,21 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 	// Read in that amount from connection to client.
 	_, err = io.ReadFull(c.IncReader, msgBuffer)
 	if err != nil {
+
 		level.Error(s.logger).Log("msg", fmt.Sprintf("error reading mail content from client %s: %v", c.ClientAddr, err))
+
+		// Signal connected internal node that client aborted APPEND.
+		conf, err := c.gRPCClient.AppendAbort(context.Background(), &imap.Abort{
+			ClientID: c.ClientID,
+		})
+
+		if err != nil {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending AppendAbort() to internal node %s: %v", c.ActualNode, err))
+		}
+		if conf.Status != 0 {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendAbort() to internal node %s returned error", c.ActualNode))
+		}
+
 		return false
 	}
 
