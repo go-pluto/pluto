@@ -21,6 +21,7 @@ import (
 // a pluto node that only authenticates and proxies
 // IMAP connections.
 type Connection struct {
+	gRPCConn      *grpc.ClientConn
 	gRPCClient    imap.NodeClient
 	IncConn       *tls.Conn
 	IncReader     *bufio.Reader
@@ -73,26 +74,43 @@ func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrep
 	c.ActualNode = c.PrimaryNode
 	c.ActualAddr = c.PrimaryAddr
 
+	// Close lost or broken connection before attempting to
+	// connect to secondary node, if existent.
+	if c.gRPCConn != nil {
+
+		err := c.gRPCConn.Close()
+		if err != nil {
+			level.Error(logger).Log("msg", fmt.Sprintf("failed to close lost or broken client connection to %s: %v", c.PrimaryNode, err))
+		}
+	}
+
+	// Dial primary node.
 	conn, err := grpc.Dial(c.PrimaryAddr, opts...)
 	for err != nil {
 
+		// Failed. Switch actual node representation.
 		level.Debug(logger).Log("msg", fmt.Sprintf("failed to dial to %s (%s), failing over to %s...", c.PrimaryNode, c.PrimaryAddr, c.SecondaryNode))
 		c.ActualNode = c.SecondaryNode
 		c.ActualAddr = c.SecondaryAddr
 
+		// Fail over to secondary node.
 		conn, err = grpc.Dial(c.SecondaryAddr, opts...)
 		if err != nil {
 
+			// Failed. Switch actual node representation.
 			level.Debug(logger).Log("msg", fmt.Sprintf("failed to dial to %s (%s), trying %s again...", c.SecondaryNode, c.SecondaryAddr, c.PrimaryNode))
 			c.ActualNode = c.PrimaryNode
 			c.ActualAddr = c.PrimaryAddr
 
+			// Dial primary node again.
 			conn, err = grpc.Dial(c.PrimaryAddr, opts...)
 		}
 	}
 
 	level.Debug(logger).Log("msg", fmt.Sprintf("dialled to %s (%s)", c.ActualNode, c.ActualAddr))
 
+	// Bootstrap gRPC client from established connection.
+	c.gRPCConn = conn
 	c.gRPCClient = imap.NewNodeClient(conn)
 
 	// If specified, send connected node context of to-come client connection.

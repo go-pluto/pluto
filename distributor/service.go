@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	stdlog "log"
 	"net"
 	"strings"
 
 	"crypto/tls"
+	"io/ioutil"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -16,6 +18,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/status"
 )
 
@@ -115,6 +118,9 @@ type Service interface {
 // up a new distributor node and returns a service struct for
 // this node type wrapping all information.
 func NewService(logger log.Logger, authenticator Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker, storageAddr string) Service {
+
+	// Disable logging of gRPC components.
+	grpclog.SetLogger(stdlog.New(ioutil.Discard, "", 0))
 
 	return &service{
 		logger:        logger,

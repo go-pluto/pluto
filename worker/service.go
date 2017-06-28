@@ -2,11 +2,13 @@ package worker
 
 import (
 	"fmt"
+	stdlog "log"
 	"net"
 	"os"
 	"sync"
 
 	"crypto/tls"
+	"io/ioutil"
 	"path/filepath"
 
 	"github.com/go-kit/kit/log"
@@ -16,6 +18,7 @@ import (
 	"github.com/numbleroot/pluto/imap"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/grpclog"
 )
 
 // Structs
@@ -98,6 +101,9 @@ type Service interface {
 // up a new worker node, runs initialization code, and returns
 // a service struct for this node type wrapping all information.
 func NewService(logger log.Logger, tlsConfig *tls.Config, config *config.Config, name string) Service {
+
+	// Disable logging of gRPC components.
+	grpclog.SetLogger(stdlog.New(ioutil.Discard, "", 0))
 
 	return &service{
 		imapNode: &imap.IMAPNode{

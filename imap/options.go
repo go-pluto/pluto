@@ -100,9 +100,9 @@ func DistributorOptions(tlsConfig *tls.Config) []grpc.DialOption {
 	return []grpc.DialOption{
 		grpc.WithCompressor(comp),
 		grpc.WithDecompressor(decomp),
-		grpc.WithBackoffMaxDelay(3 * time.Second),
+		grpc.WithBackoffMaxDelay(2 * time.Second),
 		grpc.WithBlock(),
-		grpc.WithTimeout(17 * time.Second),
+		grpc.WithTimeout(12 * time.Second),
 		grpc.WithDefaultCallOptions(callOpts...),
 		grpc.WithKeepaliveParams(kaParams),
 		// grpc.WithStatsHandler(stats),
