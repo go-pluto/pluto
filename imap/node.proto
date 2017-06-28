@@ -33,6 +33,10 @@ message MailFile {
     string clientID = 2;
 }
 
+message Abort {
+    string clientID = 1;
+}
+
 service Node {
     rpc Prepare(Context) returns(Confirmation) {}
     rpc Close(Context) returns(Confirmation) {}
@@ -42,6 +46,7 @@ service Node {
     rpc List(Command) returns(Reply) {}
     rpc AppendBegin(Command) returns(Await) {}
     rpc AppendEnd(MailFile) returns(Reply) {}
+    rpc AppendAbort(Abort) returns(Confirmation) {}
     rpc Expunge(Command) returns(Reply) {}
     rpc Store(Command) returns(Reply) {}
 }
