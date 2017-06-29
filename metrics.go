@@ -11,26 +11,30 @@ import (
 	prom "github.com/prometheus/client_golang/prometheus"
 )
 
+// PlutoMetrics wraps all metrics for Pluto into one struct.
 type PlutoMetrics struct {
-	Distributor *DistrobutorMetrics
+	Distributor *DistributorMetrics
 }
 
-type DistrobutorMetrics struct {
+// DistributorMetrics has all metrics exposed by the distributor.
+type DistributorMetrics struct {
 	Logins  metrics.Counter
 	Logouts metrics.Counter
 }
 
+// NewPlutoMetrics returns prometheus metrics when the addr isn't an empty string.
+// Otherwise discard metrics are returned.
 func NewPlutoMetrics(distributorAddr string) *PlutoMetrics {
 
 	m := &PlutoMetrics{}
 
 	if distributorAddr == "" {
-		m.Distributor = &DistrobutorMetrics{
+		m.Distributor = &DistributorMetrics{
 			Logins:  discard.NewCounter(),
 			Logouts: discard.NewCounter(),
 		}
 	} else {
-		m.Distributor = &DistrobutorMetrics{
+		m.Distributor = &DistributorMetrics{
 			Logins: prometheus.NewCounterFrom(prom.CounterOpts{
 				Namespace: "pluto",
 				Subsystem: "distributor",
