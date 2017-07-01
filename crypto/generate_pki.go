@@ -66,7 +66,7 @@ func BootstrapCertTempl(nBef time.Time, nAft time.Time) (*x509.Certificate, erro
 // CreateNodeCert performs all needed actions in order
 // to obtain a node's key pair and certificate signed by
 // the root certificate.
-func CreateNodeCert(pathPrefix string, fileName string, rsaBits int, nBef time.Time, nAft time.Time, ipAdresses []string, rootCert *x509.Certificate, rootKey *rsa.PrivateKey) error {
+func CreateNodeCert(pathPrefix string, fileName string, rsaBits int, nBef time.Time, nAft time.Time, nodeIPs []net.IP, nodeNames []string, rootCert *x509.Certificate, rootKey *rsa.PrivateKey) error {
 
 	stdlog.Printf("=== Generating for %s ===", fileName)
 
@@ -86,11 +86,16 @@ func CreateNodeCert(pathPrefix string, fileName string, rsaBits int, nBef time.T
 	template.KeyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
 	template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
 
-	for _, ipAddr := range ipAdresses {
-		// Parse supplied IP addresses and append valid results.
-		if ip := net.ParseIP(ipAddr); ip != nil {
-			template.IPAddresses = append(template.IPAddresses, ip)
-		}
+	// If supplied, add this node's IP addresses
+	// to certificate template.
+	if len(nodeIPs) > 0 {
+		template.IPAddresses = nodeIPs
+	}
+
+	// If supplied, add this node's DNS names
+	// to certificate template.
+	if len(nodeNames) > 0 {
+		template.DNSNames = nodeNames
 	}
 
 	// Create the actual node certificate.
@@ -231,40 +236,67 @@ func main() {
 	stdlog.Println("Saved root-key.pem to disk")
 	stdlog.Println("=== Done generating root certificate ===")
 
+	nodeIPs := []net.IP{}
+	nodeNames := []string{}
+
 	host, _, err := net.SplitHostPort(config.Distributor.PublicMailAddr)
 	if err != nil {
 		stdlog.Fatalf("failed to split host and port: %v", err)
 	}
 
+	if ip := net.ParseIP(host); ip != nil {
+		nodeIPs = append(nodeIPs, ip)
+	} else {
+		nodeNames = append(nodeNames, host)
+	}
+
 	// Generate distributor's internal key and signed certificate.
-	err = CreateNodeCert(*pathPrefix, "internal-distributor", *rsaBits, notBefore, notAfter, []string{host}, rootCert, rootKey)
+	err = CreateNodeCert(*pathPrefix, "internal-distributor", *rsaBits, notBefore, notAfter, nodeIPs, nodeNames, rootCert, rootKey)
 	if err != nil {
 		stdlog.Fatal(err)
 	}
 
 	for name, worker := range config.Workers {
 
+		nodeIPs := []net.IP{}
+		nodeNames := []string{}
+
 		host, _, err := net.SplitHostPort(worker.PublicMailAddr)
 		if err != nil {
 			stdlog.Fatalf("failed to split host and port: %v", err)
 		}
 
+		if ip := net.ParseIP(host); ip != nil {
+			nodeIPs = append(nodeIPs, ip)
+		} else {
+			nodeNames = append(nodeNames, host)
+		}
+
 		// For each worker node, generate an internal key pair
 		// and a signed certificate.
-		err = CreateNodeCert(*pathPrefix, fmt.Sprintf("internal-%s", name), *rsaBits, notBefore, notAfter, []string{host}, rootCert, rootKey)
+		err = CreateNodeCert(*pathPrefix, fmt.Sprintf("internal-%s", name), *rsaBits, notBefore, notAfter, nodeIPs, nodeNames, rootCert, rootKey)
 		if err != nil {
 			stdlog.Fatal(err)
 		}
 	}
+
+	nodeIPs = []net.IP{}
+	nodeNames = []string{}
 
 	host, _, err = net.SplitHostPort(config.Storage.PublicMailAddr)
 	if err != nil {
 		stdlog.Fatalf("failed to split host and port: %v", err)
 	}
 
+	if ip := net.ParseIP(host); ip != nil {
+		nodeIPs = append(nodeIPs, ip)
+	} else {
+		nodeNames = append(nodeNames, host)
+	}
+
 	// Generate the storage's internal key pair
 	// and signed certificate.
-	err = CreateNodeCert(*pathPrefix, "internal-storage", *rsaBits, notBefore, notAfter, []string{host}, rootCert, rootKey)
+	err = CreateNodeCert(*pathPrefix, "internal-storage", *rsaBits, notBefore, notAfter, nodeIPs, nodeNames, rootCert, rootKey)
 	if err != nil {
 		stdlog.Fatal(err)
 	}
