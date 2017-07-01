@@ -71,6 +71,8 @@ func (c *Connection) Receive() (string, error) {
 // to primary node.
 func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrepare bool) {
 
+	// TODO: Cancel this if client disconnects while execution.
+
 	c.ActualNode = c.PrimaryNode
 	c.ActualAddr = c.PrimaryAddr
 

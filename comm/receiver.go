@@ -27,6 +27,8 @@ type Receiver struct {
 	lock             *sync.Mutex
 	logger           log.Logger
 	name             string
+	listenAddr       string
+	publicAddr       string
 	msgInLog         chan struct{}
 	socket           net.Listener
 	tlsConfig        *tls.Config
@@ -48,13 +50,15 @@ type Receiver struct {
 // InitReceiver initializes above struct and sets
 // default values. It starts involved background
 // routines and send initial channel trigger.
-func InitReceiver(logger log.Logger, name string, logFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan Msg, doneCRDTUpdChan chan struct{}, nodes []string) (chan string, chan map[string]uint32, error) {
+func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr string, logFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan Msg, doneCRDTUpdChan chan struct{}, nodes []string) (chan string, chan map[string]uint32, error) {
 
 	// Create and initialize new struct.
 	recv := &Receiver{
 		lock:             &sync.Mutex{},
 		logger:           logger,
 		name:             name,
+		listenAddr:       listenAddr,
+		publicAddr:       publicAddr,
 		msgInLog:         make(chan struct{}, 1),
 		socket:           socket,
 		tlsConfig:        tlsConfig,
@@ -148,7 +152,7 @@ func (recv *Receiver) StartGRPCRecv() error {
 	RegisterReceiverServer(grpcRecv, recv)
 
 	level.Info(recv.logger).Log(
-		"msg", fmt.Sprintf("receiver at %s is accepting CRDT sync connections at %s", recv.name, recv.socket.Addr()),
+		"msg", fmt.Sprintf("receiver at %s (%s) is accepting CRDT sync connections at %s", recv.name, recv.listenAddr, recv.publicAddr),
 	)
 
 	// Run server.

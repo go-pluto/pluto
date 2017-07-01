@@ -195,6 +195,9 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 	// conveniently use it hereafter.
 	userMainCRDT := node.MailboxStructure[s.UserName]["Structure"]
 
+	level.Debug(node.Logger).Log("msg", fmt.Sprintf("userMainCRDT: %v", userMainCRDT))
+	level.Debug(node.Logger).Log("msg", fmt.Sprintf("userMainCRDT: %#v", userMainCRDT))
+
 	if userMainCRDT.Lookup(posMailbox) {
 
 		// If mailbox to-be-created already exists for user,

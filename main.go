@@ -291,7 +291,7 @@ func main() {
 		vclockLog := filepath.Join(workerConfig.CRDTLayerRoot, "vclock.log")
 
 		// Initialize receiving goroutine for sync operations.
-		incVClock, updVClock, err := comm.InitReceiver(logger, *workerFlag, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, []string{"storage"})
+		incVClock, updVClock, err := comm.InitReceiver(logger, *workerFlag, workerConfig.ListenSyncAddr, workerConfig.PublicSyncAddr, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, []string{"storage"})
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", fmt.Sprintf("failed to initialize receiver for %s", *workerFlag),
@@ -407,7 +407,7 @@ func main() {
 
 			// Initialize a receiving goroutine for sync operations
 			// for each worker node.
-			incVClock, updVClock, err := comm.InitReceiver(logger, "storage", recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, []string{name})
+			incVClock, updVClock, err := comm.InitReceiver(logger, "storage", conf.Storage.ListenSyncAddr, conf.Storage.PublicSyncAddr, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, []string{name})
 			if err != nil {
 				level.Error(logger).Log(
 					"msg", "failed to initialize receiver for storage",
