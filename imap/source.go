@@ -219,12 +219,18 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 	if err != nil {
 
 		// Perform clean up.
-		level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during source CREATE execution, will clean up: %v", err))
+		level.Error(node.Logger).Log(
+			"msg", "fail during source CREATE execution, will clean up",
+			"err", err,
+		)
 
 		// Attempt to remove Maildir.
 		err = posMaildir.Remove()
 		if err != nil {
-			level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove Maildir: %v", err))
+			level.Error(node.Logger).Log(
+				"msg", "failed to remove Maildir",
+				"err", err,
+			)
 		}
 
 		os.Exit(1)
@@ -255,7 +261,10 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 	if err != nil {
 
 		// Perform clean up.
-		level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during source CREATE execution, will clean up: %v", err))
+		level.Error(node.Logger).Log(
+			"msg", "fail during source CREATE execution, will clean up",
+			"err", err,
+		)
 
 		// Remove just added CRDT of new maildir from mailbox structure
 		// and corresponding contents slice.
@@ -265,7 +274,10 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 		// Attempt to remove Maildir.
 		err = posMaildir.Remove()
 		if err != nil {
-			level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove Maildir: %v", err))
+			level.Error(node.Logger).Log(
+				"msg", "failed to remove Maildir",
+				"err", err,
+			)
 		}
 
 		os.Exit(1)
@@ -369,7 +381,10 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 
 		// Otherwise, this is a write-back error of the updated CRDT
 		// log file. Reverting actions were already taken, log error.
-		level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove elements from user's main CRDT: %v", err))
+		level.Error(node.Logger).Log(
+			"msg", "failed to remove elements from user's main CRDT",
+			"err", err,
+		)
 
 		os.Exit(1)
 	}
@@ -709,11 +724,17 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	})
 	if err != nil {
 
-		level.Error(node.Logger).Log("msg", fmt.Sprintf("fail during source APPEND execution, will clean up: %v", err))
+		level.Error(node.Logger).Log(
+			"msg", "fail during source APPEND execution, will clean up",
+			"err", err,
+		)
 
 		err := os.Remove(mailFileNamePath)
 		if err != nil {
-			level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove created mail message: %v", err))
+			level.Error(node.Logger).Log(
+				"msg", "failed to remove created mail message",
+				"err", err,
+			)
 		}
 
 		os.Exit(1)
@@ -837,7 +858,10 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
-				level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove mails from user's selected mailbox CRDT: %v", err))
+				level.Error(node.Logger).Log(
+					"msg", "failed to remove mails from user's selected mailbox CRDT",
+					"err", err,
+				)
 				node.Lock.Unlock()
 				os.Exit(1)
 			}
@@ -1126,7 +1150,10 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
-				level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to remove old mail name from selected mailbox CRDT: %v", err))
+				level.Error(node.Logger).Log(
+					"msg", "failed to remove old mail name from selected mailbox CRDT",
+					"err", err,
+				)
 				node.Lock.Unlock()
 				os.Exit(1)
 			}
@@ -1153,7 +1180,10 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
-				level.Error(node.Logger).Log("msg", fmt.Sprintf("failed to add renamed mail name to selected mailbox CRDT: %v", err))
+				level.Error(node.Logger).Log(
+					"msg", "failed to add renamed mail name to selected mailbox CRDT",
+					"err", err,
+				)
 				node.Lock.Unlock()
 				os.Exit(1)
 			}

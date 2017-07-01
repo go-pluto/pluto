@@ -80,7 +80,10 @@ func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrep
 
 		err := c.gRPCConn.Close()
 		if err != nil {
-			level.Error(logger).Log("msg", fmt.Sprintf("failed to close lost or broken client connection to %s: %v", c.PrimaryNode, err))
+			level.Error(logger).Log(
+				"msg", fmt.Sprintf("failed to close lost or broken client connection to %s", c.PrimaryNode),
+				"err", err,
+			)
 		}
 	}
 
@@ -89,7 +92,10 @@ func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrep
 	for err != nil {
 
 		// Failed. Switch actual node representation.
-		level.Debug(logger).Log("msg", fmt.Sprintf("failed to dial to %s (%s), failing over to %s...: %v", c.PrimaryNode, c.PrimaryAddr, c.SecondaryNode, err))
+		level.Debug(logger).Log(
+			"msg", fmt.Sprintf("failed to dial to %s (%s), failing over to %s...", c.PrimaryNode, c.PrimaryAddr, c.SecondaryNode),
+			"err", err,
+		)
 		c.ActualNode = c.SecondaryNode
 		c.ActualAddr = c.SecondaryAddr
 
@@ -98,7 +104,10 @@ func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrep
 		if err != nil {
 
 			// Failed. Switch actual node representation.
-			level.Debug(logger).Log("msg", fmt.Sprintf("failed to dial to %s (%s), trying %s again...: %v", c.SecondaryNode, c.SecondaryAddr, c.PrimaryNode, err))
+			level.Debug(logger).Log(
+				"msg", fmt.Sprintf("failed to dial to %s (%s), trying %s again...", c.SecondaryNode, c.SecondaryAddr, c.PrimaryNode),
+				"err", err,
+			)
 			c.ActualNode = c.PrimaryNode
 			c.ActualAddr = c.PrimaryAddr
 

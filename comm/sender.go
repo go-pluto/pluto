@@ -123,7 +123,10 @@ func (sender *Sender) BrokerMsgs() {
 			// and add a trailing newline symbol.
 			data, err := proto.Marshal(&payload)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("failed to marshal enriched downstream Msg to ProtoBuf: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "failed to marshal enriched downstream Msg to ProtoBuf",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
@@ -134,14 +137,20 @@ func (sender *Sender) BrokerMsgs() {
 			// Write it to message log file.
 			_, err = sender.writeLog.Write(data)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("writing to CRDT log file failed with: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "writing to CRDT log file failed with",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
 			// Save to stable storage.
 			err = sender.writeLog.Sync()
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("syncing CRDT log file to stable storage failed with: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "syncing CRDT log file to stable storage failed with",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
@@ -179,7 +188,10 @@ func (sender *Sender) SendMsgs() {
 			// http://stackoverflow.com/a/30948278
 			info, err := sender.updLog.Stat()
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not get CRDT log file information: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "could not get CRDT log file information",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
@@ -196,35 +208,50 @@ func (sender *Sender) SendMsgs() {
 			// Reset position to beginning of file.
 			_, err = sender.updLog.Seek(0, os.SEEK_SET)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "could not reset position in CRDT log file",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
 			// Copy contents of log file to prepared buffer.
 			_, err = io.Copy(buf, sender.updLog)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not copy CRDT log file contents to buffer: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "could not copy CRDT log file contents to buffer",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
 			// Read byte amount of following binary message.
 			numBytesRaw, err := buf.ReadBytes(';')
 			if (err != nil) && (err != io.EOF) {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("error extracting number of bytes of first message in CRDT log file: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "error extracting number of bytes of first message in CRDT log file",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
 			// Reset position to byte directly after message length separator.
 			_, err = sender.updLog.Seek(int64(len(numBytesRaw)), os.SEEK_SET)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not change position in CRDT log file: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "could not change position in CRDT log file",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
 			// Convert string to number.
 			numBytes, err := strconv.ParseInt((string(numBytesRaw[:(len(numBytesRaw) - 1)])), 10, 64)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("failed to convert string to int indicating number of bytes: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "failed to convert string to int indicating number of bytes",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
@@ -237,14 +264,20 @@ func (sender *Sender) SendMsgs() {
 			// Read oldest message from log file.
 			numRead, err := sender.updLog.Read(binMsg.Data)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("error during extraction of first message in CRDT log file: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "error during extraction of first message in CRDT log file",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
 			// Reset position to beginning of file.
 			_, err = sender.updLog.Seek(0, os.SEEK_SET)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "could not reset position in CRDT log file",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
@@ -277,7 +310,10 @@ func (sender *Sender) SendMsgs() {
 					// Connect to downstream replica.
 					conn, err := grpc.Dial(addr, opts...)
 					for err != nil {
-						level.Debug(logger).Log("msg", fmt.Sprintf("failed to dial to %s (%s), trying again...", node, addr))
+						level.Debug(logger).Log(
+							"msg", fmt.Sprintf("failed to dial to %s (%s), trying again...", node, addr),
+							"err", err,
+						)
 						conn, err = grpc.Dial(addr, opts...)
 					}
 
@@ -331,7 +367,10 @@ func (sender *Sender) SendMsgs() {
 			// Retrieve file information.
 			info, err = sender.updLog.Stat()
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not get CRDT log file information: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "could not get CRDT log file information",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
@@ -341,21 +380,30 @@ func (sender *Sender) SendMsgs() {
 			// Reset position to byte after first message in file.
 			_, err = sender.updLog.Seek(msgSize, os.SEEK_SET)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "could not reset position in CRDT log file",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
 			// Copy contents of log file to prepared buffer.
 			_, err = io.Copy(buf, sender.updLog)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not copy CRDT log file contents to buffer: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "could not copy CRDT log file contents to buffer",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
 			// Reset position to beginning of file.
 			_, err = sender.updLog.Seek(0, os.SEEK_SET)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "could not reset position in CRDT log file",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
@@ -363,7 +411,10 @@ func (sender *Sender) SendMsgs() {
 			// of CRDT log file, effectively deleting the first line.
 			newNumOfBytes, err := io.Copy(sender.updLog, buf)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("error during copying buffer contents back to CRDT log file: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "error during copying buffer contents back to CRDT log file",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
@@ -371,21 +422,30 @@ func (sender *Sender) SendMsgs() {
 			// of bytes copied from buffer.
 			err = sender.updLog.Truncate(newNumOfBytes)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not truncate CRDT log file: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "could not truncate CRDT log file",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
 			// Sync changes to stable storage.
 			err = sender.updLog.Sync()
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("syncing CRDT log file to stable storage failed with: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "syncing CRDT log file to stable storage failed with",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 
 			// Reset position to beginning of file.
 			_, err = sender.updLog.Seek(0, os.SEEK_SET)
 			if err != nil {
-				level.Error(sender.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+				level.Error(sender.logger).Log(
+					"msg", "could not reset position in CRDT log file",
+					"err", err,
+				)
 				os.Exit(1)
 			}
 

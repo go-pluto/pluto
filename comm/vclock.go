@@ -124,7 +124,10 @@ func (recv *Receiver) IncVClockEntry() {
 				// Save updated vector clock to log file.
 				err := recv.SaveVClockEntries()
 				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("saving updated vector clock to file failed: %v", err))
+					level.Error(recv.logger).Log(
+						"msg", "saving updated vector clock to file failed",
+						"err", err,
+					)
 					os.Exit(1)
 				}
 

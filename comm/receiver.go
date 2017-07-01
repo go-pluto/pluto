@@ -262,7 +262,10 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// http://stackoverflow.com/a/30948278
 				info, err := recv.updLog.Stat()
 				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("could not get CRDT log file information: %v", err))
+					level.Error(recv.logger).Log(
+						"msg", "could not get CRDT log file information",
+						"err", err,
+					)
 					os.Exit(1)
 				}
 
@@ -279,7 +282,10 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// Save current position of head for later use.
 				curOffset, err := recv.updLog.Seek(0, os.SEEK_CUR)
 				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("error while retrieving current head position in CRDT log file: %v", err))
+					level.Error(recv.logger).Log(
+						"msg", "error while retrieving current head position in CRDT log file",
+						"err", err,
+					)
 					os.Exit(1)
 				}
 
@@ -294,7 +300,10 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					// Reset position to beginning of file.
 					_, err = recv.updLog.Seek(0, os.SEEK_SET)
 					if err != nil {
-						level.Error(recv.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+						level.Error(recv.logger).Log(
+							"msg", "could not reset position in CRDT log file",
+							"err", err,
+						)
 						os.Exit(1)
 					}
 
@@ -317,21 +326,30 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// Copy contents of log file to prepared buffer.
 				_, err = io.Copy(buf, recv.updLog)
 				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("could not copy CRDT log file contents to buffer: %v", err))
+					level.Error(recv.logger).Log(
+						"msg", "could not copy CRDT log file contents to buffer",
+						"err", err,
+					)
 					os.Exit(1)
 				}
 
 				// Read byte amount of following binary message.
 				numBytesRaw, err := buf.ReadBytes(';')
 				if (err != nil) && (err != io.EOF) {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("error extracting number of bytes of first message in CRDT log file: %v", err))
+					level.Error(recv.logger).Log(
+						"msg", "error extracting number of bytes of first message in CRDT log file",
+						"err", err,
+					)
 					os.Exit(1)
 				}
 
 				// Convert string to number.
 				numBytes, err := strconv.ParseInt((string(numBytesRaw[:(len(numBytesRaw) - 1)])), 10, 64)
 				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to convert string to int indicating number of bytes: %v", err))
+					level.Error(recv.logger).Log(
+						"msg", "failed to convert string to int indicating number of bytes",
+						"err", err,
+					)
 					os.Exit(1)
 				}
 
@@ -341,7 +359,10 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// Read current message from buffer of log file.
 				numRead, err := buf.Read(msgRaw)
 				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("error during extraction of current message in CRDT log file: %v", err))
+					level.Error(recv.logger).Log(
+						"msg", "error during extraction of current message in CRDT log file",
+						"err", err,
+					)
 					os.Exit(1)
 				}
 
@@ -358,7 +379,10 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				msg := &Msg{}
 				err = proto.Unmarshal(msgRaw, msg)
 				if err != nil {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to unmarshal read ProtoBuf into defined Msg struct: %v", err))
+					level.Error(recv.logger).Log(
+						"msg", "failed to unmarshal read ProtoBuf into defined Msg struct",
+						"err", err,
+					)
 					os.Exit(1)
 				}
 
@@ -418,14 +442,20 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					// Save updated vector clock to log file.
 					err := recv.SaveVClockEntries()
 					if err != nil {
-						level.Error(recv.logger).Log("msg", fmt.Sprintf("saving updated vector clock to file failed: %v", err))
+						level.Error(recv.logger).Log(
+							"msg", "saving updated vector clock to file failed",
+							"err", err,
+						)
 						os.Exit(1)
 					}
 
 					// Reset head position to curOffset saved at beginning of loop.
 					_, err = recv.updLog.Seek(curOffset, os.SEEK_SET)
 					if err != nil {
-						level.Error(recv.logger).Log("msg", fmt.Sprintf("failed to reset updLog head to saved position: %v", err))
+						level.Error(recv.logger).Log(
+							"msg", "failed to reset updLog head to saved position",
+							"err", err,
+						)
 						os.Exit(1)
 					}
 
@@ -433,7 +463,10 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					// of CRDT log file, effectively deleting the read message.
 					newNumOfBytes, err := io.Copy(recv.updLog, buf)
 					if err != nil {
-						level.Error(recv.logger).Log("msg", fmt.Sprintf("error during copying buffer contents back to CRDT log file: %v", err))
+						level.Error(recv.logger).Log(
+							"msg", "error during copying buffer contents back to CRDT log file",
+							"err", err,
+						)
 						os.Exit(1)
 					}
 
@@ -441,14 +474,20 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					// reducing the file size by length of handled message.
 					err = recv.updLog.Truncate((curOffset + newNumOfBytes))
 					if err != nil {
-						level.Error(recv.logger).Log("msg", fmt.Sprintf("could not truncate CRDT log file: %v", err))
+						level.Error(recv.logger).Log(
+							"msg", "could not truncate CRDT log file",
+							"err", err,
+						)
 						os.Exit(1)
 					}
 
 					// Sync changes to stable storage.
 					err = recv.updLog.Sync()
 					if err != nil {
-						level.Error(recv.logger).Log("msg", fmt.Sprintf("syncing CRDT log file to stable storage failed with: %v", err))
+						level.Error(recv.logger).Log(
+							"msg", "syncing CRDT log file to stable storage failed with",
+							"err", err,
+						)
 						os.Exit(1)
 					}
 
@@ -457,7 +496,10 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					// of CRDT message log file.
 					_, err = recv.updLog.Seek(0, os.SEEK_SET)
 					if err != nil {
-						level.Error(recv.logger).Log("msg", fmt.Sprintf("could not reset position in CRDT log file: %v", err))
+						level.Error(recv.logger).Log(
+							"msg", "could not reset position in CRDT log file",
+							"err", err,
+						)
 						os.Exit(1)
 					}
 				} else {
@@ -468,7 +510,10 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					// effectively delaying execution of that message.
 					_, err = recv.updLog.Seek((curOffset + msgSize), os.SEEK_SET)
 					if err != nil {
-						level.Error(recv.logger).Log("msg", fmt.Sprintf("error while moving position in CRDT log file to next line: %v", err))
+						level.Error(recv.logger).Log(
+							"msg", "error while moving position in CRDT log file to next line",
+							"err", err,
+						)
 						os.Exit(1)
 					}
 				}

@@ -173,7 +173,10 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 	// Send initial server greeting.
 	err := c.Send(fmt.Sprintf("* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] %s", greeting))
 	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+			"err", err,
+		)
 		return
 	}
 
@@ -207,9 +210,12 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 					if (err != nil) || (conf.Status != 0) {
 
 						if err != nil {
-							level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Close() to internal node %s: %v", c.ActualNode, err))
+							level.Error(s.logger).Log(
+								"msg", fmt.Sprintf("error sending Close() to internal node %s", c.ActualNode),
+								"err", err,
+							)
 						} else if conf.Status != 0 {
-							level.Error(s.logger).Log("msg", fmt.Sprintf("sending Close() to internal node %s returned error", c.ActualNode))
+							level.Error(s.logger).Log("msg", fmt.Sprintf("sending Close() to internal node %s returned error code", c.ActualNode))
 						}
 					}
 				}
@@ -217,7 +223,10 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 				c.IncConn.Close()
 
 			} else {
-				level.Error(s.logger).Log("msg", fmt.Sprintf("error while receiving text from client %s: %v", c.ClientAddr, err))
+				level.Error(s.logger).Log(
+					"msg", fmt.Sprintf("error while receiving text from client %s", c.ClientAddr),
+					"err", err,
+				)
 			}
 
 			return
@@ -230,7 +239,10 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 			// Signal error to client.
 			err := c.Send(err.Error())
 			if err != nil {
-				level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+				level.Error(s.logger).Log(
+					"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+					"err", err,
+				)
 				return
 			}
 
@@ -281,7 +293,10 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 			// Client sent inappropriate command. Signal tagged error.
 			err := c.Send(fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
 			if err != nil {
-				level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+				level.Error(s.logger).Log(
+					"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+					"err", err,
+				)
 				return
 			}
 		}
@@ -308,7 +323,10 @@ func (s *service) Capability(c *Connection, req *imap.Request) bool {
 		// this is a client error. Return BAD statement.
 		err := c.Send(fmt.Sprintf("%s BAD Command CAPABILITY was sent with extra parameters", req.Tag))
 		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+				"err", err,
+			)
 			return false
 		}
 
@@ -321,7 +339,10 @@ func (s *service) Capability(c *Connection, req *imap.Request) bool {
 	// each connection already is a TLS connection.
 	err := c.Send(fmt.Sprintf("* CAPABILITY IMAP4rev1 AUTH=PLAIN\r\n%s OK CAPABILITY completed", req.Tag))
 	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+			"err", err,
+		)
 		return false
 	}
 
@@ -339,7 +360,10 @@ func (s *service) Logout(c *Connection, req *imap.Request) bool {
 		// this is a client error. Return BAD statement.
 		err := c.Send(fmt.Sprintf("%s BAD Command LOGOUT was sent with extra parameters", req.Tag))
 		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+				"err", err,
+			)
 			return false
 		}
 
@@ -359,9 +383,12 @@ func (s *service) Logout(c *Connection, req *imap.Request) bool {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 			if err != nil {
-				level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Close() to internal node %s: %v", c.ActualNode, err))
+				level.Error(s.logger).Log(
+					"msg", fmt.Sprintf("error sending Close() to internal node %s", c.ActualNode),
+					"err", err,
+				)
 			} else if conf.Status != 0 {
-				level.Error(s.logger).Log("msg", fmt.Sprintf("sending Close() to internal node %s returned error", c.ActualNode))
+				level.Error(s.logger).Log("msg", fmt.Sprintf("sending Close() to internal node %s returned error code", c.ActualNode))
 			}
 
 			return false
@@ -371,7 +398,10 @@ func (s *service) Logout(c *Connection, req *imap.Request) bool {
 	// Signal success to client.
 	err := c.Send(fmt.Sprintf("* BYE Terminating connection\r\n%s OK LOGOUT completed", req.Tag))
 	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+			"err", err,
+		)
 		return false
 	}
 
@@ -389,7 +419,10 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 		// Send tagged BAD response.
 		err := c.Send(fmt.Sprintf("%s BAD Command LOGIN cannot be executed in this state", req.Tag))
 		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+				"err", err,
+			)
 			return false
 		}
 
@@ -405,7 +438,10 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 		// this is a client error. Return BAD statement.
 		err := c.Send(fmt.Sprintf("%s BAD Command LOGIN was not sent with exactly two parameters", req.Tag))
 		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+				"err", err,
+			)
 			return false
 		}
 
@@ -420,7 +456,10 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 		// they are invalid. Return NO statement.
 		err := c.Send(fmt.Sprintf("%s NO Name and / or password wrong", req.Tag))
 		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+				"err", err,
+			)
 			return false
 		}
 
@@ -431,7 +470,10 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 	respWorker, err := s.authenticator.GetWorkerForUser(s.workers, id)
 	if err != nil {
 		c.Send("* BAD Internal server error, sorry. Closing connection.")
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error finding worker for user %s with ID %d: %v", userCredentials[0], id, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error finding worker for user %s with ID %d", userCredentials[0], id),
+			"err", err,
+		)
 		return false
 	}
 
@@ -468,21 +510,27 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 			conf, err = c.gRPCClient.Prepare(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Prepare() to internal node %s: %v", c.ActualNode, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error sending Prepare() to internal node %s", c.ActualNode),
+				"err", err,
+			)
 			return false
 		}
 	}
 
 	if conf.Status != 0 {
 		c.Send("* BAD Internal server error, sorry. Closing connection.")
-		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Prepare() to internal node %s returned error", c.ActualNode))
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Prepare() to internal node %s returned error code", c.ActualNode))
 		return false
 	}
 
 	// Signal success to client.
 	err = c.Send(fmt.Sprintf("%s OK LOGIN completed", req.Tag))
 	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+			"err", err,
+		)
 		return false
 	}
 
@@ -499,7 +547,10 @@ func (s *service) StartTLS(c *Connection, req *imap.Request) bool {
 		// this is a client error. Return BAD statement.
 		err := c.Send(fmt.Sprintf("%s BAD Command STARTTLS was sent with extra parameters", req.Tag))
 		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+				"err", err,
+			)
 			return false
 		}
 
@@ -510,7 +561,10 @@ func (s *service) StartTLS(c *Connection, req *imap.Request) bool {
 	// tell client that a TLS session is active.
 	err := c.Send(fmt.Sprintf("%s BAD TLS is already active", req.Tag))
 	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error while sending text to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+			"err", err,
+		)
 		return false
 	}
 
@@ -540,21 +594,27 @@ func (s *service) ProxySelect(c *Connection, rawReq string) bool {
 			reply, err = c.gRPCClient.Select(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Select() to internal node %s: %v", c.ActualNode, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error sending Select() to internal node %s", c.ActualNode),
+				"err", err,
+			)
 			return false
 		}
 	}
 
 	if reply.Status != 0 {
 		c.Send("* BAD Internal server error, sorry. Closing connection.")
-		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Select() to internal node %s returned error", c.ActualNode))
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Select() to internal node %s returned error code", c.ActualNode))
 		return false
 	}
 
 	// And send response from worker or storage to client.
 	err = c.Send(reply.Text)
 	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending SELECT answer to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error sending SELECT answer to client %s", c.ClientAddr),
+			"err", err,
+		)
 		return false
 	}
 
@@ -584,21 +644,27 @@ func (s *service) ProxyCreate(c *Connection, rawReq string) bool {
 			reply, err = c.gRPCClient.Create(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Create() to internal node %s: %v", c.ActualNode, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error sending Create() to internal node %s", c.ActualNode),
+				"err", err,
+			)
 			return false
 		}
 	}
 
 	if reply.Status != 0 {
 		c.Send("* BAD Internal server error, sorry. Closing connection.")
-		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Create() to internal node %s returned error", c.ActualNode))
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Create() to internal node %s returned error code", c.ActualNode))
 		return false
 	}
 
 	// And send response from worker or storage to client.
 	err = c.Send(reply.Text)
 	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending CREATE answer to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error sending CREATE answer to client %s", c.ClientAddr),
+			"err", err,
+		)
 		return false
 	}
 
@@ -628,21 +694,27 @@ func (s *service) ProxyDelete(c *Connection, rawReq string) bool {
 			reply, err = c.gRPCClient.Delete(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Delete() to internal node %s: %v", c.ActualNode, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error sending Delete() to internal node %s", c.ActualNode),
+				"err", err,
+			)
 			return false
 		}
 	}
 
 	if reply.Status != 0 {
 		c.Send("* BAD Internal server error, sorry. Closing connection.")
-		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Delete() to internal node %s returned error", c.ActualNode))
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Delete() to internal node %s returned error code", c.ActualNode))
 		return false
 	}
 
 	// And send response from worker or storage to client.
 	err = c.Send(reply.Text)
 	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending DELETE answer to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error sending DELETE answer to client %s", c.ClientAddr),
+			"err", err,
+		)
 		return false
 	}
 
@@ -672,21 +744,27 @@ func (s *service) ProxyList(c *Connection, rawReq string) bool {
 			reply, err = c.gRPCClient.List(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending List() to internal node %s: %v", c.ActualNode, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error sending List() to internal node %s", c.ActualNode),
+				"err", err,
+			)
 			return false
 		}
 	}
 
 	if reply.Status != 0 {
 		c.Send("* BAD Internal server error, sorry. Closing connection.")
-		level.Error(s.logger).Log("msg", fmt.Sprintf("sending List() to internal node %s returned error", c.ActualNode))
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending List() to internal node %s returned error code", c.ActualNode))
 		return false
 	}
 
 	// And send response from worker or storage to client.
 	err = c.Send(reply.Text)
 	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending LIST answer to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error sending LIST answer to client %s", c.ClientAddr),
+			"err", err,
+		)
 		return false
 	}
 
@@ -716,14 +794,17 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 			await, err = c.gRPCClient.AppendBegin(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending AppendBegin() to internal node %s: %v", c.ActualNode, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error sending AppendBegin() to internal node %s", c.ActualNode),
+				"err", err,
+			)
 			return false
 		}
 	}
 
 	if await.Status != 0 {
 		c.Send("* BAD Internal server error, sorry. Closing connection.")
-		level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendBegin() to internal node %s returned error", c.ActualNode))
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendBegin() to internal node %s returned error code", c.ActualNode))
 		return false
 	}
 
@@ -731,7 +812,10 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 	err = c.Send(await.Text)
 	if err != nil {
 
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending begin APPEND answer to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error sending begin APPEND answer to client %s", c.ClientAddr),
+			"err", err,
+		)
 
 		// Signal connected internal node that client aborted APPEND.
 		conf, err := c.gRPCClient.AppendAbort(context.Background(), &imap.Abort{
@@ -739,10 +823,13 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 		})
 
 		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending AppendAbort() to internal node %s: %v", c.ActualNode, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error sending AppendAbort() to internal node %s", c.ActualNode),
+				"err", err,
+			)
 		}
 		if conf.Status != 0 {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendAbort() to internal node %s returned error", c.ActualNode))
+			level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendAbort() to internal node %s returned error code", c.ActualNode))
 		}
 
 		return false
@@ -761,7 +848,10 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 	_, err = io.ReadFull(c.IncReader, msgBuffer)
 	if err != nil {
 
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error reading mail content from client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error reading mail content from client %s", c.ClientAddr),
+			"err", err,
+		)
 
 		// Signal connected internal node that client aborted APPEND.
 		conf, err := c.gRPCClient.AppendAbort(context.Background(), &imap.Abort{
@@ -769,10 +859,13 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 		})
 
 		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending AppendAbort() to internal node %s: %v", c.ActualNode, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error sending AppendAbort() to internal node %s", c.ActualNode),
+				"err", err,
+			)
 		}
 		if conf.Status != 0 {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendAbort() to internal node %s returned error", c.ActualNode))
+			level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendAbort() to internal node %s returned error code", c.ActualNode))
 		}
 
 		return false
@@ -788,9 +881,12 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 		c.Send("* BAD Internal server error, sorry. Closing connection.")
 
 		if err != nil {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending AppendEnd() to internal node %s: %v", c.ActualNode, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error sending AppendEnd() to internal node %s", c.ActualNode),
+				"err", err,
+			)
 		} else if reply.Status != 0 {
-			level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendEnd() to internal node %s returned error", c.ActualNode))
+			level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendEnd() to internal node %s returned error code", c.ActualNode))
 		}
 
 		return false
@@ -799,7 +895,10 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 	// And send response from worker or storage to client.
 	err = c.Send(reply.Text)
 	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending end APPEND answer to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error sending end APPEND answer to client %s", c.ClientAddr),
+			"err", err,
+		)
 		return false
 	}
 
@@ -829,21 +928,27 @@ func (s *service) ProxyExpunge(c *Connection, rawReq string) bool {
 			reply, err = c.gRPCClient.Expunge(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Expunge() to internal node %s: %v", c.ActualNode, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error sending Expunge() to internal node %s", c.ActualNode),
+				"err", err,
+			)
 			return false
 		}
 	}
 
 	if reply.Status != 0 {
 		c.Send("* BAD Internal server error, sorry. Closing connection.")
-		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Expunge() to internal node %s returned error", c.ActualNode))
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Expunge() to internal node %s returned error code", c.ActualNode))
 		return false
 	}
 
 	// And send response from worker or storage to client.
 	err = c.Send(reply.Text)
 	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending EXPUNGE answer to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error sending EXPUNGE answer to client %s", c.ClientAddr),
+			"err", err,
+		)
 		return false
 	}
 
@@ -873,21 +978,27 @@ func (s *service) ProxyStore(c *Connection, rawReq string) bool {
 			reply, err = c.gRPCClient.Store(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
-			level.Error(s.logger).Log("msg", fmt.Sprintf("error sending Store() to internal node %s: %v", c.ActualNode, err))
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error sending Store() to internal node %s", c.ActualNode),
+				"err", err,
+			)
 			return false
 		}
 	}
 
 	if reply.Status != 0 {
 		c.Send("* BAD Internal server error, sorry. Closing connection.")
-		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Store() to internal node %s returned error", c.ActualNode))
+		level.Error(s.logger).Log("msg", fmt.Sprintf("sending Store() to internal node %s returned error code", c.ActualNode))
 		return false
 	}
 
 	// And send response from worker or storage to client.
 	err = c.Send(reply.Text)
 	if err != nil {
-		level.Error(s.logger).Log("msg", fmt.Sprintf("error sending STORE answer to client %s: %v", c.ClientAddr, err))
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("error sending STORE answer to client %s", c.ClientAddr),
+			"err", err,
+		)
 		return false
 	}
 
