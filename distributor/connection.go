@@ -89,7 +89,7 @@ func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrep
 	for err != nil {
 
 		// Failed. Switch actual node representation.
-		level.Debug(logger).Log("msg", fmt.Sprintf("failed to dial to %s (%s), failing over to %s...", c.PrimaryNode, c.PrimaryAddr, c.SecondaryNode))
+		level.Debug(logger).Log("msg", fmt.Sprintf("failed to dial to %s (%s), failing over to %s...: %#v", c.PrimaryNode, c.PrimaryAddr, c.SecondaryNode, err))
 		c.ActualNode = c.SecondaryNode
 		c.ActualAddr = c.SecondaryAddr
 
@@ -98,7 +98,7 @@ func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrep
 		if err != nil {
 
 			// Failed. Switch actual node representation.
-			level.Debug(logger).Log("msg", fmt.Sprintf("failed to dial to %s (%s), trying %s again...", c.SecondaryNode, c.SecondaryAddr, c.PrimaryNode))
+			level.Debug(logger).Log("msg", fmt.Sprintf("failed to dial to %s (%s), trying %s again...: %#v", c.SecondaryNode, c.SecondaryAddr, c.PrimaryNode, err))
 			c.ActualNode = c.PrimaryNode
 			c.ActualAddr = c.PrimaryAddr
 
