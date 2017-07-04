@@ -113,8 +113,8 @@ func TestWriteORSetToFile(t *testing.T) {
 
 	// Assign to ORSet and make sure to close
 	// and remove when function exits.
-	s.file = f
-	defer s.file.Close()
+	s.File = f
+	defer s.File.Close()
 	defer os.Remove("test-crdt.log")
 
 	// Write current ORSet to file.
