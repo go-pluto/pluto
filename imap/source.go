@@ -857,7 +857,7 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
 				level.Error(node.Logger).Log(
-					"msg", "failed to remove mails from user's selected mailbox CRDT",
+					"msg", fmt.Sprintf("failed to remove mail '%v' from user's selected mailbox CRDT", node.MailboxContents[s.UserName][s.SelectedMailbox][msgNum]),
 					"err", err,
 				)
 				os.Exit(1)

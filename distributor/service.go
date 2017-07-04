@@ -871,6 +871,37 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 		return false
 	}
 
+	// Expect trailing '\r\n' after message content.
+	empty, err := c.Receive()
+	if (err != nil) || (empty != "") {
+
+		if err == nil {
+			err = fmt.Errorf("received other message than '\r\n'")
+		}
+
+		level.Error(s.logger).Log(
+			"msg", fmt.Sprintf("failed at expected '\r\n' after message from %s", c.ClientAddr),
+			"err", err,
+		)
+
+		// Signal connected internal node that client aborted APPEND.
+		conf, err := c.gRPCClient.AppendAbort(context.Background(), &imap.Abort{
+			ClientID: c.ClientID,
+		})
+
+		if err != nil {
+			level.Error(s.logger).Log(
+				"msg", fmt.Sprintf("error sending AppendAbort() to internal node %s", c.ActualNode),
+				"err", err,
+			)
+		}
+		if conf.Status != 0 {
+			level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendAbort() to internal node %s returned error code", c.ActualNode))
+		}
+
+		return false
+	}
+
 	// Send the end part of APPEND request via gRPC.
 	reply, err := c.gRPCClient.AppendEnd(context.Background(), &imap.MailFile{
 		Content:  msgBuffer,
