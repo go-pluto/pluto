@@ -21,7 +21,7 @@ import (
 	"encoding/pem"
 	"math/big"
 
-	"github.com/numbleroot/pluto/config"
+	"github.com/go-pluto/pluto/config"
 )
 
 // Variables

@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/numbleroot/pluto/imap"
+	"github.com/go-pluto/pluto/imap"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )

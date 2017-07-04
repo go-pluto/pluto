@@ -14,14 +14,14 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/numbleroot/maildir"
-	"github.com/numbleroot/pluto/auth"
-	"github.com/numbleroot/pluto/comm"
-	"github.com/numbleroot/pluto/config"
-	"github.com/numbleroot/pluto/crypto"
-	"github.com/numbleroot/pluto/distributor"
-	"github.com/numbleroot/pluto/storage"
-	"github.com/numbleroot/pluto/worker"
+	"github.com/go-pluto/maildir"
+	"github.com/go-pluto/pluto/auth"
+	"github.com/go-pluto/pluto/comm"
+	"github.com/go-pluto/pluto/config"
+	"github.com/go-pluto/pluto/crypto"
+	"github.com/go-pluto/pluto/distributor"
+	"github.com/go-pluto/pluto/storage"
+	"github.com/go-pluto/pluto/worker"
 	"github.com/satori/go.uuid"
 )
 

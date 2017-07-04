@@ -5,7 +5,7 @@ import (
 
 	"path/filepath"
 
-	"github.com/numbleroot/pluto/config"
+	"github.com/go-pluto/pluto/config"
 	"github.com/stretchr/testify/assert"
 )
 

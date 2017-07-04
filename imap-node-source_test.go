@@ -9,7 +9,7 @@ import (
 
 	"crypto/tls"
 
-	"github.com/numbleroot/pluto/imap"
+	"github.com/go-pluto/pluto/imap"
 )
 
 // Variables

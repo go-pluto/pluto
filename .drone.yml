@@ -1,6 +1,6 @@
 workspace:
   base: /go
-  path: src/github.com/numbleroot/pluto
+  path: src/github.com/go-pluto/pluto
 
 pipeline:
   build:
@@ -23,7 +23,7 @@ pipeline:
 
   #docker:
   #  image: plugins/docker
-  #  repo: numbleroot/pluto
+  #  repo: go-pluto/pluto
   #  context: .
   #  secrets: [ docker_username, docker_password ]
   #  tag: [ latest ]
@@ -33,7 +33,7 @@ pipeline:
 
   docker:
     image: plugins/docker
-    repo: numbleroot/pluto
+    repo: go-pluto/pluto
     context: .
     secrets: [ docker_username, docker_password ]
     tag: [ "${DRONE_TAG}" ]

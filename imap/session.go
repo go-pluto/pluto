@@ -1,6 +1,6 @@
 package imap
 
-import "github.com/numbleroot/maildir"
+import "github.com/go-pluto/maildir"
 
 // Constants
 

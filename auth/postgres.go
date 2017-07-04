@@ -7,7 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 
-	"github.com/numbleroot/pluto/config"
+	"github.com/go-pluto/pluto/config"
 	"gopkg.in/jackc/pgx.v2"
 )
 

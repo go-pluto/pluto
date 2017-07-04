@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/numbleroot/pluto/config"
+	"github.com/go-pluto/pluto/config"
 )
 
 // Structs

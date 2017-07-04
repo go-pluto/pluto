@@ -1,10 +1,10 @@
 # Pluto
 
-[![GoDoc](https://godoc.org/github.com/numbleroot/pluto?status.svg)](https://godoc.org/github.com/numbleroot/pluto) [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](https://github.com/numbleroot/pluto/blob/master/LICENSE) [![Build Status](https://travis-ci.org/numbleroot/pluto.svg?branch=master)](https://travis-ci.org/numbleroot/pluto) [![Go Report Card](https://goreportcard.com/badge/github.com/numbleroot/pluto)](https://goreportcard.com/report/github.com/numbleroot/pluto) [![Issue Count](https://codeclimate.com/github/numbleroot/pluto/badges/issue_count.svg)](https://codeclimate.com/github/numbleroot/pluto) [![codecov](https://codecov.io/gh/numbleroot/pluto/branch/master/graph/badge.svg)](https://codecov.io/gh/numbleroot/pluto)
+[![GoDoc](https://godoc.org/github.com/go-pluto/pluto?status.svg)](https://godoc.org/github.com/go-pluto/pluto) [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](https://github.com/go-pluto/pluto/blob/master/LICENSE) [![Build Status](https://travis-ci.org/go-pluto/pluto.svg?branch=master)](https://travis-ci.org/go-pluto/pluto) [![Go Report Card](https://goreportcard.com/badge/github.com/go-pluto/pluto)](https://goreportcard.com/report/github.com/go-pluto/pluto) [![Issue Count](https://codeclimate.com/github/go-pluto/pluto/badges/issue_count.svg)](https://codeclimate.com/github/go-pluto/pluto) [![codecov](https://codecov.io/gh/go-pluto/pluto/branch/master/graph/badge.svg)](https://codecov.io/gh/go-pluto/pluto)
 
 Pluto is a distributed IMAP server that implements a subset of the [IMAPv4 standard](https://tools.ietf.org/html/rfc3501). It makes use of [Conflict-free Replicated Data Types](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) (operation-based style) defined by Shapiro et al. to replicate application state into traditionally stateless tiers (worker nodes) and still achieve system-wide convergence of user data. By this, pluto attempts to offer a solution towards the challenges arising from Brewer's [CAP theorem](https://en.wikipedia.org/wiki/CAP_theorem): in case of failures in the system, choose to stay available by accepting reduced consistency in form of the CRDTs' [strong eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency#Strong_eventual_consistency). We described our system architecture, the modelled IMAP operations based on OR-Set CmRDTs, and a response time evaluation of this prototype compared to Dovecot in our paper called ["pluto: The CRDT-Driven IMAP Server"](https://dl.acm.org/citation.cfm?id=3064891), presented at [PaPoC 2017](http://software.imdea.org/Conferences/PAPOC17/).
 
-Pluto is written in Go and provided under copyleft license [GPLv3](https://github.com/numbleroot/pluto/blob/master/LICENSE).
+Pluto is written in Go and provided under copyleft license [GPLv3](https://github.com/go-pluto/pluto/blob/master/LICENSE).
 
 
 ## Status
@@ -17,13 +17,13 @@ Pluto is written in Go and provided under copyleft license [GPLv3](https://githu
 If you have a working [Go](https://golang.org/) setup, installation is as easy as:
 
 ```bash
- $ go get -u github.com/numbleroot/pluto
+ $ go get -u github.com/go-pluto/pluto
 ```
 
 
 ## Quick Start
 
-You need to configure your pluto setup in a `config.toml` file. Please refer to the provided [config.toml.example](https://github.com/numbleroot/pluto/blob/master/config.toml.example) for an exemplary configuration that only needs adaptation to your requirements.
+You need to configure your pluto setup in a `config.toml` file. Please refer to the provided [config.toml.example](https://github.com/go-pluto/pluto/blob/master/config.toml.example) for an exemplary configuration that only needs adaptation to your requirements.
 
 **Important:** Please make sure, not to include `|` (pipe character) in names for your distributor, worker and storage nodes as this character is used in marshalled messages sent on internal network.
 
@@ -135,7 +135,7 @@ $ make pki
 
 ## Evaluation
 
-Evaluation scripts to benchmark pluto's response time performance against the de facto standard IMAP server [Dovecot](https://www.dovecot.org/) are provided in repository [pluto-evaluation](https://github.com/numbleroot/pluto-evaluation).
+Evaluation scripts to benchmark pluto's response time performance against the de facto standard IMAP server [Dovecot](https://www.dovecot.org) are provided in repository [evaluation](https://github.com/go-pluto/evaluation).
 
 
 ## Acknowledgments
@@ -146,4 +146,4 @@ Evaluation scripts to benchmark pluto's response time performance against the de
 
 ## License
 
-This project is [GPLv3](https://github.com/numbleroot/pluto/blob/master/LICENSE) licensed.
+This project is [GPLv3](https://github.com/go-pluto/pluto/blob/master/LICENSE) licensed.

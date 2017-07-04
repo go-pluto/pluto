@@ -18,7 +18,7 @@ build:
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'
 
 docker: build
-	docker build -t numbleroot/pluto .
+	docker build -t go-pluto/pluto .
 
 pki:
 	if [ ! -d "private" ]; then mkdir private; fi

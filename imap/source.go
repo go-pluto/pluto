@@ -12,9 +12,9 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/numbleroot/maildir"
-	"github.com/numbleroot/pluto/comm"
-	"github.com/numbleroot/pluto/crdt"
+	"github.com/go-pluto/maildir"
+	"github.com/go-pluto/pluto/comm"
+	"github.com/go-pluto/pluto/crdt"
 )
 
 // Structs

@@ -4,7 +4,7 @@ import (
 	"net"
 
 	"github.com/go-kit/kit/metrics"
-	"github.com/numbleroot/pluto/imap"
+	"github.com/go-pluto/pluto/imap"
 )
 
 // Structs
