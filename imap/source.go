@@ -389,6 +389,17 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 		os.Exit(1)
 	}
 
+	// Close file descriptor for CRDT file of this folder.
+	err = node.MailboxStructure[s.UserName][delMailbox].File.Close()
+	if err != nil {
+
+		// TODO: Maybe think about better way to clean up here?
+		return &Reply{
+			Text:   "* BAD Internal server error, sorry. Closing connection.",
+			Status: 1,
+		}, fmt.Errorf("failed to close file descriptor of CRDT file for mailbox: %v", err)
+	}
+
 	// Remove CRDT from mailbox structure and corresponding
 	// mail contents slice.
 	delete(node.MailboxStructure[s.UserName], delMailbox)

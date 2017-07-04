@@ -18,8 +18,8 @@ import (
 // removed set defined by Shapiro, Preguiça, Baquero,
 // and Zawirski. It consists of unique IDs and data items.
 type ORSet struct {
-	file     *os.File
 	elements map[string]string
+	File     *os.File
 }
 
 // sendFunc is used as a parameter to below defined
@@ -57,7 +57,7 @@ func InitORSetWithFile(fileName string) (*ORSet, error) {
 
 	// Init an empty ORSet.
 	s := InitORSet()
-	s.file = f
+	s.File = f
 
 	// Write newly created CRDT file to stable storage.
 	if err = s.WriteORSetToFile(); err != nil {
@@ -80,10 +80,10 @@ func InitORSetFromFile(fileName string) (*ORSet, error) {
 
 	// Init an empty ORSet.
 	s := InitORSet()
-	s.file = f
+	s.File = f
 
 	// Parse contained CRDT state from file.
-	contentsRaw, err := ioutil.ReadAll(s.file)
+	contentsRaw, err := ioutil.ReadAll(s.File)
 	if err != nil {
 		return nil, fmt.Errorf("reading all contents from CRDT file '%s' failed with: %v", fileName, err)
 	}
@@ -143,25 +143,25 @@ func (s *ORSet) WriteORSetToFile() error {
 	}
 
 	// Reset position in file to beginning.
-	_, err := s.file.Seek(0, os.SEEK_SET)
+	_, err := s.File.Seek(0, os.SEEK_SET)
 	if err != nil {
-		return fmt.Errorf("error while setting head back to beginning in CRDT file '%s': %v", s.file.Name(), err)
+		return fmt.Errorf("error while setting head back to beginning in CRDT file '%s': %v", s.File.Name(), err)
 	}
 
 	// Write marshalled set to file.
-	newNumOfBytes, err := s.file.WriteString(marshalled)
+	newNumOfBytes, err := s.File.WriteString(marshalled)
 	if err != nil {
-		return fmt.Errorf("failed to write ORSet contents to file '%s': %v", s.file.Name(), err)
+		return fmt.Errorf("failed to write ORSet contents to file '%s': %v", s.File.Name(), err)
 	}
 
 	// Adjust file size to just written length of string.
-	if err := s.file.Truncate(int64(newNumOfBytes)); err != nil {
-		return fmt.Errorf("error while truncating CRDT file '%s' to new size: %v", s.file.Name(), err)
+	if err := s.File.Truncate(int64(newNumOfBytes)); err != nil {
+		return fmt.Errorf("error while truncating CRDT file '%s' to new size: %v", s.File.Name(), err)
 	}
 
 	// Save to stable storage.
-	if err := s.file.Sync(); err != nil {
-		return fmt.Errorf("could not synchronise CRDT file '%s' contents to stable storage: %v", s.file.Name(), err)
+	if err := s.File.Sync(); err != nil {
+		return fmt.Errorf("could not synchronise CRDT file '%s' contents to stable storage: %v", s.File.Name(), err)
 	}
 
 	return nil
