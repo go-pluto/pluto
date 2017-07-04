@@ -875,12 +875,19 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 	empty, err := c.Receive()
 	if (err != nil) || (empty != "") {
 
+		retValue := false
+
 		if err == nil {
-			err = fmt.Errorf("received other message than '\r\n'")
+
+			// Received string was not empty. Tell client
+			// and prepare error message.
+			c.Send("* BAD Literal message of APPEND was not suffixed with CRLF.")
+			err = fmt.Errorf("received message other than CRLF")
+			retValue = true
 		}
 
-		level.Error(s.logger).Log(
-			"msg", fmt.Sprintf("failed at expected '\r\n' after message from %s", c.ClientAddr),
+		level.Warn(s.logger).Log(
+			"msg", fmt.Sprintf("failed at expected CRLF after message from %s", c.ClientAddr),
 			"err", err,
 		)
 
@@ -899,7 +906,7 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 			level.Error(s.logger).Log("msg", fmt.Sprintf("sending AppendAbort() to internal node %s returned error code", c.ActualNode))
 		}
 
-		return false
+		return retValue
 	}
 
 	// Send the end part of APPEND request via gRPC.

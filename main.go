@@ -58,7 +58,7 @@ func initLogger(loglevel string) log.Logger {
 	logger := log.NewJSONLogger(log.NewSyncWriter(os.Stdout))
 	logger = log.With(logger,
 		"ts", log.DefaultTimestampUTC,
-		"caller", log.DefaultCaller,
+		"caller", log.Caller(5),
 	)
 
 	switch strings.ToLower(loglevel) {
