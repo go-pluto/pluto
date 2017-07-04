@@ -790,11 +790,11 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
 	node.Lock.Lock()
+	defer node.Lock.Unlock()
 
 	// Save all mails possibly to delete and
 	// number of these files.
-	expMails := node.MailboxContents[s.UserName][s.SelectedMailbox]
-	numExpMails := len(expMails)
+	numExpMails := len(node.MailboxContents[s.UserName][s.SelectedMailbox])
 
 	// Only do the work if there are any mails
 	// present in mailbox.
@@ -804,10 +804,8 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 		for i := (numExpMails - 1); i >= 0; i-- {
 
 			// Retrieve all flags of fetched mail.
-			mailFlags, err := expMaildir.Flags(expMails[i], false)
+			mailFlags, err := expMaildir.Flags(node.MailboxContents[s.UserName][s.SelectedMailbox][i], false)
 			if err != nil {
-
-				node.Lock.Unlock()
 
 				return &Reply{
 					Text:   "* BAD Internal server error, sorry. Closing connection.",
@@ -831,7 +829,7 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 		for _, msgNum := range expMailNums {
 
 			// Remove each mail to expunge from mailbox CRDT.
-			err := expMailboxCRDT.Remove(expMails[msgNum], func(args ...string) {
+			err := expMailboxCRDT.Remove(node.MailboxContents[s.UserName][s.SelectedMailbox][msgNum], func(args ...string) {
 
 				// Prepare slice of Element structs to capture
 				// all value-tag-pairs to remove.
@@ -862,18 +860,15 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 					"msg", "failed to remove mails from user's selected mailbox CRDT",
 					"err", err,
 				)
-				node.Lock.Unlock()
 				os.Exit(1)
 			}
 
 			// Construct path to file.
-			expMailPath := filepath.Join(string(expMaildir), expMails[msgNum])
+			expMailPath := filepath.Join(string(expMaildir), node.MailboxContents[s.UserName][s.SelectedMailbox][msgNum])
 
 			// Remove the file.
 			err = os.Remove(expMailPath)
 			if err != nil {
-
-				node.Lock.Unlock()
 
 				return &Reply{
 					Text:   "* BAD Internal server error, sorry. Closing connection.",
@@ -883,13 +878,11 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 
 			// Immediately remove mail from contents structure.
 			realMsgNum := msgNum + 1
-			expMails = append(expMails[:msgNum], expMails[realMsgNum:]...)
+			node.MailboxContents[s.UserName][s.SelectedMailbox] = append(node.MailboxContents[s.UserName][s.SelectedMailbox][:msgNum], node.MailboxContents[s.UserName][s.SelectedMailbox][realMsgNum:]...)
 
 			// Append individual remove answer to answer lines.
 			expAnswerLines = append(expAnswerLines, fmt.Sprintf("* %d EXPUNGE", realMsgNum))
 		}
-
-		node.Lock.Unlock()
 
 		for _, expAnswerLine := range expAnswerLines {
 
