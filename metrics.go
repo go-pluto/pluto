@@ -5,21 +5,15 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/go-kit/kit/metrics"
 	"github.com/go-kit/kit/metrics/discard"
 	"github.com/go-kit/kit/metrics/prometheus"
+	"github.com/go-pluto/pluto/distributor"
 	prom "github.com/prometheus/client_golang/prometheus"
 )
 
 // PlutoMetrics wraps all metrics for Pluto into one struct.
 type PlutoMetrics struct {
-	Distributor *DistributorMetrics
-}
-
-// DistributorMetrics has all metrics exposed by the distributor.
-type DistributorMetrics struct {
-	Logins  metrics.Counter
-	Logouts metrics.Counter
+	Distributor *distributor.Metrics
 }
 
 // NewPlutoMetrics returns prometheus metrics when the addr isn't an empty string.
@@ -29,24 +23,28 @@ func NewPlutoMetrics(distributorAddr string) *PlutoMetrics {
 	m := &PlutoMetrics{}
 
 	if distributorAddr == "" {
-		m.Distributor = &DistributorMetrics{
-			Logins:  discard.NewCounter(),
-			Logouts: discard.NewCounter(),
+		m.Distributor = &distributor.Metrics{
+			Commands:    discard.NewCounter(),
+			Connections: discard.NewCounter(),
 		}
 	} else {
-		m.Distributor = &DistributorMetrics{
-			Logins: prometheus.NewCounterFrom(prom.CounterOpts{
-				Namespace: "pluto",
-				Subsystem: "distributor",
-				Name:      "logins_total",
-				Help:      "Number of logins",
-			}, nil),
-			Logouts: prometheus.NewCounterFrom(prom.CounterOpts{
-				Namespace: "pluto",
-				Subsystem: "distributor",
-				Name:      "logouts_total",
-				Help:      "Number of logouts",
-			}, nil),
+		m.Distributor = &distributor.Metrics{
+			Commands: prometheus.NewCounterFrom(
+				prom.CounterOpts{
+					Namespace: "pluto",
+					Subsystem: "distributor",
+					Name:      "commands_total",
+					Help:      "Number of commands",
+				}, []string{"command", "status"},
+			),
+			Connections: prometheus.NewCounterFrom(
+				prom.CounterOpts{
+					Namespace: "pluto",
+					Subsystem: "distributor",
+					Name:      "connections_total",
+					Help:      "Number of connections opened to pluto",
+				}, nil,
+			),
 		}
 	}
 

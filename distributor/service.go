@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/go-kit/kit/metrics"
 	"github.com/go-pluto/pluto/config"
 	"github.com/go-pluto/pluto/imap"
 	"golang.org/x/net/context"
@@ -24,8 +25,15 @@ import (
 
 // Structs
 
+// Metrics has all metrics exposed by the distributor.
+type Metrics struct {
+	Commands    metrics.Counter
+	Connections metrics.Counter
+}
+
 type service struct {
 	logger        log.Logger
+	metrics       *Metrics
 	authenticator Authenticator
 	tlsConfig     *tls.Config
 	workers       map[string]config.Worker
@@ -117,13 +125,14 @@ type Service interface {
 // NewService takes in all required parameters for spinning
 // up a new distributor node and returns a service struct for
 // this node type wrapping all information.
-func NewService(logger log.Logger, authenticator Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker, storageAddr string) Service {
+func NewService(logger log.Logger, metrics *Metrics, authenticator Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker, storageAddr string) Service {
 
 	// Disable logging of gRPC components.
 	grpclog.SetLogger(stdlog.New(ioutil.Discard, "", 0))
 
 	return &service{
 		logger:        logger,
+		metrics:       metrics,
 		authenticator: authenticator,
 		tlsConfig:     tlsConfig,
 		workers:       workers,
@@ -146,6 +155,8 @@ func (s *service) Run(listener net.Listener, greeting string) error {
 
 		// Dispatch into own goroutine.
 		go s.handleConnection(conn, greeting)
+
+		s.metrics.Connections.Add(1)
 	}
 }
 
@@ -252,42 +263,160 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 
 		switch {
 
-		case req.Command == "CAPABILITY":
+		case req.Command == imap.CommandCapability:
 			cmdOK = s.Capability(c, req)
 
-		case req.Command == "LOGOUT":
-			cmdOK = s.Logout(c, req)
+			logger := log.With(s.logger, "command", imap.CommandCapability)
 			if cmdOK {
-				// A LOGOUT marks connection termination.
-				recvUntil = "LOGOUT"
+				level.Debug(logger).Log()
+				s.metrics.Commands.With("command", imap.CommandCapability, "status", "success").Add(1)
+			} else {
+				level.Info(logger).Log("err", "failed to run")
+				s.metrics.Commands.With("command", imap.CommandCapability, "status", "failure").Add(1)
 			}
 
-		case req.Command == "STARTTLS":
+		case req.Command == imap.CommandLogout:
+			cmdOK = s.Logout(c, req)
+
+			logger := log.With(s.logger, "command", imap.CommandLogout)
+			if cmdOK {
+				// A LOGOUT marks connection termination.
+				recvUntil = imap.CommandLogout
+				level.Debug(logger).Log()
+				s.metrics.Commands.With("command", imap.CommandLogout, "status", "success").Add(1)
+			} else {
+				level.Info(logger).Log("err", "failed to run")
+				s.metrics.Commands.With("command", imap.CommandLogout, "status", "failure").Add(1)
+			}
+
+		case req.Command == imap.CommandStartTLS:
 			cmdOK = s.StartTLS(c, req)
 
-		case req.Command == "LOGIN":
+			logger := log.With(s.logger, "command", imap.CommandStartTLS)
+			if cmdOK {
+				level.Debug(logger).Log()
+				s.metrics.Commands.With("command", imap.CommandStartTLS, "status", "success").Add(1)
+			} else {
+				level.Info(logger).Log("err", "failed to run")
+				s.metrics.Commands.With("command", imap.CommandStartTLS, "status", "failure").Add(1)
+			}
+
+		case req.Command == imap.CommandLogin:
 			cmdOK = s.Login(c, req)
 
-		case (c.IsAuthorized) && (req.Command == "SELECT"):
+			logger := log.With(s.logger, "command", imap.CommandLogin)
+			if cmdOK {
+				level.Debug(logger).Log()
+				s.metrics.Commands.With("command", imap.CommandLogin, "status", "success").Add(1)
+			} else {
+				level.Info(logger).Log("err", "failed to run")
+				s.metrics.Commands.With("command", imap.CommandLogin, "status", "failure").Add(1)
+			}
+
+		case (c.IsAuthorized) && (req.Command == imap.CommandSelect):
 			cmdOK = s.ProxySelect(c, rawReq)
 
-		case (c.IsAuthorized) && (req.Command == "CREATE"):
+			logger := log.With(s.logger,
+				"command", imap.CommandSelect,
+				"payload", req.Payload,
+			)
+			if cmdOK {
+				level.Debug(logger).Log()
+				s.metrics.Commands.With("command", imap.CommandSelect, "status", "success").Add(1)
+			} else {
+				level.Info(logger).Log("err", "failed to run")
+				s.metrics.Commands.With("command", imap.CommandSelect, "status", "failure").Add(1)
+			}
+
+		case (c.IsAuthorized) && (req.Command == imap.CommandCreate):
 			cmdOK = s.ProxyCreate(c, rawReq)
 
-		case (c.IsAuthorized) && (req.Command == "DELETE"):
+			logger := log.With(s.logger,
+				"command", imap.CommandCreate,
+				"payload", req.Payload,
+			)
+			if cmdOK {
+				level.Debug(logger).Log()
+				s.metrics.Commands.With("command", imap.CommandCreate, "status", "success").Add(1)
+			} else {
+				level.Info(logger).Log("err", "failed to run")
+				s.metrics.Commands.With("command", imap.CommandCreate, "status", "failure").Add(1)
+			}
+
+		case (c.IsAuthorized) && (req.Command == imap.CommandDelete):
 			cmdOK = s.ProxyDelete(c, rawReq)
 
-		case (c.IsAuthorized) && (req.Command == "LIST"):
+			logger := log.With(s.logger,
+				"command", imap.CommandDelete,
+				"payload", req.Payload,
+			)
+			if cmdOK {
+				level.Debug(logger).Log()
+				s.metrics.Commands.With("command", imap.CommandDelete, "status", "success").Add(1)
+			} else {
+				level.Info(logger).Log("err", "failed to run")
+				s.metrics.Commands.With("command", imap.CommandDelete, "status", "failure").Add(1)
+			}
+
+		case (c.IsAuthorized) && (req.Command == imap.CommandList):
 			cmdOK = s.ProxyList(c, rawReq)
 
-		case (c.IsAuthorized) && (req.Command == "APPEND"):
+			logger := log.With(s.logger,
+				"command", imap.CommandList,
+				"payload", req.Payload,
+			)
+			if cmdOK {
+				level.Debug(logger).Log()
+				s.metrics.Commands.With("command", imap.CommandList, "status", "success").Add(1)
+			} else {
+				level.Info(logger).Log("err", "failed to run")
+				s.metrics.Commands.With("command", imap.CommandList, "status", "failure").Add(1)
+			}
+
+		case (c.IsAuthorized) && (req.Command == imap.CommandAppend):
 			cmdOK = s.ProxyAppend(c, rawReq)
 
-		case (c.IsAuthorized) && (req.Command == "EXPUNGE"):
+			logger := log.With(s.logger,
+				"command", imap.CommandAppend,
+				"payload", req.Payload,
+			)
+			if cmdOK {
+				level.Debug(logger).Log()
+				s.metrics.Commands.With("command", imap.CommandAppend, "status", "success").Add(1)
+			} else {
+				level.Info(logger).Log("err", "failed to run")
+				s.metrics.Commands.With("command", imap.CommandAppend, "status", "failure").Add(1)
+			}
+
+		case (c.IsAuthorized) && (req.Command == imap.CommandExpunge):
 			cmdOK = s.ProxyExpunge(c, rawReq)
 
-		case (c.IsAuthorized) && (req.Command == "STORE"):
+			logger := log.With(s.logger,
+				"command", imap.CommandExpunge,
+				"payload", req.Payload,
+			)
+			if cmdOK {
+				level.Debug(logger).Log()
+				s.metrics.Commands.With("command", imap.CommandExpunge, "status", "success").Add(1)
+			} else {
+				level.Info(logger).Log("err", "failed to run")
+				s.metrics.Commands.With("command", imap.CommandExpunge, "status", "failure").Add(1)
+			}
+
+		case (c.IsAuthorized) && (req.Command == imap.CommandStore):
 			cmdOK = s.ProxyStore(c, rawReq)
+
+			logger := log.With(s.logger,
+				"command", imap.CommandStore,
+				"payload", req.Payload,
+			)
+			if cmdOK {
+				level.Debug(logger).Log()
+				s.metrics.Commands.With("command", imap.CommandStore, "status", "success").Add(1)
+			} else {
+				level.Info(logger).Log("err", "failed to run")
+				s.metrics.Commands.With("command", imap.CommandStore, "status", "failure").Add(1)
+			}
 
 		default:
 			// Client sent inappropriate command. Signal tagged error.

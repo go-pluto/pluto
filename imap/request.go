@@ -7,23 +7,39 @@ import (
 	"strings"
 )
 
+// Constants
+
+const (
+	CommandCapability = "CAPABILITY"
+	CommandLogout     = "LOGOUT"
+	CommandStartTLS   = "STARTTLS"
+	CommandLogin      = "LOGIN"
+	CommandSelect     = "SELECT"
+	CommandCreate     = "CREATE"
+	CommandDelete     = "DELETE"
+	CommandList       = "LIST"
+	CommandAppend     = "APPEND"
+	CommandExpunge    = "EXPUNGE"
+	CommandStore      = "STORE"
+)
+
 // Variables
 
 // SupportedCommands is a quick access map
 // for checking if a supplied IMAP command
 // is supported by pluto.
 var SupportedCommands = map[string]bool{
-	"CAPABILITY": true,
-	"LOGOUT":     true,
-	"STARTTLS":   true,
-	"LOGIN":      true,
-	"SELECT":     true,
-	"CREATE":     true,
-	"DELETE":     true,
-	"LIST":       true,
-	"APPEND":     true,
-	"EXPUNGE":    true,
-	"STORE":      true,
+	CommandCapability: true,
+	CommandLogout:     true,
+	CommandStartTLS:   true,
+	CommandLogin:      true,
+	CommandSelect:     true,
+	CommandCreate:     true,
+	CommandDelete:     true,
+	CommandList:       true,
+	CommandAppend:     true,
+	CommandExpunge:    true,
+	CommandStore:      true,
 }
 
 // Structs
