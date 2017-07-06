@@ -17,8 +17,9 @@ proto:
 build:
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'
 
-docker: build
-	docker build -t go-pluto/pluto .
+docker:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags '-extldflags "-static"'
+	docker build -t gopluto/pluto .
 
 pki:
 	if [ ! -d "private" ]; then mkdir private; fi
