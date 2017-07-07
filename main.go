@@ -201,7 +201,9 @@ func main() {
 		defer mailSocket.Close()
 
 		level.Info(logger).Log(
-			"msg", fmt.Sprintf("distributor (%s) is accepting public mail connections at %s", conf.Distributor.ListenMailAddr, conf.Distributor.PublicMailAddr),
+			"msg", "distributor is accepting public mail connections",
+			"public_addr", conf.Distributor.PublicMailAddr,
+			"listen_addr", conf.Distributor.ListenMailAddr,
 		)
 
 		intlTLSConfig, err := crypto.NewInternalTLSConfig(conf.Distributor.InternalTLS.CertLoc, conf.Distributor.InternalTLS.KeyLoc, conf.RootCertLoc)
