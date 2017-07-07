@@ -598,7 +598,7 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 
 // ApplyCRDTUpd receives strings representing CRDT
 // update operations from receiver and executes them.
-func (node *IMAPNode) ApplyCRDTUpd(applyChan chan comm.Msg, doneChan chan struct{}) {
+func (node *IMAPNode) ApplyCRDTUpd(applyChan <-chan comm.Msg, doneChan chan<- struct{}) {
 
 	for {
 
