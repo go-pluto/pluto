@@ -103,11 +103,12 @@ type Service interface {
 func NewService(logger log.Logger, tlsConfig *tls.Config, config *config.Config, name string) Service {
 
 	// Disable logging of gRPC components.
+	// TODO: SetLogger is deprecated, use SetLoggerV2
 	grpclog.SetLogger(stdlog.New(ioutil.Discard, "", 0))
 
 	return &service{
 		imapNode: &imap.IMAPNode{
-			Logger:             logger,
+			Logger:             log.With(logger, "service", "worker"),
 			Lock:               &sync.RWMutex{},
 			MailboxStructure:   make(map[string]map[string]*crdt.ORSet),
 			MailboxContents:    make(map[string]map[string][]string),
