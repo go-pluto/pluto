@@ -266,7 +266,6 @@ func main() {
 
 		var workerS worker.Service
 		workerS = worker.NewService(logger, tlsConfig, conf, *workerFlag)
-		workerS = worker.NewLoggingService(workerS, logger)
 
 		// Create needed synchronization socket used by gRPC.
 		syncSocket, err := net.Listen("tcp", workerConfig.ListenSyncAddr)
@@ -365,7 +364,6 @@ func main() {
 
 		var storageS storage.Service
 		storageS = storage.NewService(logger, tlsConfig, conf, conf.Workers)
-		storageS = storage.NewLoggingService(storageS, logger)
 
 		// Create needed synchronization socket used by gRPC.
 		syncSocket, err := net.Listen("tcp", conf.Storage.ListenSyncAddr)
