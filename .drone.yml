@@ -23,7 +23,7 @@ pipeline:
     secrets: [ docker_username, docker_password ]
     tag: [ latest ]
     when:
-      branch: master
+      # branch: master
       event: push
 
   docker:
