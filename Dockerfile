@@ -1,6 +1,5 @@
-FROM alpine
+FROM alpine:3.4
 
-ADD ./pluto /usr/bin/
+ADD ./pluto /bin/
 
-ENTRYPOINT ["/usr/bin/pluto"]
-CMD ["-config", "/etc/pluto.toml"] # default location which can be easily overwritten from the outside
+ENTRYPOINT ["/bin/pluto"]
