@@ -3,44 +3,25 @@ workspace:
   path: src/github.com/go-pluto/pluto
 
 pipeline:
-  build:
-    image: golang:1.8
-    commands:
-      - make build
-      - ls -lah
-
   test:
     image: golang:1.8
     commands:
-      - make test-pki
-      - make test-public
-      - make test
+    - make test-pki
+    - make test-public
+    - make test
 
-  #codecov:
-  #  image: alpine:latest
-  #  commands:
-  #    - bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
+  build:
+    image: golang:1.8
+    commands:
+    - make build
+    when:
+      event: [ push, tag ]
 
   docker:
     image: plugins/docker
-    repo: go-pluto/pluto
-    context: .
+    repo: gopluto/pluto
     secrets: [ docker_username, docker_password ]
     tag: [ latest ]
     when:
+      # branch: master
       event: push
-
-  docker:
-    image: plugins/docker
-    repo: go-pluto/pluto
-    context: .
-    secrets: [ docker_username, docker_password ]
-    tag: [ "${DRONE_TAG}" ]
-    when:
-      event: tag
-
-  github-release:
-    image: plugins/github-release
-    files: pluto
-    when:
-      event: tag
