@@ -21,15 +21,14 @@ pipeline:
   #  commands:
   #    - bash <(curl -s https://codecov.io/bash) || echo "Codecov did not collect coverage reports"
 
-  #docker:
-  #  image: plugins/docker
-  #  repo: go-pluto/pluto
-  #  context: .
-  #  secrets: [ docker_username, docker_password ]
-  #  tag: [ latest ]
-  #  when:
-  #    branch: master
-  #    event: push
+  docker:
+    image: plugins/docker
+    repo: go-pluto/pluto
+    context: .
+    secrets: [ docker_username, docker_password ]
+    tag: [ latest ]
+    when:
+      event: push
 
   docker:
     image: plugins/docker
