@@ -1,4 +1,4 @@
-FROM centurylink/ca-certs
+FROM alpine:3.4
 
 ADD ./pluto /bin/
 
