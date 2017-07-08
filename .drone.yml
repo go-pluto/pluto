@@ -23,5 +23,19 @@ pipeline:
     secrets: [ docker_username, docker_password ]
     tag: [ latest ]
     when:
-      # branch: master
+      branch: master
       event: push
+
+  docker:
+    image: plugins/docker
+    repo: gopluto/pluto
+    secrets: [ docker_username, docker_password ]
+    tag: [ 0.4, 0.4.1 ]
+    when:
+      event: tag
+
+  github-release:
+    image: plugins/github-release
+    files: pluto
+    when:
+      event: tag
