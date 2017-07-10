@@ -437,7 +437,14 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 		}
 	}
 
-	c.IncConn.Close()
+	// Tear down connection.
+	err = c.Close()
+	if err != nil {
+		level.Error(s.logger).Log(
+			"msg", "failed to close Connection struct",
+			"err", err,
+		)
+	}
 
 	return
 }

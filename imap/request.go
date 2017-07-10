@@ -10,6 +10,7 @@ import (
 // Constants
 
 const (
+	// Define IMAPv4 commands implemented by pluto.
 	CommandCapability = "CAPABILITY"
 	CommandLogout     = "LOGOUT"
 	CommandStartTLS   = "STARTTLS"

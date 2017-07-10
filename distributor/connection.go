@@ -39,6 +39,26 @@ type Connection struct {
 
 // Functions
 
+// Close terminates external and internal connections
+// used by this struct and renders it unusable for
+// further communication.
+func (c *Connection) Close() error {
+
+	err := c.gRPCConn.Close()
+	if err != nil {
+		return err
+	}
+
+	err = c.IncConn.Close()
+	if err != nil {
+		return nil
+	}
+
+	c.IsAuthorized = false
+
+	return nil
+}
+
 // Send takes in an answer text from a node as a
 // string and writes it to the connection to the client.
 // In case an error occurs, this method returns it to
