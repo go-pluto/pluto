@@ -2,13 +2,11 @@ package storage
 
 import (
 	"fmt"
-	stdlog "log"
 	"net"
 	"os"
 	"sync"
 
 	"crypto/tls"
-	"io/ioutil"
 	"path/filepath"
 
 	"github.com/go-kit/kit/log"
@@ -102,7 +100,7 @@ type Service interface {
 func NewService(logger log.Logger, tlsConfig *tls.Config, config *config.Config, workers map[string]config.Worker) Service {
 
 	// Disable logging of gRPC components.
-	grpclog.SetLogger(stdlog.New(ioutil.Discard, "", 0))
+	grpclog.SetLoggerV2(grpclog.NewLoggerV2(os.DevNull, os.DevNull, os.Stdout))
 
 	return &service{
 		imapNode: &imap.IMAPNode{

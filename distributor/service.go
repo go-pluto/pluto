@@ -4,12 +4,11 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	stdlog "log"
 	"net"
+	"os"
 	"strings"
 
 	"crypto/tls"
-	"io/ioutil"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -128,7 +127,7 @@ type Service interface {
 func NewService(logger log.Logger, metrics *Metrics, authenticator Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker, storageAddr string) Service {
 
 	// Disable logging of gRPC components.
-	grpclog.SetLogger(stdlog.New(ioutil.Discard, "", 0))
+	grpclog.SetLoggerV2(grpclog.NewLoggerV2(os.DevNull, os.DevNull, os.Stdout))
 
 	return &service{
 		logger:        log.With(logger, "service", "distributor"),
