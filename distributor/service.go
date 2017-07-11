@@ -128,7 +128,7 @@ type Service interface {
 func NewService(logger log.Logger, metrics *Metrics, authenticator Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker, storageAddr string) Service {
 
 	// Disable logging of gRPC components.
-	grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, ioutil.Discard, os.Stdout))
+	grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, os.Stdout, os.Stdout))
 
 	return &service{
 		logger:        log.With(logger, "service", "distributor"),
@@ -656,7 +656,12 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 	c.SecondaryAddr = s.storageAddr
 
 	// Connect to reachable node.
-	c.Connect(s.gRPCOptions, s.logger, false)
+	err = c.Connect(s.gRPCOptions, s.logger, false)
+	if err != nil {
+		c.Send(err.Error())
+		level.Error(s.logger).Log("msg", "failed too many times to connect to worker or storage, telling client")
+		return true
+	}
 
 	// Save context to connection struct.
 	c.IsAuthorized = true
@@ -677,8 +682,16 @@ func (s *service) Login(c *Connection, req *imap.Request) bool {
 		// Check received gRPC error.
 		stat, ok := status.FromError(err)
 		if ok && (stat.Code() == codes.Unavailable) {
+
 			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during Prepare(), reconnecting...", c.ActualNode, c.ActualAddr))
-			c.Connect(s.gRPCOptions, s.logger, false)
+
+			err := c.Connect(s.gRPCOptions, s.logger, false)
+			if err != nil {
+				c.Send(err.Error())
+				level.Error(s.logger).Log("msg", "failed too many times to connect to worker or storage, telling client")
+				return true
+			}
+
 			conf, err = c.gRPCClient.Prepare(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
@@ -761,8 +774,16 @@ func (s *service) ProxySelect(c *Connection, rawReq string) bool {
 		// Check received gRPC error.
 		stat, ok := status.FromError(err)
 		if ok && (stat.Code() == codes.Unavailable) {
+
 			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during ProxySelect(), reconnecting...", c.ActualNode, c.ActualAddr))
-			c.Connect(s.gRPCOptions, s.logger, true)
+
+			err := c.Connect(s.gRPCOptions, s.logger, false)
+			if err != nil {
+				c.Send(err.Error())
+				level.Error(s.logger).Log("msg", "failed too many times to connect to worker or storage, telling client")
+				return true
+			}
+
 			reply, err = c.gRPCClient.Select(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
@@ -811,8 +832,16 @@ func (s *service) ProxyCreate(c *Connection, rawReq string) bool {
 		// Check received gRPC error.
 		stat, ok := status.FromError(err)
 		if ok && (stat.Code() == codes.Unavailable) {
+
 			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during ProxyCreate(), reconnecting...", c.ActualNode, c.ActualAddr))
-			c.Connect(s.gRPCOptions, s.logger, true)
+
+			err := c.Connect(s.gRPCOptions, s.logger, false)
+			if err != nil {
+				c.Send(err.Error())
+				level.Error(s.logger).Log("msg", "failed too many times to connect to worker or storage, telling client")
+				return true
+			}
+
 			reply, err = c.gRPCClient.Create(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
@@ -861,8 +890,16 @@ func (s *service) ProxyDelete(c *Connection, rawReq string) bool {
 		// Check received gRPC error.
 		stat, ok := status.FromError(err)
 		if ok && (stat.Code() == codes.Unavailable) {
+
 			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during ProxyDelete(), reconnecting...", c.ActualNode, c.ActualAddr))
-			c.Connect(s.gRPCOptions, s.logger, true)
+
+			err := c.Connect(s.gRPCOptions, s.logger, false)
+			if err != nil {
+				c.Send(err.Error())
+				level.Error(s.logger).Log("msg", "failed too many times to connect to worker or storage, telling client")
+				return true
+			}
+
 			reply, err = c.gRPCClient.Delete(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
@@ -911,8 +948,16 @@ func (s *service) ProxyList(c *Connection, rawReq string) bool {
 		// Check received gRPC error.
 		stat, ok := status.FromError(err)
 		if ok && (stat.Code() == codes.Unavailable) {
+
 			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during ProxyList(), reconnecting...", c.ActualNode, c.ActualAddr))
-			c.Connect(s.gRPCOptions, s.logger, true)
+
+			err := c.Connect(s.gRPCOptions, s.logger, false)
+			if err != nil {
+				c.Send(err.Error())
+				level.Error(s.logger).Log("msg", "failed too many times to connect to worker or storage, telling client")
+				return true
+			}
+
 			reply, err = c.gRPCClient.List(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
@@ -961,8 +1006,16 @@ func (s *service) ProxyAppend(c *Connection, rawReq string) bool {
 		// Check received gRPC error.
 		stat, ok := status.FromError(err)
 		if ok && (stat.Code() == codes.Unavailable) {
+
 			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during begin part of ProxyAppend(), reconnecting...", c.ActualNode, c.ActualAddr))
-			c.Connect(s.gRPCOptions, s.logger, true)
+
+			err := c.Connect(s.gRPCOptions, s.logger, false)
+			if err != nil {
+				c.Send(err.Error())
+				level.Error(s.logger).Log("msg", "failed too many times to connect to worker or storage, telling client")
+				return true
+			}
+
 			await, err = c.gRPCClient.AppendBegin(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
@@ -1133,8 +1186,16 @@ func (s *service) ProxyExpunge(c *Connection, rawReq string) bool {
 		// Check received gRPC error.
 		stat, ok := status.FromError(err)
 		if ok && (stat.Code() == codes.Unavailable) {
+
 			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during ProxyExpunge(), reconnecting...", c.ActualNode, c.ActualAddr))
-			c.Connect(s.gRPCOptions, s.logger, true)
+
+			err := c.Connect(s.gRPCOptions, s.logger, false)
+			if err != nil {
+				c.Send(err.Error())
+				level.Error(s.logger).Log("msg", "failed too many times to connect to worker or storage, telling client")
+				return true
+			}
+
 			reply, err = c.gRPCClient.Expunge(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")
@@ -1183,8 +1244,16 @@ func (s *service) ProxyStore(c *Connection, rawReq string) bool {
 		// Check received gRPC error.
 		stat, ok := status.FromError(err)
 		if ok && (stat.Code() == codes.Unavailable) {
+
 			level.Debug(s.logger).Log("msg", fmt.Sprintf("%s (%s) unavailable during ProxyStore(), reconnecting...", c.ActualNode, c.ActualAddr))
-			c.Connect(s.gRPCOptions, s.logger, true)
+
+			err := c.Connect(s.gRPCOptions, s.logger, false)
+			if err != nil {
+				c.Send(err.Error())
+				level.Error(s.logger).Log("msg", "failed too many times to connect to worker or storage, telling client")
+				return true
+			}
+
 			reply, err = c.gRPCClient.Store(context.Background(), payload)
 		} else {
 			c.Send("* BAD Internal server error, sorry. Closing connection.")

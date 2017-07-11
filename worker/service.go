@@ -102,7 +102,7 @@ type Service interface {
 func NewService(logger log.Logger, tlsConfig *tls.Config, config *config.Config, name string) Service {
 
 	// Disable logging of gRPC components.
-	grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, ioutil.Discard, os.Stdout))
+	grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, os.Stdout, os.Stdout))
 
 	return &service{
 		imapNode: &imap.IMAPNode{

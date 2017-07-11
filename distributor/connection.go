@@ -98,9 +98,10 @@ func (c *Connection) Receive() (string, error) {
 // Connect to primary node or fail over to secondary node
 // in case of an error. If failover fails as well, go back
 // to primary node.
-func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrepare bool) {
+func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrepare bool) error {
 
-	// TODO: Cancel this if client disconnects while execution.
+	const failedThresh = 8
+	var failedCount int = 0
 
 	c.ActualNode = c.PrimaryNode
 	c.ActualAddr = c.PrimaryAddr
@@ -120,7 +121,9 @@ func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrep
 
 	// Dial primary node.
 	conn, err := grpc.Dial(c.PrimaryAddr, opts...)
-	for err != nil {
+	for (err != nil) && (failedCount < failedThresh) {
+
+		failedCount++
 
 		// Failed. Switch actual node representation.
 		level.Debug(logger).Log(
@@ -134,6 +137,8 @@ func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrep
 		conn, err = grpc.Dial(c.SecondaryAddr, opts...)
 		if err != nil {
 
+			failedCount++
+
 			// Failed. Switch actual node representation.
 			level.Debug(logger).Log(
 				"msg", fmt.Sprintf("failed to dial to %s (%s), trying %s again...", c.SecondaryNode, c.SecondaryAddr, c.PrimaryNode),
@@ -145,6 +150,10 @@ func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrep
 			// Dial primary node again.
 			conn, err = grpc.Dial(c.PrimaryAddr, opts...)
 		}
+	}
+
+	if failedCount >= failedThresh {
+		return fmt.Errorf("* BAD Internal server error, sorry. Try again later.")
 	}
 
 	level.Debug(logger).Log("msg", fmt.Sprintf("dialled to %s (%s)", c.ActualNode, c.ActualAddr))
@@ -162,4 +171,6 @@ func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrep
 			RespWorker: c.PrimaryNode,
 		})
 	}
+
+	return nil
 }
