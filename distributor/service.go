@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"crypto/tls"
+	"io/ioutil"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -127,7 +128,7 @@ type Service interface {
 func NewService(logger log.Logger, metrics *Metrics, authenticator Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker, storageAddr string) Service {
 
 	// Disable logging of gRPC components.
-	grpclog.SetLoggerV2(grpclog.NewLoggerV2(os.DevNull, os.DevNull, os.Stdout))
+	grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, ioutil.Discard, os.Stdout))
 
 	return &service{
 		logger:        log.With(logger, "service", "distributor"),

@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"crypto/tls"
+	"io/ioutil"
 	"path/filepath"
 
 	"github.com/go-kit/kit/log"
@@ -101,7 +102,7 @@ type Service interface {
 func NewService(logger log.Logger, tlsConfig *tls.Config, config *config.Config, name string) Service {
 
 	// Disable logging of gRPC components.
-	grpclog.SetLoggerV2(grpclog.NewLoggerV2(os.DevNull, os.DevNull, os.Stdout))
+	grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, ioutil.Discard, os.Stdout))
 
 	return &service{
 		imapNode: &imap.IMAPNode{
