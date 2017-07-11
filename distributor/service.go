@@ -127,7 +127,7 @@ type Service interface {
 // this node type wrapping all information.
 func NewService(logger log.Logger, metrics *Metrics, authenticator Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker, storageAddr string) Service {
 
-	// Disable logging of gRPC components.
+	// Specify verbosity of gRPC components (no INFO).
 	grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, os.Stdout, os.Stdout))
 
 	return &service{

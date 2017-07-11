@@ -46,9 +46,6 @@ func NodeOptions(tlsConfig *tls.Config) []grpc.ServerOption {
 		PermitWithoutStream: true,
 	}
 
-	// TODO: Think about clever stats handler. Prometheus-exposed?
-	// stats := grpc.StatsHandler(h)
-
 	return []grpc.ServerOption{
 		grpc.Creds(creds),
 		grpc.RPCCompressor(comp),
@@ -57,7 +54,6 @@ func NodeOptions(tlsConfig *tls.Config) []grpc.ServerOption {
 		grpc.MaxSendMsgSize(maxMsgSize),
 		grpc.KeepaliveParams(kaParams),
 		grpc.KeepaliveEnforcementPolicy(enfPolicy),
-		// grpc.StatsHandler(stats),
 	}
 }
 
@@ -91,9 +87,6 @@ func DistributorOptions(tlsConfig *tls.Config) []grpc.DialOption {
 		PermitWithoutStream: true,
 	}
 
-	// TODO: Think about clever stats handler. Prometheus-exposed?
-	// stats := grpc.StatsHandler(h)
-
 	// Use pluto-internal TLS config for credentials.
 	creds := credentials.NewTLS(tlsConfig)
 
@@ -105,7 +98,6 @@ func DistributorOptions(tlsConfig *tls.Config) []grpc.DialOption {
 		grpc.WithTimeout(12 * time.Second),
 		grpc.WithDefaultCallOptions(callOpts...),
 		grpc.WithKeepaliveParams(kaParams),
-		// grpc.WithStatsHandler(stats),
 		grpc.WithTransportCredentials(creds),
 	}
 }
