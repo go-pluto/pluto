@@ -44,14 +44,23 @@ type Connection struct {
 // further communication.
 func (c *Connection) Close() error {
 
-	err := c.gRPCConn.Close()
-	if err != nil {
-		return err
+	if c.gRPCConn != nil {
+
+		// If gRPC connection exists, close it.
+		err := c.gRPCConn.Close()
+		if err != nil {
+			return err
+		}
 	}
 
-	err = c.IncConn.Close()
-	if err != nil {
-		return nil
+	if c.IncConn != nil {
+
+		// If a client connection was established,
+		// close it.
+		err := c.IncConn.Close()
+		if err != nil {
+			return nil
+		}
 	}
 
 	c.IsAuthorized = false

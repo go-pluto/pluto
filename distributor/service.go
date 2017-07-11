@@ -184,10 +184,21 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 	// Send initial server greeting.
 	err := c.Send(fmt.Sprintf("* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] %s", greeting))
 	if err != nil {
+
 		level.Error(s.logger).Log(
-			"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
+			"msg", "error while sending text to client",
+			"client", c.ClientAddr,
 			"err", err,
 		)
+
+		err = c.Close()
+		if err != nil {
+			level.Error(s.logger).Log(
+				"msg", "failed to close Connection struct",
+				"err", err,
+			)
+		}
+
 		return
 	}
 
@@ -231,11 +242,17 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 					}
 				}
 
-				c.IncConn.Close()
-
 			} else {
 				level.Error(s.logger).Log(
 					"msg", fmt.Sprintf("error while receiving text from client %s", c.ClientAddr),
+					"err", err,
+				)
+			}
+
+			err = c.Close()
+			if err != nil {
+				level.Error(s.logger).Log(
+					"msg", "failed to close Connection struct",
 					"err", err,
 				)
 			}
@@ -250,10 +267,19 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 			// Signal error to client.
 			err := c.Send(err.Error())
 			if err != nil {
+
 				level.Error(s.logger).Log(
 					"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
 					"err", err,
 				)
+
+				err = c.Close()
+				if err != nil {
+					level.Error(s.logger).Log(
+						"msg", "failed to close Connection struct",
+						"err", err,
+					)
+				}
 				return
 			}
 
@@ -422,10 +448,20 @@ func (s *service) handleConnection(conn net.Conn, greeting string) {
 			// Client sent inappropriate command. Signal tagged error.
 			err := c.Send(fmt.Sprintf("%s BAD Received invalid IMAP command", req.Tag))
 			if err != nil {
+
 				level.Error(s.logger).Log(
 					"msg", fmt.Sprintf("error while sending text to client %s", c.ClientAddr),
 					"err", err,
 				)
+
+				err = c.Close()
+				if err != nil {
+					level.Error(s.logger).Log(
+						"msg", "failed to close Connection struct",
+						"err", err,
+					)
+				}
+
 				return
 			}
 		}
