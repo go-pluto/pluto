@@ -100,8 +100,8 @@ func (c *Connection) Receive() (string, error) {
 // to primary node.
 func (c *Connection) Connect(opts []grpc.DialOption, logger log.Logger, sendPrepare bool) error {
 
-	const failedThresh = 8
-	var failedCount int = 0
+	failedCount := 0
+	failedThresh := 8
 
 	c.ActualNode = c.PrimaryNode
 	c.ActualAddr = c.PrimaryAddr

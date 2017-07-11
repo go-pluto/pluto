@@ -10,18 +10,28 @@ import (
 // Constants
 
 const (
-	// Define IMAPv4 commands implemented by pluto.
+	// CommandCapability defines IMAPv4 CAPABILITY support.
 	CommandCapability = "CAPABILITY"
-	CommandLogout     = "LOGOUT"
-	CommandStartTLS   = "STARTTLS"
-	CommandLogin      = "LOGIN"
-	CommandSelect     = "SELECT"
-	CommandCreate     = "CREATE"
-	CommandDelete     = "DELETE"
-	CommandList       = "LIST"
-	CommandAppend     = "APPEND"
-	CommandExpunge    = "EXPUNGE"
-	CommandStore      = "STORE"
+	// CommandLogout defines IMAPv4 LOGOUT support.
+	CommandLogout = "LOGOUT"
+	// CommandStartTLS defines IMAPv4 STARTTLS support.
+	CommandStartTLS = "STARTTLS"
+	// CommandLogin defines IMAPv4 LOGIN support.
+	CommandLogin = "LOGIN"
+	// CommandSelect defines IMAPv4 SELECT support.
+	CommandSelect = "SELECT"
+	// CommandCreate defines IMAPv4 CREATE support.
+	CommandCreate = "CREATE"
+	// CommandDelete defines IMAPv4 DELETE support.
+	CommandDelete = "DELETE"
+	// CommandList defines IMAPv4 LIST support.
+	CommandList = "LIST"
+	// CommandAppend defines IMAPv4 APPEND support.
+	CommandAppend = "APPEND"
+	// CommandExpunge defines IMAPv4 EXPUNGE support.
+	CommandExpunge = "EXPUNGE"
+	// CommandStore defines IMAPv4 STORE support.
+	CommandStore = "STORE"
 )
 
 // Variables
