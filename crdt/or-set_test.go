@@ -103,7 +103,9 @@ func TestInitORSetFromFile(t *testing.T) {
 // on implemented WriteORSetToFile() function.
 func TestWriteORSetToFile(t *testing.T) {
 
-	s := InitORSet()
+	s := &ORSet{
+		elements: make(map[string]string),
+	}
 
 	// Assign a corresponding file.
 	f, err := os.OpenFile("test-crdt.log", (os.O_CREATE | os.O_RDWR), 0600)
@@ -300,7 +302,9 @@ func TestLookup(t *testing.T) {
 
 func benchmarkLookup(b *testing.B, e string) {
 
-	s := InitORSet()
+	s := &ORSet{
+		elements: make(map[string]string),
+	}
 
 	s.elements["10000000-a071-4227-9e63-a4b0ee84688f"] = v1
 	s.elements["20000000-a071-4227-9e63-a4b0ee84688f"] = v2
@@ -344,7 +348,9 @@ func BenchmarkLookup8(b *testing.B) { benchmarkLookup(b, v8) }
 // on implemented AddEffect() function.
 func TestAddEffect(t *testing.T) {
 
-	s := InitORSet()
+	s := &ORSet{
+		elements: make(map[string]string),
+	}
 
 	// Set and test keys.
 
@@ -462,7 +468,9 @@ func TestAdd(t *testing.T) {
 // on implemented RemoveEffect() function.
 func TestRemoveEffect(t *testing.T) {
 
-	s := InitORSet()
+	s := &ORSet{
+		elements: make(map[string]string),
+	}
 
 	// Create an empty remove set.
 	testRSet := make(map[string]string)
