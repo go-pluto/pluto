@@ -29,15 +29,6 @@ type sendFunc func(...string)
 
 // Functions
 
-// InitORSet returns an empty initialized new
-// observed-removed set.
-func InitORSet() *ORSet {
-
-	return &ORSet{
-		elements: make(map[string]string),
-	}
-}
-
 // InitORSetWithFile takes in a file name and initializes
 // a new ORSet with opened file handler to that name as
 // designated log file.
@@ -56,7 +47,9 @@ func InitORSetWithFile(fileName string) (*ORSet, error) {
 	}
 
 	// Init an empty ORSet.
-	s := InitORSet()
+	s := &ORSet{
+		elements: make(map[string]string),
+	}
 	s.File = f
 
 	// Write newly created CRDT file to stable storage.
@@ -79,7 +72,9 @@ func InitORSetFromFile(fileName string) (*ORSet, error) {
 	}
 
 	// Init an empty ORSet.
-	s := InitORSet()
+	s := &ORSet{
+		elements: make(map[string]string),
+	}
 	s.File = f
 
 	// Parse contained CRDT state from file.

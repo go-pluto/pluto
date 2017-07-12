@@ -280,6 +280,15 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 			)
 		}
 
+		// Close CRDT file if possible.
+		err = node.MailboxStructure[s.UserName][posMailbox].File.Close()
+		if err != nil {
+			level.Error(node.Logger).Log(
+				"msg", "failed to close CRDT file",
+				"err", err,
+			)
+		}
+
 		os.Exit(1)
 	}
 
