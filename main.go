@@ -97,7 +97,8 @@ func createUserFiles(crdtLayerRoot string, maildirRoot string, start int, end in
 		}
 
 		crdtFolder := filepath.Join(crdtLayerRoot, fmt.Sprintf("user%d", i))
-		if err := os.MkdirAll(crdtFolder, 0755); err != nil {
+		err = os.MkdirAll(crdtFolder, 0755)
+		if err != nil {
 			return err
 		}
 
@@ -105,14 +106,18 @@ func createUserFiles(crdtLayerRoot string, maildirRoot string, start int, end in
 		mailboxStructureLog := filepath.Join(crdtFolder, "mailbox-structure.log")
 
 		if !exists(inboxLog) {
-			if err := ioutil.WriteFile(inboxLog, nil, 0644); err != nil {
+
+			err := ioutil.WriteFile(inboxLog, nil, 0644)
+			if err != nil {
 				return err
 			}
 		}
 
 		if !exists(mailboxStructureLog) {
-			data := "SU5CT1g=;" + uuid.NewV4().String() + "\n"
-			if err := ioutil.WriteFile(mailboxStructureLog, []byte(data), 0644); err != nil {
+
+			data := fmt.Sprintf("SU5CT1g=;%s\n", uuid.NewV4().String())
+			err := ioutil.WriteFile(mailboxStructureLog, []byte(data), 0644)
+			if err != nil {
 				return err
 			}
 		}
@@ -181,10 +186,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		publicTLSConfig, err := crypto.NewPublicTLSConfig(conf.Distributor.PublicTLS.CertLoc, conf.Distributor.PublicTLS.KeyLoc)
+		publicTLSConfig, err := crypto.NewPublicTLSConfig(conf.Distributor.PublicCertLoc, conf.Distributor.PublicKeyLoc)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to create public TLS config for distributor",
+				"msg", "failed to create public TLS config",
+				"node", conf.Distributor.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -193,7 +199,8 @@ func main() {
 		mailSocket, err := tls.Listen("tcp", conf.Distributor.ListenMailAddr, publicTLSConfig)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to listen for public mail TLS connections on distributor",
+				"msg", "failed to listen for public mail TLS connections",
+				"node", conf.Distributor.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -201,26 +208,29 @@ func main() {
 		defer mailSocket.Close()
 
 		level.Info(logger).Log(
-			"msg", "distributor is accepting public mail connections",
+			"msg", "accepting public mail connections",
+			"node", conf.Distributor.Name,
 			"public_addr", conf.Distributor.PublicMailAddr,
 			"listen_addr", conf.Distributor.ListenMailAddr,
 		)
 
-		intlTLSConfig, err := crypto.NewInternalTLSConfig(conf.Distributor.InternalTLS.CertLoc, conf.Distributor.InternalTLS.KeyLoc, conf.RootCertLoc)
+		intlTLSConfig, err := crypto.NewInternalTLSConfig(conf.Distributor.InternalCertLoc, conf.Distributor.InternalKeyLoc, conf.RootCertLoc)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to create internal TLS config for distributor",
+				"msg", "failed to create internal TLS config",
+				"node", conf.Distributor.Name,
 				"err", err,
 			)
 			os.Exit(1)
 		}
 
 		var distrS distributor.Service
-		distrS = distributor.NewService(logger, plutoMetrics.Distributor, authenticator, intlTLSConfig, conf.Workers, conf.Storage.PublicMailAddr)
+		distrS = distributor.NewService(conf.Distributor.Name, logger, plutoMetrics.Distributor, authenticator, intlTLSConfig, conf.Workers, conf.Storage.PublicMailAddr)
 
 		if err := distrS.Run(mailSocket, conf.IMAP.Greeting); err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to run distributor",
+				"msg", "failed to run",
+				"node", conf.Distributor.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -249,51 +259,65 @@ func main() {
 
 		// Create all non-existent files and folders for
 		// all users this worker is responsible for.
-		if err := createUserFiles(workerConfig.CRDTLayerRoot, workerConfig.MaildirRoot, workerConfig.UserStart, workerConfig.UserEnd); err != nil {
+		err := createUserFiles(workerConfig.CRDTLayerRoot, workerConfig.MaildirRoot, workerConfig.UserStart, workerConfig.UserEnd)
+		if err != nil {
 			level.Error(logger).Log(
-				"msg", fmt.Sprintf("failed to create user files on %s", *workerFlag),
+				"msg", "failed to create user files",
+				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
 		}
 
-		tlsConfig, err := crypto.NewInternalTLSConfig(workerConfig.TLS.CertLoc, workerConfig.TLS.KeyLoc, conf.RootCertLoc)
+		tlsConfig, err := crypto.NewInternalTLSConfig(workerConfig.CertLoc, workerConfig.KeyLoc, conf.RootCertLoc)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", fmt.Sprintf("failed to create internal TLS config for %s", *workerFlag),
+				"msg", "failed to create internal TLS config",
+				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
 		}
 
 		var workerS worker.Service
-		workerS = worker.NewService(logger, tlsConfig, conf, *workerFlag)
+		workerS = worker.NewService(workerConfig.Name, logger, tlsConfig, conf)
 
 		// Create needed synchronization socket used by gRPC.
 		syncSocket, err := net.Listen("tcp", workerConfig.ListenSyncAddr)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", fmt.Sprintf("failed to open synchronization socket on %s", *workerFlag),
+				"msg", "failed to open synchronization socket",
+				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
 		}
 		defer syncSocket.Close()
 
+		// Retrive name of the one synchronization subnet
+		// this worker is part of.
+		var subnetName string
+		for subnetName = range workerConfig.Peers {
+			break
+		}
+
+		// TODO: CONTINUE HERE.
+
 		// Initialize channels for this node.
 		applyCRDTUpd := make(chan comm.Msg)
 		doneCRDTUpd := make(chan struct{})
 
 		// Construct path to receiving and sending CRDT logs for storage node.
-		recvCRDTLog := filepath.Join(workerConfig.CRDTLayerRoot, "receiving.log")
-		sendCRDTLog := filepath.Join(workerConfig.CRDTLayerRoot, "sending.log")
-		vclockLog := filepath.Join(workerConfig.CRDTLayerRoot, "vclock.log")
+		recvCRDTLog := filepath.Join(workerConfig.CRDTLayerRoot, subnetName, "-receiving.log")
+		sendCRDTLog := filepath.Join(workerConfig.CRDTLayerRoot, subnetName, "-sending.log")
+		vclockLog := filepath.Join(workerConfig.CRDTLayerRoot, subnetName, "-vclock.log")
 
 		// Initialize receiving goroutine for sync operations.
-		incVClock, updVClock, err := comm.InitReceiver(logger, *workerFlag, workerConfig.ListenSyncAddr, workerConfig.PublicSyncAddr, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, []string{"storage"})
+		incVClock, updVClock, err := comm.InitReceiver(logger, workerConfig.Name, workerConfig.ListenSyncAddr, workerConfig.PublicSyncAddr, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, []string{"storage"})
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", fmt.Sprintf("failed to initialize receiver for %s", *workerFlag),
+				"msg", "failed to initialize receiver",
+				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -304,10 +328,11 @@ func main() {
 		curCRDTSubnet["storage"] = conf.Storage.PublicSyncAddr
 
 		// Init sending part of CRDT communication and send messages in background.
-		syncSendChan, err := comm.InitSender(logger, *workerFlag, sendCRDTLog, tlsConfig, incVClock, updVClock, curCRDTSubnet)
+		syncSendChan, err := comm.InitSender(logger, workerConfig.Name, sendCRDTLog, tlsConfig, incVClock, updVClock, curCRDTSubnet)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", fmt.Sprintf("failed to initialize sender for %s", *workerFlag),
+				"msg", "failed to initialize sender",
+				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -320,7 +345,8 @@ func main() {
 		err = workerS.Init(syncSendChan)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", fmt.Sprintf("failed to initilize service of %s", *workerFlag),
+				"msg", "failed to initilize service",
+				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -330,7 +356,8 @@ func main() {
 		mailSocket, err := net.Listen("tcp", workerConfig.ListenMailAddr)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", fmt.Sprintf("failed to open socket for proxied mail traffic on %s", *workerFlag),
+				"msg", "failed to open socket for proxied mail traffic",
+				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -338,14 +365,18 @@ func main() {
 		defer mailSocket.Close()
 
 		level.Info(logger).Log(
-			"msg", fmt.Sprintf("%s (%s) is accepting proxied mail connections at %s", *workerFlag, workerConfig.ListenMailAddr, workerConfig.PublicMailAddr),
+			"msg", "accepting proxied mail connections",
+			"node", workerConfig.Name,
+			"public_addr", workerConfig.PublicMailAddr,
+			"listen_addr", workerConfig.ListenMailAddr,
 		)
 
 		// Run main handler routine on gRPC-served IMAP socket.
 		err = workerS.Serve(mailSocket)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", fmt.Sprintf("failed to run Serve() on IMAP gRPC socket of %s", *workerFlag),
+				"msg", "failed to run Serve() on IMAP gRPC socket",
+				"node", workerConfig.Name,
 				"err", err,
 			)
 		}
@@ -355,23 +386,25 @@ func main() {
 		// Run an HTTP server in a goroutine to expose this storage's metrics.
 		go runPromHTTP(logger, conf.Storage.PrometheusAddr)
 
-		tlsConfig, err := crypto.NewInternalTLSConfig(conf.Storage.TLS.CertLoc, conf.Storage.TLS.KeyLoc, conf.RootCertLoc)
+		tlsConfig, err := crypto.NewInternalTLSConfig(conf.Storage.CertLoc, conf.Storage.KeyLoc, conf.RootCertLoc)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to create internal TLS config for storage",
+				"msg", "failed to create internal TLS config",
+				"node", conf.Storage.Name,
 				"err", err,
 			)
 			os.Exit(1)
 		}
 
 		var storageS storage.Service
-		storageS = storage.NewService(logger, tlsConfig, conf, conf.Workers)
+		storageS = storage.NewService(conf.Storage.Name, logger, tlsConfig, conf, conf.Workers)
 
 		// Create needed synchronization socket used by gRPC.
 		syncSocket, err := net.Listen("tcp", conf.Storage.ListenSyncAddr)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to open synchronization socket on storage",
+				"msg", "failed to open synchronization socket",
+				"node", conf.Storage.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -387,7 +420,8 @@ func main() {
 			// worker is responsible for.
 			if err := createUserFiles(conf.Storage.CRDTLayerRoot, conf.Storage.MaildirRoot, worker.UserStart, worker.UserEnd); err != nil {
 				level.Error(logger).Log(
-					"msg", fmt.Sprintf("failed to create user files for %s on storage", name),
+					"msg", "failed to create user files",
+					"node", conf.Storage.Name,
 					"err", err,
 				)
 				os.Exit(1)
@@ -405,10 +439,11 @@ func main() {
 
 			// Initialize a receiving goroutine for sync operations
 			// for each worker node.
-			incVClock, updVClock, err := comm.InitReceiver(logger, "storage", conf.Storage.ListenSyncAddr, conf.Storage.PublicSyncAddr, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, []string{name})
+			incVClock, updVClock, err := comm.InitReceiver(logger, conf.Storage.Name, conf.Storage.ListenSyncAddr, conf.Storage.PublicSyncAddr, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, []string{name})
 			if err != nil {
 				level.Error(logger).Log(
-					"msg", "failed to initialize receiver for storage",
+					"msg", "failed to initialize receiver",
+					"node", conf.Storage.Name,
 					"err", err,
 				)
 				os.Exit(1)
@@ -419,10 +454,11 @@ func main() {
 			curCRDTSubnet[name] = worker.PublicSyncAddr
 
 			// Init sending part of CRDT communication and send messages in background.
-			syncSendChans[name], err = comm.InitSender(logger, "storage", sendCRDTLog, tlsConfig, incVClock, updVClock, curCRDTSubnet)
+			syncSendChans[name], err = comm.InitSender(logger, conf.Storage.Name, sendCRDTLog, tlsConfig, incVClock, updVClock, curCRDTSubnet)
 			if err != nil {
 				level.Error(logger).Log(
-					"msg", "failed to initialize sender for storage",
+					"msg", "failed to initialize sender",
+					"node", conf.Storage.Name,
 					"err", err,
 				)
 				os.Exit(1)
@@ -436,7 +472,8 @@ func main() {
 		err = storageS.Init(syncSendChans)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to initilize service of storage",
+				"msg", "failed to initilize service",
+				"node", conf.Storage.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -446,7 +483,8 @@ func main() {
 		mailSocket, err := net.Listen("tcp", conf.Storage.ListenMailAddr)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to open socket for proxied mail traffic on storage",
+				"msg", "failed to open socket for proxied mail traffic",
+				"node", conf.Storage.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -454,14 +492,18 @@ func main() {
 		defer mailSocket.Close()
 
 		level.Info(logger).Log(
-			"msg", fmt.Sprintf("storage (%s) is accepting proxied mail connections at %s", conf.Storage.ListenMailAddr, conf.Storage.PublicMailAddr),
+			"msg", "accepting proxied mail connections",
+			"node", conf.Storage.Name,
+			"public_addr", conf.Storage.PublicMailAddr,
+			"listen_addr", conf.Storage.ListenMailAddr,
 		)
 
 		// Run main handler routine on gRPC-served IMAP socket.
 		err = storageS.Serve(mailSocket)
 		if err != nil {
 			level.Error(logger).Log(
-				"msg", "failed to run Serve() on IMAP gRPC socket of storage",
+				"msg", "failed to run Serve() on IMAP gRPC socket",
+				"node", conf.Storage.Name,
 				"err", err,
 			)
 		}

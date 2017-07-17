@@ -39,7 +39,7 @@ func CreateTestEnv(configFilePath string) (*TestEnv, error) {
 	}
 
 	// Create public TLS config (distributor).
-	tlsConfig, err := crypto.NewPublicTLSConfig(config.Distributor.PublicTLS.CertLoc, config.Distributor.PublicTLS.KeyLoc)
+	tlsConfig, err := crypto.NewPublicTLSConfig(config.Distributor.PublicCertLoc, config.Distributor.PublicKeyLoc)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func CreateTestEnv(configFilePath string) (*TestEnv, error) {
 
 	// Read distributor's public certificate in PEM format
 	// specified in pluto's main config file into memory.
-	rootCert, err := ioutil.ReadFile(config.Distributor.PublicTLS.CertLoc)
+	rootCert, err := ioutil.ReadFile(config.Distributor.PublicCertLoc)
 	if err != nil {
 		return nil, fmt.Errorf("reading distributor's public certificate into memory failed with: %v", err)
 	}

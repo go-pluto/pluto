@@ -53,7 +53,7 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 
 	go func() {
 
-		intlTLSConfig, err := crypto.NewInternalTLSConfig(testEnv.Config.Storage.TLS.CertLoc, testEnv.Config.Storage.TLS.KeyLoc, testEnv.Config.RootCertLoc)
+		intlTLSConfig, err := crypto.NewInternalTLSConfig(testEnv.Config.Storage.CertLoc, testEnv.Config.Storage.KeyLoc, testEnv.Config.RootCertLoc)
 		if err != nil {
 			stdlog.Fatal(err)
 		}
@@ -97,7 +97,7 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			stdlog.Fatal("can't find correct worker config")
 		}
 
-		intlTLSConfig, err := crypto.NewInternalTLSConfig(workerConfig.TLS.CertLoc, workerConfig.TLS.KeyLoc, testEnv.Config.RootCertLoc)
+		intlTLSConfig, err := crypto.NewInternalTLSConfig(workerConfig.CertLoc, workerConfig.KeyLoc, testEnv.Config.RootCertLoc)
 		if err != nil {
 			stdlog.Fatal(err)
 		}
@@ -159,7 +159,7 @@ func RunAllNodes(testEnv *utils.TestEnv, workerName string) {
 			testEnv.DoneDistr <- struct{}{}
 		}()
 
-		publicTLSConfig, err := crypto.NewPublicTLSConfig(testEnv.Config.Distributor.PublicTLS.CertLoc, testEnv.Config.Distributor.PublicTLS.KeyLoc)
+		publicTLSConfig, err := crypto.NewPublicTLSConfig(testEnv.Config.Distributor.PublicCertLoc, testEnv.Config.Distributor.PublicKeyLoc)
 		if err != nil {
 			stdlog.Fatal(err)
 		}

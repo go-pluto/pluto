@@ -125,13 +125,13 @@ type Service interface {
 // NewService takes in all required parameters for spinning
 // up a new distributor node and returns a service struct for
 // this node type wrapping all information.
-func NewService(logger log.Logger, metrics *Metrics, authenticator Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker, storageAddr string) Service {
+func NewService(name string, logger log.Logger, metrics *Metrics, authenticator Authenticator, tlsConfig *tls.Config, workers map[string]config.Worker, storageAddr string) Service {
 
 	// Specify verbosity of gRPC components (no INFO).
 	grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, os.Stdout, os.Stdout))
 
 	return &service{
-		logger:        log.With(logger, "service", "distributor"),
+		logger:        log.With(logger, "node", name),
 		metrics:       metrics,
 		authenticator: authenticator,
 		tlsConfig:     tlsConfig,

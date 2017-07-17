@@ -16,8 +16,8 @@ type PlutoMetrics struct {
 	Distributor *distributor.Metrics
 }
 
-// NewPlutoMetrics returns prometheus metrics when the addr isn't an empty string.
-// Otherwise discard metrics are returned.
+// NewPlutoMetrics returns Prometheus metrics when addr isn't
+// an empty string. Otherwise discard metrics are returned.
 func NewPlutoMetrics(distributorAddr string) *PlutoMetrics {
 
 	m := &PlutoMetrics{}

@@ -32,50 +32,51 @@ type IMAP struct {
 // the first entry point of a pluto setup, the
 // IMAP request authenticator and distributor.
 type Distributor struct {
-	PublicMailAddr string
-	ListenMailAddr string
-	PrometheusAddr string
-	AuthAdapter    string
-	PublicTLS      TLS
-	InternalTLS    TLS
-	AuthFile       *AuthFile
-	AuthPostgres   *AuthPostgres
+	Name            string
+	PublicMailAddr  string
+	ListenMailAddr  string
+	PrometheusAddr  string
+	PublicCertLoc   string
+	PublicKeyLoc    string
+	InternalCertLoc string
+	InternalKeyLoc  string
+	AuthAdapter     string
+	AuthFile        *AuthFile
+	AuthPostgres    *AuthPostgres
 }
 
 // Worker contains the connection and user sharding
 // information for an individual IMAP worker node.
 type Worker struct {
+	Name           string
 	PublicMailAddr string
 	ListenMailAddr string
 	PublicSyncAddr string
 	ListenSyncAddr string
 	PrometheusAddr string
+	CertLoc        string
+	KeyLoc         string
 	UserStart      int
 	UserEnd        int
 	MaildirRoot    string
 	CRDTLayerRoot  string
-	TLS            TLS
+	Peers          map[string]map[string]string
 }
 
 // Storage configures the global database node
 // storing all user data in a very safe manner.
 type Storage struct {
+	Name           string
 	PublicMailAddr string
 	ListenMailAddr string
 	PublicSyncAddr string
 	ListenSyncAddr string
 	PrometheusAddr string
+	CertLoc        string
+	KeyLoc         string
 	MaildirRoot    string
 	CRDTLayerRoot  string
-	TLS            TLS
-}
-
-// TLS contains Transport Layer Security relevant
-// parameters. Use this to provide paths to your
-// TLS certificate and key.
-type TLS struct {
-	CertLoc string
-	KeyLoc  string
+	Peers          map[string]map[string]string
 }
 
 // AuthPostgres defines parameters for connecting
@@ -106,8 +107,18 @@ func LoadConfig(configFile string) (*Config, error) {
 	conf := new(Config)
 
 	// Parse values from TOML file into struct.
-	if _, err := toml.DecodeFile(configFile, conf); err != nil {
+	_, err := toml.DecodeFile(configFile, conf)
+	if err != nil {
 		return nil, fmt.Errorf("failed to read in TOML config file at '%s' with: %v", configFile, err)
+	}
+
+	// Make sure each worker is only at most part
+	// of one synchronization subnet.
+	for _, worker := range conf.Workers {
+
+		if len(worker.Peers) > 1 {
+			return nil, fmt.Errorf("worker cannot be part of more than one synchronization subnet")
+		}
 	}
 
 	// Retrieve absolute path of pluto directory.
@@ -135,24 +146,24 @@ func LoadConfig(configFile string) (*Config, error) {
 		conf.RootCertLoc = filepath.Join(absPlutoPath, conf.RootCertLoc)
 	}
 
-	// Distributor.PublicTLS.CertLoc
-	if filepath.IsAbs(conf.Distributor.PublicTLS.CertLoc) != true {
-		conf.Distributor.PublicTLS.CertLoc = filepath.Join(absPlutoPath, conf.Distributor.PublicTLS.CertLoc)
+	// Distributor.PublicCertLoc
+	if filepath.IsAbs(conf.Distributor.PublicCertLoc) != true {
+		conf.Distributor.PublicCertLoc = filepath.Join(absPlutoPath, conf.Distributor.PublicCertLoc)
 	}
 
-	// Distributor.PublicTLS.KeyLoc
-	if filepath.IsAbs(conf.Distributor.PublicTLS.KeyLoc) != true {
-		conf.Distributor.PublicTLS.KeyLoc = filepath.Join(absPlutoPath, conf.Distributor.PublicTLS.KeyLoc)
+	// Distributor.PublicKeyLoc
+	if filepath.IsAbs(conf.Distributor.PublicKeyLoc) != true {
+		conf.Distributor.PublicKeyLoc = filepath.Join(absPlutoPath, conf.Distributor.PublicKeyLoc)
 	}
 
-	// Distributor.InternalTLS.CertLoc
-	if filepath.IsAbs(conf.Distributor.InternalTLS.CertLoc) != true {
-		conf.Distributor.InternalTLS.CertLoc = filepath.Join(absPlutoPath, conf.Distributor.InternalTLS.CertLoc)
+	// Distributor.InternalCertLoc
+	if filepath.IsAbs(conf.Distributor.InternalCertLoc) != true {
+		conf.Distributor.InternalCertLoc = filepath.Join(absPlutoPath, conf.Distributor.InternalCertLoc)
 	}
 
-	// Distributor.InternalTLS.KeyLoc
-	if filepath.IsAbs(conf.Distributor.InternalTLS.KeyLoc) != true {
-		conf.Distributor.InternalTLS.KeyLoc = filepath.Join(absPlutoPath, conf.Distributor.InternalTLS.KeyLoc)
+	// Distributor.InternalKeyLoc
+	if filepath.IsAbs(conf.Distributor.InternalKeyLoc) != true {
+		conf.Distributor.InternalKeyLoc = filepath.Join(absPlutoPath, conf.Distributor.InternalKeyLoc)
 	}
 
 	if conf.Distributor.AuthAdapter == "AuthFile" {
@@ -165,6 +176,16 @@ func LoadConfig(configFile string) (*Config, error) {
 
 	for name, worker := range conf.Workers {
 
+		// Workers[worker].CertLoc
+		if filepath.IsAbs(worker.CertLoc) != true {
+			worker.CertLoc = filepath.Join(absPlutoPath, worker.CertLoc)
+		}
+
+		// Workers[worker].KeyLoc
+		if filepath.IsAbs(worker.KeyLoc) != true {
+			worker.KeyLoc = filepath.Join(absPlutoPath, worker.KeyLoc)
+		}
+
 		// Workers[worker].MaildirRoot
 		if filepath.IsAbs(worker.MaildirRoot) != true {
 			worker.MaildirRoot = filepath.Join(absPlutoPath, worker.MaildirRoot)
@@ -175,18 +196,19 @@ func LoadConfig(configFile string) (*Config, error) {
 			worker.CRDTLayerRoot = filepath.Join(absPlutoPath, worker.CRDTLayerRoot)
 		}
 
-		// Workers[worker].TLS.CertLoc
-		if filepath.IsAbs(worker.TLS.CertLoc) != true {
-			worker.TLS.CertLoc = filepath.Join(absPlutoPath, worker.TLS.CertLoc)
-		}
-
-		// Workers[worker].TLS.KeyLoc
-		if filepath.IsAbs(worker.TLS.KeyLoc) != true {
-			worker.TLS.KeyLoc = filepath.Join(absPlutoPath, worker.TLS.KeyLoc)
-		}
-
 		// Assign worker config back to main config.
-		conf.Workers[name] = worker
+		delete(conf.Workers, name)
+		conf.Workers[worker.Name] = worker
+	}
+
+	// Storage.CertLoc
+	if filepath.IsAbs(conf.Storage.CertLoc) != true {
+		conf.Storage.CertLoc = filepath.Join(absPlutoPath, conf.Storage.CertLoc)
+	}
+
+	// Storage.KeyLoc
+	if filepath.IsAbs(conf.Storage.KeyLoc) != true {
+		conf.Storage.KeyLoc = filepath.Join(absPlutoPath, conf.Storage.KeyLoc)
 	}
 
 	// Storage.MaildirRoot
@@ -197,16 +219,6 @@ func LoadConfig(configFile string) (*Config, error) {
 	// Storage.CRDTLayerRoot
 	if filepath.IsAbs(conf.Storage.CRDTLayerRoot) != true {
 		conf.Storage.CRDTLayerRoot = filepath.Join(absPlutoPath, conf.Storage.CRDTLayerRoot)
-	}
-
-	// Storage.TLS.CertLoc
-	if filepath.IsAbs(conf.Storage.TLS.CertLoc) != true {
-		conf.Storage.TLS.CertLoc = filepath.Join(absPlutoPath, conf.Storage.TLS.CertLoc)
-	}
-
-	// Storage.TLS.KeyLoc
-	if filepath.IsAbs(conf.Storage.TLS.KeyLoc) != true {
-		conf.Storage.TLS.KeyLoc = filepath.Join(absPlutoPath, conf.Storage.TLS.KeyLoc)
 	}
 
 	return conf, nil

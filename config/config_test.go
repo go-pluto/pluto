@@ -31,5 +31,5 @@ func TestLoadConfig(t *testing.T) {
 	absCertLoc := filepath.Join(absPlutoPath, "private/public-distributor-cert.pem")
 
 	// Check for test success.
-	assert.Equalf(t, absCertLoc, conf.Distributor.PublicTLS.CertLoc, "expected certificate path to be '%s' but found '%s'", absCertLoc, conf.Distributor.PublicTLS.CertLoc)
+	assert.Equalf(t, absCertLoc, conf.Distributor.PublicCertLoc, "expected certificate path to be '%s' but found '%s'", absCertLoc, conf.Distributor.PublicCertLoc)
 }

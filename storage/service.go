@@ -98,14 +98,14 @@ type Service interface {
 // NewService takes in all required parameters for spinning
 // up a new storage node, runs initialization code, and returns
 // a service struct for this node type wrapping all information.
-func NewService(logger log.Logger, tlsConfig *tls.Config, config *config.Config, workers map[string]config.Worker) Service {
+func NewService(name string, logger log.Logger, tlsConfig *tls.Config, config *config.Config, workers map[string]config.Worker) Service {
 
 	// Specify verbosity of gRPC components (no INFO).
 	grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, os.Stdout, os.Stdout))
 
 	return &service{
 		imapNode: &imap.IMAPNode{
-			Logger:             log.With(logger, "service", "storage"),
+			Logger:             log.With(logger, "node", name),
 			Lock:               &sync.RWMutex{},
 			MailboxStructure:   make(map[string]map[string]*crdt.ORSet),
 			MailboxContents:    make(map[string]map[string][]string),
