@@ -311,13 +311,19 @@ func (sender *Sender) SendMsgs() {
 					conn, err := grpc.Dial(addr, opts...)
 					for err != nil {
 						level.Debug(logger).Log(
-							"msg", fmt.Sprintf("failed to dial to %s (%s), trying again...", node, addr),
+							"msg", "failed to dial, trying again...",
+							"remote_node", node,
+							"remote_addr", addr,
 							"err", err,
 						)
 						conn, err = grpc.Dial(addr, opts...)
 					}
 
-					level.Debug(logger).Log("msg", fmt.Sprintf("dialled to %s (%s)", node, addr))
+					level.Debug(logger).Log(
+						"msg", "successfully connected",
+						"remote_node", node,
+						"remote_addr", addr,
+					)
 
 					// Create new gRPC client stub.
 					client := NewReceiverClient(conn)
@@ -330,7 +336,11 @@ func (sender *Sender) SendMsgs() {
 						// take appropriate action.
 						stat, ok := status.FromError(err)
 						if ok && (stat.Code() == codes.Unavailable) {
-							level.Debug(logger).Log("msg", fmt.Sprintf("downstream replica %s (%s) unavailable during Incoming(), trying again...", node, addr))
+							level.Debug(logger).Log(
+								"msg", "downstream replica unavailable during Incoming(), trying again...",
+								"remote_node", node,
+								"remote_addr", addr,
+							)
 							conf, err = client.Incoming(context.Background(), binMsg)
 						} else {
 							retStatus <- fmt.Sprintf("permanent error for sending downstream message to replica %s: %v", node, err)

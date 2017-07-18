@@ -131,7 +131,7 @@ func NewService(name string, logger log.Logger, metrics *Metrics, authenticator 
 	grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, os.Stdout, os.Stdout))
 
 	return &service{
-		logger:        log.With(logger, "node", name),
+		logger:        logger,
 		metrics:       metrics,
 		authenticator: authenticator,
 		tlsConfig:     tlsConfig,

@@ -42,7 +42,7 @@ type Receiver struct {
 	stopApply        chan struct{}
 	applyCRDTUpdChan chan Msg
 	doneCRDTUpdChan  chan struct{}
-	nodes            []string
+	nodes            map[string]string
 }
 
 // Functions
@@ -50,7 +50,7 @@ type Receiver struct {
 // InitReceiver initializes above struct and sets
 // default values. It starts involved background
 // routines and send initial channel trigger.
-func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr string, logFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan Msg, doneCRDTUpdChan chan struct{}, nodes []string) (chan string, chan map[string]uint32, error) {
+func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr string, logFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan Msg, doneCRDTUpdChan chan struct{}, nodes map[string]string) (chan string, chan map[string]uint32, error) {
 
 	// Create and initialize new struct.
 	recv := &Receiver{
@@ -93,7 +93,7 @@ func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr 
 	}
 
 	// Initially set vector clock entries to 0.
-	for _, node := range nodes {
+	for node := range nodes {
 		recv.vclock[node] = 0
 	}
 
@@ -152,7 +152,9 @@ func (recv *Receiver) StartGRPCRecv() error {
 	RegisterReceiverServer(grpcRecv, recv)
 
 	level.Info(recv.logger).Log(
-		"msg", fmt.Sprintf("receiver at %s (%s) is accepting CRDT sync connections at %s", recv.name, recv.listenAddr, recv.publicAddr),
+		"msg", "accepting CRDT sync connections",
+		"public_addr", recv.publicAddr,
+		"listen_addr", recv.listenAddr,
 	)
 
 	// Run server.

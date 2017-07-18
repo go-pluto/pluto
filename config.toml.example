@@ -76,7 +76,7 @@ AuthAdapter = "AuthPostgres"
     CRDTLayerRoot = "/for/example/home/worker-1/crdt-layer/"
 
         # Define CRDT synchronization networks for this node.
-        [Workers.worker-1.Peers.partition-1]
+        [Workers.worker-1.Peers.subnet-1]
         us-west-worker-1 = "127.0.0.1:30101"
         asia-south-worker-1 = "127.0.0.1:30201"
         storage = "127.0.0.1:31000"
@@ -97,7 +97,7 @@ AuthAdapter = "AuthPostgres"
     MaildirRoot = "/for/example/var/mail/Maildir/"
     CRDTLayerRoot = "/for/example/var/crdt-layer/"
 
-        [Workers.worker-2.Peers.partition-2]
+        [Workers.worker-2.Peers.subnet-2]
         us-west-worker-2 = "127.0.0.1:30102"
         asia-south-worker-2 = "127.0.0.1:30202"
         storage = "127.0.0.1:31000"
@@ -118,7 +118,7 @@ AuthAdapter = "AuthPostgres"
     MaildirRoot = "/for/example/some/very/unique/path/Maildir/"
     CRDTLayerRoot = "/for/example/some/very/unique/path/crdt-layer/"
 
-        [Workers.worker-3.Peers.partition-3]
+        [Workers.worker-3.Peers.subnet-3]
         us-west-worker-3 = "127.0.0.1:30103"
         asia-south-worker-3 = "127.0.0.1:30203"
         storage = "127.0.0.1:31000"
@@ -137,17 +137,17 @@ KeyLoc = "/very/complicated/and/long/path/to/your/internal-storage-key.pem"
 MaildirRoot = "/for/example/some/very/unique/path/Maildir/"
 CRDTLayerRoot = "/for/example/some/very/unique/path/crdt-layer/"
 
-    [Storage.Peers.partition-1]
+    [Storage.Peers.subnet-1]
     eu-west-worker-1 = "127.0.0.1:30001"
     us-west-worker-1 = "127.0.0.1:30101"
     asia-south-worker-1 = "127.0.0.1:30201"
 
-    [Storage.Peers.partition-2]
+    [Storage.Peers.subnet-2]
     eu-west-worker-2 = "127.0.0.1:30002"
     us-west-worker-2 = "127.0.0.1:30102"
     asia-south-worker-2 = "127.0.0.1:30202"
 
-    [Storage.Peers.partition-3]
+    [Storage.Peers.subnet-3]
     eu-west-worker-3 = "127.0.0.1:30003"
     us-west-worker-3 = "127.0.0.1:30103"
     asia-south-worker-3 = "127.0.0.1:30203"

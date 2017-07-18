@@ -106,7 +106,7 @@ func NewService(name string, logger log.Logger, tlsConfig *tls.Config, config *c
 
 	return &service{
 		imapNode: &imap.IMAPNode{
-			Logger:             log.With(logger, "node", name),
+			Logger:             logger,
 			Lock:               &sync.RWMutex{},
 			MailboxStructure:   make(map[string]map[string]*crdt.ORSet),
 			MailboxContents:    make(map[string]map[string][]string),

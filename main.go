@@ -174,6 +174,9 @@ func main() {
 	// system based on passed command line flag.
 	if *distributorFlag {
 
+		// Add node name context to subsequent log outputs.
+		logger = log.With(logger, "node", conf.Distributor.Name)
+
 		// Run an HTTP server in a goroutine to expose this distributor's metrics.
 		go runPromHTTP(logger, conf.Distributor.PrometheusAddr)
 
@@ -190,7 +193,6 @@ func main() {
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to create public TLS config",
-				"node", conf.Distributor.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -200,7 +202,6 @@ func main() {
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to listen for public mail TLS connections",
-				"node", conf.Distributor.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -209,7 +210,6 @@ func main() {
 
 		level.Info(logger).Log(
 			"msg", "accepting public mail connections",
-			"node", conf.Distributor.Name,
 			"public_addr", conf.Distributor.PublicMailAddr,
 			"listen_addr", conf.Distributor.ListenMailAddr,
 		)
@@ -218,7 +218,6 @@ func main() {
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to create internal TLS config",
-				"node", conf.Distributor.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -230,7 +229,6 @@ func main() {
 		if err := distrS.Run(mailSocket, conf.IMAP.Greeting); err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to run",
-				"node", conf.Distributor.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -239,7 +237,7 @@ func main() {
 	} else if *workerFlag != "" {
 
 		// Check if supplied worker with workerName actually is configured.
-		workerConfig, ok := conf.Workers[*workerFlag]
+		wConfig, ok := conf.Workers[*workerFlag]
 		if !ok {
 
 			// Retrieve first valid worker ID to provide feedback.
@@ -254,85 +252,79 @@ func main() {
 			os.Exit(1)
 		}
 
+		// Add node name context to subsequent log outputs.
+		logger = log.With(logger, "node", wConfig.Name)
+
 		// Run an HTTP server in a goroutine to expose this worker's metrics.
-		go runPromHTTP(logger, workerConfig.PrometheusAddr)
+		go runPromHTTP(logger, wConfig.PrometheusAddr)
 
 		// Create all non-existent files and folders for
 		// all users this worker is responsible for.
-		err := createUserFiles(workerConfig.CRDTLayerRoot, workerConfig.MaildirRoot, workerConfig.UserStart, workerConfig.UserEnd)
+		err := createUserFiles(wConfig.CRDTLayerRoot, wConfig.MaildirRoot, wConfig.UserStart, wConfig.UserEnd)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to create user files",
-				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
 		}
 
-		tlsConfig, err := crypto.NewInternalTLSConfig(workerConfig.CertLoc, workerConfig.KeyLoc, conf.RootCertLoc)
+		tlsConfig, err := crypto.NewInternalTLSConfig(wConfig.CertLoc, wConfig.KeyLoc, conf.RootCertLoc)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to create internal TLS config",
-				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
 		}
 
 		var workerS worker.Service
-		workerS = worker.NewService(workerConfig.Name, logger, tlsConfig, conf)
+		workerS = worker.NewService(wConfig.Name, logger, tlsConfig, conf)
 
 		// Create needed synchronization socket used by gRPC.
-		syncSocket, err := net.Listen("tcp", workerConfig.ListenSyncAddr)
+		syncSocket, err := net.Listen("tcp", wConfig.ListenSyncAddr)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to open synchronization socket",
-				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
 		}
 		defer syncSocket.Close()
 
-		// Retrive name of the one synchronization subnet
-		// this worker is part of.
-		var subnetName string
-		for subnetName = range workerConfig.Peers {
+		// Retrive name and peers of the one synchronization
+		// subnet this worker is part of.
+		var subnet string
+		var peers map[string]string
+		for subnet, peers = range wConfig.Peers {
 			break
 		}
-
-		// TODO: CONTINUE HERE.
 
 		// Initialize channels for this node.
 		applyCRDTUpd := make(chan comm.Msg)
 		doneCRDTUpd := make(chan struct{})
 
-		// Construct path to receiving and sending CRDT logs for storage node.
-		recvCRDTLog := filepath.Join(workerConfig.CRDTLayerRoot, subnetName, "-receiving.log")
-		sendCRDTLog := filepath.Join(workerConfig.CRDTLayerRoot, subnetName, "-sending.log")
-		vclockLog := filepath.Join(workerConfig.CRDTLayerRoot, subnetName, "-vclock.log")
+		// Construct path to receiving and sending CRDT logs
+		// for the subnet this worker node is part of.
+		recvCRDTLog := filepath.Join(wConfig.CRDTLayerRoot, fmt.Sprintf("%s-receiving.log", subnet))
+		sendCRDTLog := filepath.Join(wConfig.CRDTLayerRoot, fmt.Sprintf("%s-sending.log", subnet))
+		vclockLog := filepath.Join(wConfig.CRDTLayerRoot, fmt.Sprintf("%s-vclock.log", subnet))
 
 		// Initialize receiving goroutine for sync operations.
-		incVClock, updVClock, err := comm.InitReceiver(logger, workerConfig.Name, workerConfig.ListenSyncAddr, workerConfig.PublicSyncAddr, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, []string{"storage"})
+		incVClock, updVClock, err := comm.InitReceiver(logger, wConfig.Name, wConfig.ListenSyncAddr, wConfig.PublicSyncAddr, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, peers)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to initialize receiver",
-				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
 		}
 
-		// Create subnet to distribute CRDT changes in.
-		curCRDTSubnet := make(map[string]string)
-		curCRDTSubnet["storage"] = conf.Storage.PublicSyncAddr
-
 		// Init sending part of CRDT communication and send messages in background.
-		syncSendChan, err := comm.InitSender(logger, workerConfig.Name, sendCRDTLog, tlsConfig, incVClock, updVClock, curCRDTSubnet)
+		syncSendChan, err := comm.InitSender(logger, wConfig.Name, sendCRDTLog, tlsConfig, incVClock, updVClock, peers)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to initialize sender",
-				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -346,18 +338,16 @@ func main() {
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to initilize service",
-				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
 		}
 
 		// Create socket for gRPC IMAP connections.
-		mailSocket, err := net.Listen("tcp", workerConfig.ListenMailAddr)
+		mailSocket, err := net.Listen("tcp", wConfig.ListenMailAddr)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to open socket for proxied mail traffic",
-				"node", workerConfig.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -366,9 +356,8 @@ func main() {
 
 		level.Info(logger).Log(
 			"msg", "accepting proxied mail connections",
-			"node", workerConfig.Name,
-			"public_addr", workerConfig.PublicMailAddr,
-			"listen_addr", workerConfig.ListenMailAddr,
+			"public_addr", wConfig.PublicMailAddr,
+			"listen_addr", wConfig.ListenMailAddr,
 		)
 
 		// Run main handler routine on gRPC-served IMAP socket.
@@ -376,12 +365,14 @@ func main() {
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to run Serve() on IMAP gRPC socket",
-				"node", workerConfig.Name,
 				"err", err,
 			)
 		}
 
 	} else if *storageFlag {
+
+		// Add node name context to subsequent log outputs.
+		logger = log.With(logger, "node", conf.Storage.Name)
 
 		// Run an HTTP server in a goroutine to expose this storage's metrics.
 		go runPromHTTP(logger, conf.Storage.PrometheusAddr)
@@ -390,7 +381,6 @@ func main() {
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to create internal TLS config",
-				"node", conf.Storage.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -404,7 +394,6 @@ func main() {
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to open synchronization socket",
-				"node", conf.Storage.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -413,52 +402,49 @@ func main() {
 
 		syncSendChans := make(map[string]chan comm.Msg)
 
-		for name, worker := range conf.Workers {
+		for subnet, peers := range conf.Storage.Peers {
 
-			// Create all non-existent files and folders on
-			// storage for all users the currently examined
-			// worker is responsible for.
-			if err := createUserFiles(conf.Storage.CRDTLayerRoot, conf.Storage.MaildirRoot, worker.UserStart, worker.UserEnd); err != nil {
-				level.Error(logger).Log(
-					"msg", "failed to create user files",
-					"node", conf.Storage.Name,
-					"err", err,
-				)
-				os.Exit(1)
+			for worker := range peers {
+
+				// Create all non-existent files and folders on
+				// storage for all users the currently examined
+				// worker is responsible for.
+				err := createUserFiles(conf.Storage.CRDTLayerRoot, conf.Storage.MaildirRoot, conf.Workers[worker].UserStart, conf.Workers[worker].UserEnd)
+				if err != nil {
+					level.Error(logger).Log(
+						"msg", "failed to create user files",
+						"err", err,
+					)
+					os.Exit(1)
+				}
 			}
 
 			// Initialize channels for this node.
 			applyCRDTUpd := make(chan comm.Msg)
 			doneCRDTUpd := make(chan struct{})
 
-			// Construct path to receiving and sending CRDT logs for
-			// current worker node.
-			recvCRDTLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("receiving-%s.log", name))
-			sendCRDTLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("sending-%s.log", name))
-			vclockLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("vclock-%s.log", name))
+			// Construct path to receiving and sending CRDT logs
+			// for the current subnet.
+			recvCRDTLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("%s-receiving.log", subnet))
+			sendCRDTLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("%s-sending.log", subnet))
+			vclockLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("%s-vclock.log", subnet))
 
 			// Initialize a receiving goroutine for sync operations
 			// for each worker node.
-			incVClock, updVClock, err := comm.InitReceiver(logger, conf.Storage.Name, conf.Storage.ListenSyncAddr, conf.Storage.PublicSyncAddr, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, []string{name})
+			incVClock, updVClock, err := comm.InitReceiver(logger, conf.Storage.Name, conf.Storage.ListenSyncAddr, conf.Storage.PublicSyncAddr, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, peers)
 			if err != nil {
 				level.Error(logger).Log(
 					"msg", "failed to initialize receiver",
-					"node", conf.Storage.Name,
 					"err", err,
 				)
 				os.Exit(1)
 			}
 
-			// Create subnet to distribute CRDT changes in.
-			curCRDTSubnet := make(map[string]string)
-			curCRDTSubnet[name] = worker.PublicSyncAddr
-
 			// Init sending part of CRDT communication and send messages in background.
-			syncSendChans[name], err = comm.InitSender(logger, conf.Storage.Name, sendCRDTLog, tlsConfig, incVClock, updVClock, curCRDTSubnet)
+			syncSendChans[subnet], err = comm.InitSender(logger, conf.Storage.Name, sendCRDTLog, tlsConfig, incVClock, updVClock, peers)
 			if err != nil {
 				level.Error(logger).Log(
 					"msg", "failed to initialize sender",
-					"node", conf.Storage.Name,
 					"err", err,
 				)
 				os.Exit(1)
@@ -473,7 +459,6 @@ func main() {
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to initilize service",
-				"node", conf.Storage.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -484,7 +469,6 @@ func main() {
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to open socket for proxied mail traffic",
-				"node", conf.Storage.Name,
 				"err", err,
 			)
 			os.Exit(1)
@@ -493,7 +477,6 @@ func main() {
 
 		level.Info(logger).Log(
 			"msg", "accepting proxied mail connections",
-			"node", conf.Storage.Name,
 			"public_addr", conf.Storage.PublicMailAddr,
 			"listen_addr", conf.Storage.ListenMailAddr,
 		)
@@ -503,7 +486,6 @@ func main() {
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to run Serve() on IMAP gRPC socket",
-				"node", conf.Storage.Name,
 				"err", err,
 			)
 		}

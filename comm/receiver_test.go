@@ -243,7 +243,11 @@ func TestApplyStoredMsgs(t *testing.T) {
 	assert.Nilf(t, err, "failed to open temporary vector clock file: %v", err)
 
 	// Simulate nodes.
-	nodes := []string{"other-node-1", "other-node-2", "other-node-3"}
+	nodes := map[string]string{
+		"other-node-1": "10.0.0.1",
+		"other-node-2": "10.10.0.23",
+		"other-node-3": "10.255.0.91",
+	}
 
 	// Bundle information in Receiver struct.
 	recv := &Receiver{
