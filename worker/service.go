@@ -224,13 +224,14 @@ func (s *service) Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.C
 
 	// Create new connection tracking object.
 	s.sessions[clientCtx.ClientID] = &imap.Session{
-		State:           imap.Authenticated,
-		ClientID:        clientCtx.ClientID,
-		UserName:        clientCtx.UserName,
-		RespWorker:      clientCtx.RespWorker,
-		UserCRDTPath:    filepath.Join(s.config.CRDTLayerRoot, clientCtx.UserName),
-		UserMaildirPath: filepath.Join(s.config.MaildirRoot, clientCtx.UserName),
-		AppendInProg:    nil,
+		State:             imap.Authenticated,
+		ClientID:          clientCtx.ClientID,
+		UserName:          clientCtx.UserName,
+		RespWorker:        clientCtx.RespWorker,
+		StorageSubnetChan: nil,
+		UserCRDTPath:      filepath.Join(s.config.CRDTLayerRoot, clientCtx.UserName),
+		UserMaildirPath:   filepath.Join(s.config.MaildirRoot, clientCtx.UserName),
+		AppendInProg:      nil,
 	}
 
 	return &imap.Confirmation{

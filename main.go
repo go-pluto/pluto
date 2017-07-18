@@ -400,11 +400,16 @@ func main() {
 		}
 		defer syncSocket.Close()
 
+		peersToSubnet := make(map[string]string)
 		syncSendChans := make(map[string]chan comm.Msg)
 
 		for subnet, peers := range conf.Storage.Peers {
 
 			for worker := range peers {
+
+				// Build reverse mapping from peer name
+				// to subnet this peer is part of.
+				peersToSubnet[worker] = subnet
 
 				// Create all non-existent files and folders on
 				// storage for all users the currently examined
@@ -455,7 +460,7 @@ func main() {
 		}
 
 		// Run required initialization code for storage.
-		err = storageS.Init(syncSendChans)
+		err = storageS.Init(peersToSubnet, syncSendChans)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to initilize service",

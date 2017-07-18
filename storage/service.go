@@ -26,6 +26,7 @@ type service struct {
 	imapNode      *imap.IMAPNode
 	tlsConfig     *tls.Config
 	config        config.Storage
+	peersToSubnet map[string]string
 	sessions      map[string]*imap.Session
 	IMAPNodeGRPC  *grpc.Server
 	SyncSendChans map[string]chan comm.Msg
@@ -38,7 +39,7 @@ type service struct {
 type Service interface {
 
 	// Init initializes node-type specific fields.
-	Init(syncSendChans map[string]chan comm.Msg) error
+	Init(peersToSubnet map[string]string, syncSendChans map[string]chan comm.Msg) error
 
 	// ApplyCRDTUpd receives strings representing CRDT
 	// update operations from receiver and executes them.
@@ -115,6 +116,7 @@ func NewService(name string, logger log.Logger, tlsConfig *tls.Config, config *c
 		},
 		tlsConfig:     tlsConfig,
 		config:        config.Storage,
+		peersToSubnet: make(map[string]string),
 		sessions:      make(map[string]*imap.Session),
 		SyncSendChans: make(map[string]chan comm.Msg),
 	}
@@ -123,7 +125,7 @@ func NewService(name string, logger log.Logger, tlsConfig *tls.Config, config *c
 // Init executes functions organizing files and folders
 // needed for this node and passes on all synchronization
 // channels to the service.
-func (s *service) Init(syncSendChans map[string]chan comm.Msg) error {
+func (s *service) Init(peersToSubnet map[string]string, syncSendChans map[string]chan comm.Msg) error {
 
 	// Find all Maildir and CRDT files for this node.
 	err := s.findFiles()
@@ -131,9 +133,14 @@ func (s *service) Init(syncSendChans map[string]chan comm.Msg) error {
 		return err
 	}
 
-	// Deep-copy sync channels to workers.
-	for name, node := range syncSendChans {
-		s.SyncSendChans[name] = node
+	// Deep-copy mapping from peer name to subnet.
+	for peer, subnet := range peersToSubnet {
+		s.peersToSubnet[peer] = subnet
+	}
+
+	// Deep-copy sync channels to subnets.
+	for subnet, channel := range syncSendChans {
+		s.SyncSendChans[subnet] = channel
 	}
 
 	// Define options for an empty gRPC server.
@@ -226,13 +233,14 @@ func (s *service) Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.C
 
 	// Create new connection tracking object.
 	s.sessions[clientCtx.ClientID] = &imap.Session{
-		State:           imap.Authenticated,
-		ClientID:        clientCtx.ClientID,
-		UserName:        clientCtx.UserName,
-		RespWorker:      clientCtx.RespWorker,
-		UserCRDTPath:    filepath.Join(s.config.CRDTLayerRoot, clientCtx.UserName),
-		UserMaildirPath: filepath.Join(s.config.MaildirRoot, clientCtx.UserName),
-		AppendInProg:    nil,
+		State:             imap.Authenticated,
+		ClientID:          clientCtx.ClientID,
+		UserName:          clientCtx.UserName,
+		RespWorker:        clientCtx.RespWorker,
+		StorageSubnetChan: s.SyncSendChans[s.peersToSubnet[clientCtx.RespWorker]],
+		UserCRDTPath:      filepath.Join(s.config.CRDTLayerRoot, clientCtx.UserName),
+		UserMaildirPath:   filepath.Join(s.config.MaildirRoot, clientCtx.UserName),
+		AppendInProg:      nil,
 	}
 
 	return &imap.Confirmation{
@@ -262,10 +270,6 @@ func (s *service) Select(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
 
-	// Retrieve correct channel to send downstream
-	// updates from this node to.
-	syncChan := s.SyncSendChans[sess.RespWorker]
-
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
@@ -275,7 +279,7 @@ func (s *service) Select(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Select(sess, req, syncChan)
+	reply, err := s.imapNode.Select(sess, req, sess.StorageSubnetChan)
 
 	return reply, err
 }
@@ -290,10 +294,6 @@ func (s *service) Create(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
 
-	// Retrieve correct channel to send downstream
-	// updates from this node to.
-	syncChan := s.SyncSendChans[sess.RespWorker]
-
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
@@ -303,7 +303,7 @@ func (s *service) Create(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Create(sess, req, syncChan)
+	reply, err := s.imapNode.Create(sess, req, sess.StorageSubnetChan)
 
 	return reply, err
 }
@@ -317,10 +317,6 @@ func (s *service) Delete(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
 
-	// Retrieve correct channel to send downstream
-	// updates from this node to.
-	syncChan := s.SyncSendChans[sess.RespWorker]
-
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
@@ -330,7 +326,7 @@ func (s *service) Delete(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Delete(sess, req, syncChan)
+	reply, err := s.imapNode.Delete(sess, req, sess.StorageSubnetChan)
 
 	return reply, err
 }
@@ -345,10 +341,6 @@ func (s *service) List(ctx context.Context, comd *imap.Command) (*imap.Reply, er
 	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
 
-	// Retrieve correct channel to send downstream
-	// updates from this node to.
-	syncChan := s.SyncSendChans[sess.RespWorker]
-
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
@@ -358,7 +350,7 @@ func (s *service) List(ctx context.Context, comd *imap.Command) (*imap.Reply, er
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.List(sess, req, syncChan)
+	reply, err := s.imapNode.List(sess, req, sess.StorageSubnetChan)
 
 	return reply, err
 }
@@ -405,12 +397,8 @@ func (s *service) AppendEnd(ctx context.Context, mailFile *imap.MailFile) (*imap
 		}, fmt.Errorf("no APPEND in progress for client %s but AppendEnd was invoked", mailFile.ClientID)
 	}
 
-	// Retrieve correct channel to send downstream
-	// updates from this node to.
-	syncChan := s.SyncSendChans[sess.RespWorker]
-
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.AppendEnd(sess, mailFile.Content, syncChan)
+	reply, err := s.imapNode.AppendEnd(sess, mailFile.Content, sess.StorageSubnetChan)
 
 	return reply, err
 }
@@ -445,10 +433,6 @@ func (s *service) Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply,
 	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
 
-	// Retrieve correct channel to send downstream
-	// updates from this node to.
-	syncChan := s.SyncSendChans[sess.RespWorker]
-
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
@@ -458,7 +442,7 @@ func (s *service) Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply,
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Expunge(sess, req, syncChan)
+	reply, err := s.imapNode.Expunge(sess, req, sess.StorageSubnetChan)
 
 	return reply, err
 }
@@ -474,10 +458,6 @@ func (s *service) Store(ctx context.Context, comd *imap.Command) (*imap.Reply, e
 	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
 
-	// Retrieve correct channel to send downstream
-	// updates from this node to.
-	syncChan := s.SyncSendChans[sess.RespWorker]
-
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
 	if err != nil {
@@ -487,7 +467,7 @@ func (s *service) Store(ctx context.Context, comd *imap.Command) (*imap.Reply, e
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Store(sess, req, syncChan)
+	reply, err := s.imapNode.Store(sess, req, sess.StorageSubnetChan)
 
 	return reply, err
 }

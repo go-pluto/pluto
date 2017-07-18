@@ -1,6 +1,9 @@
 package imap
 
-import "github.com/go-pluto/maildir"
+import (
+	"github.com/go-pluto/maildir"
+	"github.com/go-pluto/pluto/comm"
+)
 
 // Constants
 
@@ -23,14 +26,15 @@ type State int
 // and performing the actual IMAP operations for an
 // authenticated client.
 type Session struct {
-	State           State
-	ClientID        string
-	UserName        string
-	RespWorker      string
-	UserCRDTPath    string
-	UserMaildirPath string
-	SelectedMailbox string
-	AppendInProg    *AppendInProg
+	State             State
+	ClientID          string
+	UserName          string
+	RespWorker        string
+	StorageSubnetChan chan comm.Msg
+	UserCRDTPath      string
+	UserMaildirPath   string
+	SelectedMailbox   string
+	AppendInProg      *AppendInProg
 }
 
 // AppendInProg captures the important environment
