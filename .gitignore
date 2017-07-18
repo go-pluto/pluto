@@ -27,6 +27,7 @@ _testmain.go
 private/
 pluto
 config.toml
+config-us.toml
 test-config-aws.toml
 users.txt
 .env
