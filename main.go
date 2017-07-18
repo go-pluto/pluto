@@ -23,6 +23,7 @@ import (
 	"github.com/go-pluto/pluto/storage"
 	"github.com/go-pluto/pluto/worker"
 	"github.com/satori/go.uuid"
+	"google.golang.org/grpc/grpclog"
 )
 
 // Functions
@@ -54,6 +55,9 @@ func initAuthenticator(config *config.Config) (distributor.Authenticator, error)
 // initLogger initializes a JSON gokit-logger set
 // to the according log level supplied via cli flag.
 func initLogger(loglevel string) log.Logger {
+
+	// Specify verbosity of gRPC components (only ERROR).
+	grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, ioutil.Discard, os.Stdout))
 
 	logger := log.NewJSONLogger(log.NewSyncWriter(os.Stdout))
 	logger = log.With(logger,
@@ -411,16 +415,20 @@ func main() {
 				// to subnet this peer is part of.
 				peersToSubnet[worker] = subnet
 
-				// Create all non-existent files and folders on
-				// storage for all users the currently examined
-				// worker is responsible for.
-				err := createUserFiles(conf.Storage.CRDTLayerRoot, conf.Storage.MaildirRoot, conf.Workers[worker].UserStart, conf.Workers[worker].UserEnd)
-				if err != nil {
-					level.Error(logger).Log(
-						"msg", "failed to create user files",
-						"err", err,
-					)
-					os.Exit(1)
+				c, found := conf.Workers[worker]
+				if found {
+
+					// Create all non-existent files and folders on
+					// storage for all users the currently examined
+					// worker is responsible for.
+					err := createUserFiles(conf.Storage.CRDTLayerRoot, conf.Storage.MaildirRoot, c.UserStart, c.UserEnd)
+					if err != nil {
+						level.Error(logger).Log(
+							"msg", "failed to create user files",
+							"err", err,
+						)
+						os.Exit(1)
+					}
 				}
 			}
 

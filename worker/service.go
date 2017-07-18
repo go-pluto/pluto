@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"crypto/tls"
-	"io/ioutil"
 	"path/filepath"
 
 	"github.com/go-kit/kit/log"
@@ -17,7 +16,6 @@ import (
 	"github.com/go-pluto/pluto/imap"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
 )
 
 // Structs
@@ -100,9 +98,6 @@ type Service interface {
 // up a new worker node, runs initialization code, and returns
 // a service struct for this node type wrapping all information.
 func NewService(name string, logger log.Logger, tlsConfig *tls.Config, config *config.Config) Service {
-
-	// Specify verbosity of gRPC components (no INFO).
-	grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, os.Stdout, os.Stdout))
 
 	return &service{
 		imapNode: &imap.IMAPNode{
