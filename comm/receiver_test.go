@@ -274,7 +274,7 @@ func TestApplyStoredMsgs(t *testing.T) {
 	assert.Nilf(t, err, "expected resetting of position in vector clock file not to fail but received: %v", err)
 
 	// Set vector clock entries to 0.
-	for _, node := range nodes {
+	for node := range nodes {
 		recv.vclock[node] = 0
 	}
 
