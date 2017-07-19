@@ -22,7 +22,7 @@ import (
 
 // Structs
 
-// Metrics has all metrics exposed by the distributor.
+// Metrics has all metrics exposed by a distributor.
 type Metrics struct {
 	Commands    metrics.Counter
 	Connections metrics.Counter

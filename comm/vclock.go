@@ -11,9 +11,9 @@ import (
 	"github.com/go-kit/kit/log/level"
 )
 
-// SaveVClockEntries writes current status of vector
-// clock to log file to recover from later. It expects to
-// be the only goroutine currently operating on receiver.
+// SaveVClockEntries writes the current status of vector
+// clock to log file. It expects to be the only goroutine
+// currently operating on the log file.
 func (recv *Receiver) SaveVClockEntries() error {
 
 	vclockString := ""
@@ -38,13 +38,19 @@ func (recv *Receiver) SaveVClockEntries() error {
 	// Write vclock string to file.
 	newNumOfBytes, err := recv.vclockLog.WriteString(vclockString)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	// Truncate file to just written content.
 	err = recv.vclockLog.Truncate(int64(newNumOfBytes))
 	if err != nil {
-		return nil
+		return err
+	}
+
+	// Make sure to write to stable storage before returning.
+	err = recv.vclockLog.Sync()
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -108,7 +114,8 @@ func (recv *Receiver) IncVClockEntry() {
 			recv.lock.Lock()
 
 			// Check if received node name exists in map.
-			if _, exists := recv.vclock[entry]; exists {
+			_, exists := recv.vclock[entry]
+			if exists {
 
 				// If it does, increment its vector clock
 				// value by one.

@@ -14,11 +14,18 @@ import (
 	"github.com/go-pluto/pluto/config"
 	"github.com/go-pluto/pluto/crdt"
 	"github.com/go-pluto/pluto/imap"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
 // Structs
+
+// Metrics has all metrics exposed by a worker.
+type Metrics struct {
+	Labels      []string
+	VectorClock *prometheus.CounterVec
+}
 
 type service struct {
 	imapNode     *imap.IMAPNode
