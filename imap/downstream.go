@@ -192,43 +192,67 @@ func (node *IMAPNode) ApplyDelete(msg comm.Msg) {
 		os.Exit(1)
 	}
 
-	// Remove CRDT from structure map if present.
-	if _, found := node.MailboxStructure[deleteUpd.User][deleteUpd.Mailbox]; found {
-		delete(node.MailboxStructure[deleteUpd.User], deleteUpd.Mailbox)
-	}
+	if userMainCRDT.Lookup(deleteUpd.Mailbox) {
 
-	// Remove slice from contents map if present.
-	if _, found := node.MailboxContents[deleteUpd.User][deleteUpd.Mailbox]; found {
-		delete(node.MailboxContents[deleteUpd.User], deleteUpd.Mailbox)
-	}
+		// Concurrent CREATE operations have put more instances
+		// of this mailbox into the user's main structure CRDT.
+		// Do not remove the underlying files. Instead, delete
+		// the mail files sent by the source node as representing
+		// the folder's content at the time of DELETE issuance.
 
-	// If it exists in file system,
-	// remove CRDT file of mailbox.
-	_, err = os.Stat(delMailboxCRDTPath)
-	if err == nil {
+		// TODO: CONTINUE HERE.
+		// TODO: AMEND MESSAGE SENT BY SOURCE DELETE INVOCATION.
 
-		err = os.Remove(delMailboxCRDTPath)
-		if err != nil {
-			level.Error(node.Logger).Log(
-				"msg", "failed to remove CRDT file of mailbox",
-				"err", err,
-			)
-			os.Exit(1)
+		// Remove slice from contents map if present.
+		// if _, found := node.MailboxContents[deleteUpd.User][deleteUpd.Mailbox]; found {
+		// 	delete(node.MailboxContents[deleteUpd.User], deleteUpd.Mailbox)
+		// }
+
+	} else {
+
+		// This DELETE operation removed the entire presence of
+		// this folder from the user's mailbox. Thus, file system
+		// clean up of files and folders, and internal state
+		// representation manipulation is due.
+
+		// Remove CRDT from structure map if present.
+		if _, found := node.MailboxStructure[deleteUpd.User][deleteUpd.Mailbox]; found {
+			delete(node.MailboxStructure[deleteUpd.User], deleteUpd.Mailbox)
 		}
-	}
 
-	// Remove files associated with deleted mailbox
-	// from stable storage, if present.
-	_, err = os.Stat(delMaildir)
-	if err == nil {
+		// Remove slice from contents map if present.
+		if _, found := node.MailboxContents[deleteUpd.User][deleteUpd.Mailbox]; found {
+			delete(node.MailboxContents[deleteUpd.User], deleteUpd.Mailbox)
+		}
 
-		err = maildir.Dir(delMaildir).Remove()
-		if err != nil {
-			level.Error(node.Logger).Log(
-				"msg", "failed to remove Maildir",
-				"err", err,
-			)
-			os.Exit(1)
+		// If it exists in file system,
+		// remove CRDT file of mailbox.
+		_, err = os.Stat(delMailboxCRDTPath)
+		if err == nil {
+
+			err = os.Remove(delMailboxCRDTPath)
+			if err != nil {
+				level.Error(node.Logger).Log(
+					"msg", "failed to remove CRDT file of mailbox",
+					"err", err,
+				)
+				os.Exit(1)
+			}
+		}
+
+		// Remove files associated with deleted mailbox
+		// from stable storage, if present.
+		_, err = os.Stat(delMaildir)
+		if err == nil {
+
+			err = maildir.Dir(delMaildir).Remove()
+			if err != nil {
+				level.Error(node.Logger).Log(
+					"msg", "failed to remove Maildir",
+					"err", err,
+				)
+				os.Exit(1)
+			}
 		}
 	}
 }
