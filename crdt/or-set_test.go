@@ -93,7 +93,7 @@ func TestInitORSetFromFile(t *testing.T) {
 	assert.Nilf(t, err, "marshalled5: expected InitORSetFromFile() not to fail but got: %v", err)
 
 	// Check correct unmarshalling.
-	assert.Equalf(t, 3, len(s.elements), "marshalled5: expected exactly three elements in set but found: %d", len(s.elements))
+	assert.Equalf(t, 3, len(s.Elements), "marshalled5: expected exactly three elements in set but found: %d", len(s.Elements))
 	assert.Equalf(t, true, s.Lookup("abc"), "expected 'abc' to be in set but Lookup() returns false")
 	assert.Equalf(t, true, s.Lookup("def"), "expected 'def' to be in set but Lookup() returns false")
 	assert.Equalf(t, true, s.Lookup("ghi"), "expected 'ghi' to be in set but Lookup() returns false")
@@ -104,7 +104,7 @@ func TestInitORSetFromFile(t *testing.T) {
 func TestWriteORSetToFile(t *testing.T) {
 
 	s := &ORSet{
-		elements: make(map[string]string),
+		Elements: make(map[string]string),
 	}
 
 	// Assign a corresponding file.
@@ -204,8 +204,8 @@ func TestLookup(t *testing.T) {
 	}
 
 	// Make sure, set is initially empty.
-	if len(s.elements) != 0 {
-		t.Fatalf("expected set list to be empty initially, but len(s.elements) returned %d", len(s.elements))
+	if len(s.Elements) != 0 {
+		t.Fatalf("expected set list to be empty initially, but len(s.Elements) returned %d", len(s.Elements))
 	}
 
 	// Set values in internal map and check
@@ -216,7 +216,7 @@ func TestLookup(t *testing.T) {
 		t.Fatalf("expected '%v' not to be in set but Lookup() returns true.", v1)
 	}
 
-	s.elements["10000000-a071-4227-9e63-a4b0ee84688f"] = v1
+	s.Elements["10000000-a071-4227-9e63-a4b0ee84688f"] = v1
 
 	if s.Lookup(v1) != true {
 		t.Fatalf("expected '%v' to be in set but Lookup() returns false.", v1)
@@ -227,7 +227,7 @@ func TestLookup(t *testing.T) {
 		t.Fatalf("expected '%v' not to be in set but Lookup() returns true.", v2)
 	}
 
-	s.elements["20000000-a071-4227-9e63-a4b0ee84688f"] = v2
+	s.Elements["20000000-a071-4227-9e63-a4b0ee84688f"] = v2
 
 	if s.Lookup(v2) != true {
 		t.Fatalf("expected '%v' to be in set but Lookup() returns false.", v2)
@@ -238,7 +238,7 @@ func TestLookup(t *testing.T) {
 		t.Fatalf("expected '%v' not to be in set but Lookup() returns true.", v3)
 	}
 
-	s.elements["30000000-a071-4227-9e63-a4b0ee84688f"] = v3
+	s.Elements["30000000-a071-4227-9e63-a4b0ee84688f"] = v3
 
 	if s.Lookup(v3) != true {
 		t.Fatalf("expected '%v' to be in set but Lookup() returns false.", v3)
@@ -249,7 +249,7 @@ func TestLookup(t *testing.T) {
 		t.Fatalf("expected '%v' not to be in set but Lookup() returns true.", v4)
 	}
 
-	s.elements["40000000-a071-4227-9e63-a4b0ee84688f"] = v4
+	s.Elements["40000000-a071-4227-9e63-a4b0ee84688f"] = v4
 
 	if s.Lookup(v4) != true {
 		t.Fatalf("expected '%v' to be in set but Lookup() returns false.", v4)
@@ -260,7 +260,7 @@ func TestLookup(t *testing.T) {
 		t.Fatalf("expected '%v' not to be in set but Lookup() returns true.", v5)
 	}
 
-	s.elements["50000000-a071-4227-9e63-a4b0ee84688f"] = v5
+	s.Elements["50000000-a071-4227-9e63-a4b0ee84688f"] = v5
 
 	if s.Lookup(v5) != true {
 		t.Fatalf("expected '%v' to be in set but Lookup() returns false.", v5)
@@ -271,7 +271,7 @@ func TestLookup(t *testing.T) {
 		t.Fatalf("expected '%v' not to be in set but Lookup() returns true.", v6)
 	}
 
-	s.elements["60000000-a071-4227-9e63-a4b0ee84688f"] = v6
+	s.Elements["60000000-a071-4227-9e63-a4b0ee84688f"] = v6
 
 	if s.Lookup(v6) != true {
 		t.Fatalf("expected '%v' to be in set but Lookup() returns false.", v6)
@@ -282,7 +282,7 @@ func TestLookup(t *testing.T) {
 		t.Fatalf("expected '%v' not to be in set but Lookup() returns true.", v7)
 	}
 
-	s.elements["70000000-a071-4227-9e63-a4b0ee84688f"] = v7
+	s.Elements["70000000-a071-4227-9e63-a4b0ee84688f"] = v7
 
 	if s.Lookup(v7) != true {
 		t.Fatalf("expected '%v' to be in set but Lookup() returns false.", v7)
@@ -293,7 +293,7 @@ func TestLookup(t *testing.T) {
 		t.Fatalf("expected '%v' not to be in set but Lookup() returns true.", v8)
 	}
 
-	s.elements["80000000-a071-4227-9e63-a4b0ee84688f"] = v8
+	s.Elements["80000000-a071-4227-9e63-a4b0ee84688f"] = v8
 
 	if s.Lookup(v8) != true {
 		t.Fatalf("expected '%v' to be in set but Lookup() returns false.", v8)
@@ -303,17 +303,17 @@ func TestLookup(t *testing.T) {
 func benchmarkLookup(b *testing.B, e string) {
 
 	s := &ORSet{
-		elements: make(map[string]string),
+		Elements: make(map[string]string),
 	}
 
-	s.elements["10000000-a071-4227-9e63-a4b0ee84688f"] = v1
-	s.elements["20000000-a071-4227-9e63-a4b0ee84688f"] = v2
-	s.elements["30000000-a071-4227-9e63-a4b0ee84688f"] = v3
-	s.elements["40000000-a071-4227-9e63-a4b0ee84688f"] = v4
-	s.elements["50000000-a071-4227-9e63-a4b0ee84688f"] = v5
-	s.elements["60000000-a071-4227-9e63-a4b0ee84688f"] = v6
-	s.elements["70000000-a071-4227-9e63-a4b0ee84688f"] = v7
-	s.elements["80000000-a071-4227-9e63-a4b0ee84688f"] = v8
+	s.Elements["10000000-a071-4227-9e63-a4b0ee84688f"] = v1
+	s.Elements["20000000-a071-4227-9e63-a4b0ee84688f"] = v2
+	s.Elements["30000000-a071-4227-9e63-a4b0ee84688f"] = v3
+	s.Elements["40000000-a071-4227-9e63-a4b0ee84688f"] = v4
+	s.Elements["50000000-a071-4227-9e63-a4b0ee84688f"] = v5
+	s.Elements["60000000-a071-4227-9e63-a4b0ee84688f"] = v6
+	s.Elements["70000000-a071-4227-9e63-a4b0ee84688f"] = v7
+	s.Elements["80000000-a071-4227-9e63-a4b0ee84688f"] = v8
 
 	for i := 0; i < b.N; i++ {
 		s.Lookup(e)
@@ -349,13 +349,13 @@ func BenchmarkLookup8(b *testing.B) { benchmarkLookup(b, v8) }
 func TestAddEffect(t *testing.T) {
 
 	s := &ORSet{
-		elements: make(map[string]string),
+		Elements: make(map[string]string),
 	}
 
 	// Set and test keys.
 
 	// k1
-	if value, found := s.elements[k1]; found {
+	if value, found := s.Elements[k1]; found {
 		t.Fatalf("expected '%s' not to be an active map key but found '%v' at that place.", k1, value)
 	}
 
@@ -364,12 +364,12 @@ func TestAddEffect(t *testing.T) {
 		t.Fatalf("expected AddEffect() not to fail but got: %v", err)
 	}
 
-	if value, found := s.elements[k1]; !found {
+	if value, found := s.Elements[k1]; !found {
 		t.Fatalf("expected '%s' to be an active map key and contain '%v' as value but found '%v' at that place.", k1, v1, value)
 	}
 
 	// k2
-	if value, found := s.elements[k2]; found {
+	if value, found := s.Elements[k2]; found {
 		t.Fatalf("expected '%s' not to be an active map key but found '%v' at that place.", k2, value)
 	}
 
@@ -378,12 +378,12 @@ func TestAddEffect(t *testing.T) {
 		t.Fatalf("expected AddEffect() not to fail but got: %v", err)
 	}
 
-	if value, found := s.elements[k2]; !found {
+	if value, found := s.Elements[k2]; !found {
 		t.Fatalf("expected '%s' to be an active map key and contain '%v' as value but found '%v' at that place.", k2, v3, value)
 	}
 
 	// k3
-	if value, found := s.elements[k3]; found {
+	if value, found := s.Elements[k3]; found {
 		t.Fatalf("expected '%s' not to be an active map key but found '%v' at that place.", k3, value)
 	}
 
@@ -392,7 +392,7 @@ func TestAddEffect(t *testing.T) {
 		t.Fatalf("expected AddEffect() not to fail but got: %v", err)
 	}
 
-	if value, found := s.elements[k3]; !found {
+	if value, found := s.Elements[k3]; !found {
 		t.Fatalf("expected '%s' to be an active map key and contain '%v' as value but found '%v' at that place.", k3, v5, value)
 	}
 }
@@ -459,7 +459,7 @@ func TestAdd(t *testing.T) {
 	err = s.Add(v2, func(args ...string) { msg4 = args })
 	assert.Nilf(t, err, "expected Add() to return nil error but received: %v", err)
 
-	assert.Equalf(t, 4, len(s.elements), "expected set to contain exactly 4 elements but found %d instead", len(s.elements))
+	assert.Equalf(t, 4, len(s.Elements), "expected set to contain exactly 4 elements but found %d instead", len(s.Elements))
 	assert.Equalf(t, msg1[0], msg4[0], "expected values of msg1 and msg4 to be equal but '%s' != '%s'", msg1[0], msg4[0])
 	assert.NotEqualf(t, msg1[1], msg4[1], "expected tags of msg1 and msg4 not to be equal but '%s' == '%s'", msg1[1], msg4[1])
 }
@@ -469,7 +469,7 @@ func TestAdd(t *testing.T) {
 func TestRemoveEffect(t *testing.T) {
 
 	s := &ORSet{
-		elements: make(map[string]string),
+		Elements: make(map[string]string),
 	}
 
 	// Create an empty remove set.
@@ -513,8 +513,8 @@ func TestRemoveEffect(t *testing.T) {
 		t.Fatalf("expected RemoveEffect() not to fail but got: %v", err)
 	}
 
-	if len(s.elements) != 6 {
-		t.Fatalf("expected 6 elements in set but only found %d.", len(s.elements))
+	if len(s.Elements) != 6 {
+		t.Fatalf("expected 6 elements in set but only found %d.", len(s.Elements))
 	}
 
 	if s.Lookup(v2) != true {
@@ -538,8 +538,8 @@ func TestRemoveEffect(t *testing.T) {
 		t.Fatalf("expected RemoveEffect() not to fail but got: %v", err)
 	}
 
-	if len(s.elements) != 6 {
-		t.Fatalf("expected 6 elements in set but only found %d.", len(s.elements))
+	if len(s.Elements) != 6 {
+		t.Fatalf("expected 6 elements in set but only found %d.", len(s.Elements))
 	}
 
 	if s.Lookup(v2) != true {
@@ -564,8 +564,8 @@ func TestRemoveEffect(t *testing.T) {
 		t.Fatalf("expected RemoveEffect() not to fail but got: %v", err)
 	}
 
-	if len(s.elements) != 5 {
-		t.Fatalf("expected 5 elements in set but only found %d.", len(s.elements))
+	if len(s.Elements) != 5 {
+		t.Fatalf("expected 5 elements in set but only found %d.", len(s.Elements))
 	}
 
 	if s.Lookup(v2) != true {
@@ -593,8 +593,8 @@ func TestRemoveEffect(t *testing.T) {
 		t.Fatalf("expected RemoveEffect() not to fail but got: %v", err)
 	}
 
-	if len(s.elements) != 2 {
-		t.Fatalf("expected 2 elements in set but only found %d.", len(s.elements))
+	if len(s.Elements) != 2 {
+		t.Fatalf("expected 2 elements in set but only found %d.", len(s.Elements))
 	}
 
 	if s.Lookup(v2) == true {
@@ -621,8 +621,8 @@ func TestRemoveEffect(t *testing.T) {
 		t.Fatalf("expected RemoveEffect() not to fail but got: %v", err)
 	}
 
-	if len(s.elements) != 2 {
-		t.Fatalf("expected 2 elements in set but only found %d.", len(s.elements))
+	if len(s.Elements) != 2 {
+		t.Fatalf("expected 2 elements in set but only found %d.", len(s.Elements))
 	}
 
 	if s.Lookup(v2) == true {
@@ -680,7 +680,7 @@ func TestRemove(t *testing.T) {
 	err = s.Remove(v3, func(args ...string) { msg1 = args })
 	assert.Nilf(t, err, "expected Remove() to return nil error but received: %v", err)
 
-	assert.Equalf(t, 5, len(s.elements), "expected 5 elements in set but only found %d", len(s.elements))
+	assert.Equalf(t, 5, len(s.Elements), "expected 5 elements in set but only found %d", len(s.Elements))
 
 	assert.Equalf(t, true, s.Lookup(v2), "expected '%v' to be in set but Lookup() returns false", v2)
 	assert.Equalf(t, false, s.Lookup(v3), "expected '%v' not to be in set but Lookup() returns true", v3)
@@ -692,7 +692,7 @@ func TestRemove(t *testing.T) {
 	err = s.Remove(v2, func(args ...string) { msg2 = args })
 	assert.Nilf(t, err, "expected Remove() to return nil error but received: %v", err)
 
-	assert.Equalf(t, 1, len(s.elements), "expected 1 element in set but found %d", len(s.elements))
+	assert.Equalf(t, 1, len(s.Elements), "expected 1 element in set but found %d", len(s.Elements))
 	assert.Equalf(t, false, s.Lookup(v2), "expected '%v' not to be in set but Lookup() returns true", v2)
 	assert.Equalf(t, false, s.Lookup(v3), "expected '%v' not to be in set but Lookup() returns true", v3)
 	assert.Equalf(t, true, s.Lookup(v4), "expected '%v' to be in set but Lookup() returns false", v4)

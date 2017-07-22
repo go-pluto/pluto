@@ -191,11 +191,7 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 	node.Lock.Lock()
 	defer node.Lock.Unlock()
 
-	// Save user's mailbox structure CRDT to more
-	// conveniently use it hereafter.
-	userMainCRDT := node.MailboxStructure[s.UserName]["Structure"]
-
-	if userMainCRDT.Lookup(posMailbox) {
+	if node.MailboxStructure[s.UserName]["Structure"].Lookup(posMailbox) {
 
 		// If mailbox to-be-created already exists for user,
 		// this is a client error. Return NO response.
@@ -245,7 +241,7 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 
 	// If succeeded, add a new folder in user's main CRDT
 	// and synchronise it to other replicas.
-	err = userMainCRDT.Add(posMailbox, func(args ...string) {
+	err = node.MailboxStructure[s.UserName]["Structure"].Add(posMailbox, func(args ...string) {
 		syncChan <- comm.Msg{
 			Operation: "create",
 			Create: &comm.Msg_CREATE{
@@ -345,20 +341,19 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 	node.Lock.Lock()
 	defer node.Lock.Unlock()
 
-	// Save user's mailbox structure CRDT to more
-	// conveniently use it hereafter.
-	userMainCRDT := node.MailboxStructure[s.UserName]["Structure"]
-
 	// TODO: Add routines to take care of mailboxes that
 	//       are tagged with a \Noselect tag.
 
 	// Remove element from user's main CRDT and send out
 	// remove update operations to all other replicas.
-	err := userMainCRDT.Remove(delMailbox, func(args ...string) {
+	err := node.MailboxStructure[s.UserName]["Structure"].Remove(delMailbox, func(args ...string) {
 
-		// Prepare slice of Element structs to capture
-		// all value-tag-pairs to remove.
+		// Prepare slices of Element structs to capture
+		// all value-tag-pairs to remove in mailbox structure
+		// and - in case of concurrent CREATEs downstream -
+		// in the affected mailbox representation.
 		rmvMailbox := make([]*comm.Msg_Element, (len(args) / 2))
+		rmvMails := make([]*comm.Msg_Element, len(node.MailboxStructure[s.UserName][delMailbox].Elements))
 
 		for i := 0; i < (len(args) / 2); i++ {
 
@@ -368,12 +363,23 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 			}
 		}
 
+		i := 0
+		for tag, value := range node.MailboxStructure[s.UserName][delMailbox].Elements {
+
+			rmvMails[i] = &comm.Msg_Element{
+				Value: value,
+				Tag:   tag,
+			}
+			i++
+		}
+
 		syncChan <- comm.Msg{
 			Operation: "delete",
 			Delete: &comm.Msg_DELETE{
 				User:       s.UserName,
 				Mailbox:    delMailbox,
 				RmvMailbox: rmvMailbox,
+				RmvMails:   rmvMails,
 			},
 		}
 	})
@@ -479,14 +485,10 @@ func (node *IMAPNode) List(s *Session, req *Request, syncChan chan comm.Msg) (*R
 
 	node.Lock.RLock()
 
-	// Save user's mailbox structure CRDT to more
-	// conveniently use it hereafter.
-	userMainCRDT := node.MailboxStructure[s.UserName]
-
 	// Reserve space for answer.
-	listAnswerLines := make([]string, 0, (len(userMainCRDT) - 1))
+	listAnswerLines := make([]string, 0, (len(node.MailboxStructure[s.UserName]) - 1))
 
-	for mailbox := range userMainCRDT {
+	for mailbox := range node.MailboxStructure[s.UserName] {
 
 		// Do not consider structure element.
 		if mailbox != "Structure" {
@@ -636,11 +638,7 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 	// of following CRDT operations atomic.
 	node.Lock.Lock()
 
-	// Save user's mailbox structure CRDT to more
-	// conveniently use it hereafter.
-	userMainCRDT := node.MailboxStructure[s.UserName]["Structure"]
-
-	if userMainCRDT.Lookup(appendInProg.Mailbox) != true {
+	if node.MailboxStructure[s.UserName]["Structure"].Lookup(appendInProg.Mailbox) != true {
 
 		node.Lock.Unlock()
 
@@ -720,15 +718,12 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	}
 	mailFileName := filepath.Base(mailFileNamePath)
 
-	// Retrieve CRDT of mailbox to append mail to.
-	appMailboxCRDT := node.MailboxStructure[s.UserName][s.AppendInProg.Mailbox]
-
 	// Append new mail to mailbox' contents CRDT.
 	node.MailboxContents[s.UserName][s.AppendInProg.Mailbox] = append(node.MailboxContents[s.UserName][s.AppendInProg.Mailbox], mailFileName)
 
 	// Add new mail to mailbox' CRDT and send update
 	// message to other replicas.
-	err = appMailboxCRDT.Add(mailFileName, func(args ...string) {
+	err = node.MailboxStructure[s.UserName][s.AppendInProg.Mailbox].Add(mailFileName, func(args ...string) {
 		syncChan <- comm.Msg{
 			Operation: "append",
 			Append: &comm.Msg_APPEND{
@@ -843,13 +838,10 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 		// Reserve space for answer lines.
 		expAnswerLines = make([]string, 0, len(expMailNums))
 
-		// Retrieve CRDT of mailbox to expunge.
-		expMailboxCRDT := node.MailboxStructure[s.UserName][s.SelectedMailbox]
-
 		for _, msgNum := range expMailNums {
 
 			// Remove each mail to expunge from mailbox CRDT.
-			err := expMailboxCRDT.Remove(node.MailboxContents[s.UserName][s.SelectedMailbox][msgNum], func(args ...string) {
+			err := node.MailboxStructure[s.UserName][s.SelectedMailbox].Remove(node.MailboxContents[s.UserName][s.SelectedMailbox][msgNum], func(args ...string) {
 
 				// Prepare slice of Element structs to capture
 				// all value-tag-pairs to remove.
@@ -1138,14 +1130,11 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 				}, fmt.Errorf("error renaming mail file in STORE operation: %v", err)
 			}
 
-			// Save CRDT of mailbox.
-			storeMailboxCRDT := node.MailboxStructure[s.UserName][s.SelectedMailbox]
-
 			var rmvMails []*comm.Msg_Element
 
 			// First, remove the former name of the mail file
 			// but do not yet send out an update operation.
-			err = storeMailboxCRDT.Remove(mailFileName, func(args ...string) {
+			err = node.MailboxStructure[s.UserName][s.SelectedMailbox].Remove(mailFileName, func(args ...string) {
 
 				// Prepare slice of Element structs to capture
 				// all value-tag-pairs to remove.
@@ -1173,7 +1162,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 
 			// Second, add the new mail file's name and finally
 			// instruct all other nodes to do the same.
-			err = storeMailboxCRDT.Add(newMailFileName, func(args ...string) {
+			err = node.MailboxStructure[s.UserName][s.SelectedMailbox].Add(newMailFileName, func(args ...string) {
 
 				syncChan <- comm.Msg{
 					Operation: "store",

@@ -18,8 +18,8 @@ import (
 // removed set defined by Shapiro, Preguiça, Baquero,
 // and Zawirski. It consists of unique IDs and data items.
 type ORSet struct {
-	elements map[string]string
 	File     *os.File
+	Elements map[string]string
 }
 
 // sendFunc is used as a parameter to below defined
@@ -48,7 +48,7 @@ func InitORSetWithFile(fileName string) (*ORSet, error) {
 
 	// Init an empty ORSet.
 	s := &ORSet{
-		elements: make(map[string]string),
+		Elements: make(map[string]string),
 	}
 	s.File = f
 
@@ -73,7 +73,7 @@ func InitORSetFromFile(fileName string) (*ORSet, error) {
 
 	// Init an empty ORSet.
 	s := &ORSet{
-		elements: make(map[string]string),
+		Elements: make(map[string]string),
 	}
 	s.File = f
 
@@ -110,7 +110,7 @@ func InitORSetFromFile(fileName string) (*ORSet, error) {
 
 		// Assign decoded value to corresponding
 		// tag in elements set.
-		s.elements[parts[tag]] = string(decValue)
+		s.Elements[parts[tag]] = string(decValue)
 	}
 
 	return s, nil
@@ -124,7 +124,7 @@ func (s *ORSet) WriteORSetToFile() error {
 
 	marshalled := ""
 
-	for tag, valueRaw := range s.elements {
+	for tag, valueRaw := range s.Elements {
 
 		// Encode value in base64 encoding.
 		value := base64.StdEncoding.EncodeToString([]byte(valueRaw))
@@ -173,7 +173,7 @@ func (s *ORSet) GetAllValues() []string {
 	// we already considered.
 	seenValues := make(map[string]bool)
 
-	for _, value := range s.elements {
+	for _, value := range s.Elements {
 
 		// Check if we did not yet considered this value.
 		if _, seen := seenValues[value]; seen != true {
@@ -195,7 +195,7 @@ func (s *ORSet) GetAllValues() []string {
 // false otherwise.
 func (s *ORSet) Lookup(e string) bool {
 
-	for _, value := range s.elements {
+	for _, value := range s.Elements {
 
 		// When we find the value while iterating
 		// through set, we return true and end loop
@@ -215,7 +215,7 @@ func (s *ORSet) Lookup(e string) bool {
 func (s *ORSet) AddEffect(e string, tag string, needsWriteBack bool) error {
 
 	// Insert data element e at key tag.
-	s.elements[tag] = e
+	s.Elements[tag] = e
 
 	if !needsWriteBack {
 		return nil
@@ -275,8 +275,8 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsWriteBack bool) error 
 
 		// Each time we see such tag in this replica's
 		// set, we delete it.
-		if _, found := s.elements[rTag]; found {
-			delete(s.elements, rTag)
+		if _, found := s.Elements[rTag]; found {
+			delete(s.Elements, rTag)
 		}
 	}
 
@@ -321,7 +321,7 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 	rmElements := make(map[string]string)
 
 	// Otherwise range over set elements.
-	for tag, value := range s.elements {
+	for tag, value := range s.Elements {
 
 		if e == value {
 
