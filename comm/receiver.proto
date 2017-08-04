@@ -20,7 +20,6 @@ message Msg {
         string user = 1;
         string mailbox = 2;
         repeated Element rmvMailbox = 3;
-        repeated Element rmvMails = 4;
     }
 
     message RENAME {

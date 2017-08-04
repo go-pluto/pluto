@@ -50,6 +50,5 @@ test: destroy-test-env
 	done
 
 destroy-test-env:
-	@echo ""
 	if [ -d "private/Maildirs" ]; then rm -rf private/Maildirs; fi
 	if [ -d "private/crdt-layers" ]; then rm -rf private/crdt-layers; fi
