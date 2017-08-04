@@ -84,11 +84,13 @@ func initLogger(loglevel string) log.Logger {
 // This concerns Maildir and CRDT files and folders.
 func createUserFiles(crdtLayerRoot string, maildirRoot string, start int, end int) error {
 
-	if err := os.MkdirAll(maildirRoot, 0755); err != nil {
+	err := os.MkdirAll(maildirRoot, 0755)
+	if err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll(crdtLayerRoot, 0755); err != nil {
+	err = os.MkdirAll(crdtLayerRoot, 0755)
+	if err != nil {
 		return err
 	}
 
@@ -106,21 +108,12 @@ func createUserFiles(crdtLayerRoot string, maildirRoot string, start int, end in
 			return err
 		}
 
-		inboxLog := filepath.Join(crdtFolder, "INBOX.log")
-		mailboxStructureLog := filepath.Join(crdtFolder, "mailbox-structure.log")
+		structureFile := filepath.Join(crdtFolder, "structure.crdt")
 
-		if !exists(inboxLog) {
-
-			err := ioutil.WriteFile(inboxLog, nil, 0644)
-			if err != nil {
-				return err
-			}
-		}
-
-		if !exists(mailboxStructureLog) {
+		if !exists(structureFile) {
 
 			data := fmt.Sprintf("SU5CT1g=;%s\n", uuid.NewV4().String())
-			err := ioutil.WriteFile(mailboxStructureLog, []byte(data), 0644)
+			err := ioutil.WriteFile(structureFile, []byte(data), 0644)
 			if err != nil {
 				return err
 			}
@@ -283,7 +276,7 @@ func main() {
 		}
 
 		var workerS worker.Service
-		workerS = worker.NewService(wConfig.Name, logger, tlsConfig, conf)
+		workerS = worker.NewService(wConfig.Name, tlsConfig, conf)
 
 		// Create needed synchronization socket used by gRPC.
 		syncSocket, err := net.Listen("tcp", wConfig.ListenSyncAddr)
@@ -338,7 +331,7 @@ func main() {
 		go workerS.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
 
 		// Run required initialization code for worker.
-		err = workerS.Init(syncSendChan)
+		err = workerS.Init(logger, conf.IMAP.HierarchySeparator, syncSendChan)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to initilize service",
@@ -391,7 +384,7 @@ func main() {
 		}
 
 		var storageS storage.Service
-		storageS = storage.NewService(conf.Storage.Name, logger, tlsConfig, conf, conf.Workers)
+		storageS = storage.NewService(conf.Storage.Name, tlsConfig, conf)
 
 		// Create needed synchronization socket used by gRPC.
 		syncSocket, err := net.Listen("tcp", conf.Storage.ListenSyncAddr)
@@ -468,7 +461,7 @@ func main() {
 		}
 
 		// Run required initialization code for storage.
-		err = storageS.Init(peersToSubnet, syncSendChans)
+		err = storageS.Init(logger, conf.IMAP.HierarchySeparator, peersToSubnet, syncSendChans)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to initilize service",
