@@ -175,8 +175,9 @@ func (s *ORSet) GetAllValues() []string {
 
 	for _, value := range s.Elements {
 
-		// Check if we did not yet considered this value.
-		if _, seen := seenValues[value]; seen != true {
+		// Check if we did not yet consider this value.
+		_, seen := seenValues[value]
+		if seen != true {
 
 			// If so, append it and set seen value to true.
 			allValues = append(allValues, value)

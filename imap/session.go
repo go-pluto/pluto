@@ -9,11 +9,11 @@ import (
 
 // Integer counter for IMAP states.
 const (
-	Any State = iota
-	NotAuthenticated
-	Authenticated
-	Mailbox
-	Logout
+	StateAny State = iota
+	StateNotAuthenticated
+	StateAuthenticated
+	StateMailbox
+	StateLogout
 )
 
 // Structs
@@ -31,8 +31,6 @@ type Session struct {
 	UserName          string
 	RespWorker        string
 	StorageSubnetChan chan comm.Msg
-	UserCRDTPath      string
-	UserMaildirPath   string
 	SelectedMailbox   string
 	AppendInProg      *AppendInProg
 }
