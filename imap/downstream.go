@@ -1,7 +1,6 @@
 package imap
 
 import (
-	"fmt"
 	"os"
 
 	"path/filepath"
@@ -9,142 +8,73 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/go-pluto/maildir"
 	"github.com/go-pluto/pluto/comm"
-	"github.com/go-pluto/pluto/crdt"
 )
 
 // ApplyCreate performs the downstream part
 // of a CREATE operation.
-func (node *IMAPNode) ApplyCreate(msg comm.Msg) {
+func (mailbox *Mailbox) ApplyCreate(createUpd *comm.Msg_CREATE) {
 
-	createUpd := msg.Create
-
-	// Build up paths before entering critical section.
-	posMaildir := filepath.Join(node.MaildirRoot, createUpd.User, createUpd.Mailbox)
-	posMailboxCRDTPath := filepath.Join(node.CRDTLayerRoot, createUpd.User, fmt.Sprintf("%s.log", createUpd.Mailbox))
+	createMaildir := filepath.Join(mailbox.MaildirPath, createUpd.Mailbox)
 
 	// We need to track existence state of various
 	// file system objects in case we need to revert.
 	maildirExisted := true
-	crdtFileExisted := true
-	structureExisted := true
-	contentsExisted := true
+	msgSeqNumExisted := true
 
-	// Lock node exclusively.
-	node.Lock.Lock()
-	defer node.Lock.Unlock()
+	// Lock mailbox exclusively.
+	mailbox.Lock.Lock()
+	defer mailbox.Lock.Unlock()
 
 	// Only attempt to create the corresponding
 	// Maildir if it does not already exist.
-	_, err := os.Stat(posMaildir)
+	_, err := os.Stat(createMaildir)
 	if os.IsNotExist(err) {
 
 		maildirExisted = false
 
 		// Create a new Maildir on stable storage.
-		err = maildir.Dir(posMaildir).Create()
+		err = maildir.Dir(createMaildir).Create()
 		if err != nil {
-			level.Error(node.Logger).Log(
-				"msg", "maildir for new mailbox could not be created",
+			level.Error(mailbox.Logger).Log(
+				"msg", "maildir for new mailbox folder could not be created",
 				"err", err,
 			)
 			os.Exit(1)
 		}
 	}
 
-	var posMailboxCRDT *crdt.ORSet
-
-	// Only attempt to initialize a new OR-Set
-	// if the corresponding file does not already
-	// exist in file system.
-	_, err = os.Stat(posMailboxCRDTPath)
-	if os.IsNotExist(err) {
-
-		crdtFileExisted = false
-
-		// Initialize new ORSet for new mailbox.
-		posMailboxCRDT, err = crdt.InitORSetWithFile(posMailboxCRDTPath)
-		if err != nil {
-
-			// Perform clean up.
-			level.Error(node.Logger).Log(
-				"msg", "fail during downstream CREATE execution, will clean up",
-				"err", err,
-			)
-
-			if !maildirExisted {
-
-				// Only remove created Maildir if it did
-				// not exist prior to this function's entrance.
-				err = maildir.Dir(posMaildir).Remove()
-				if err != nil {
-					level.Error(node.Logger).Log(
-						"msg", "failed to remove created Maildir",
-						"err", err,
-					)
-				}
-			}
-
-			os.Exit(1)
-		}
-	}
-
-	// If the CRDT is not yet present in mailbox
-	// structure, place newly created one there.
-	if _, found := node.MailboxStructure[createUpd.User][createUpd.Mailbox]; !found {
-		structureExisted = false
-		node.MailboxStructure[createUpd.User][createUpd.Mailbox] = posMailboxCRDT
-	}
-
-	// If no slice was found in contents structure,
+	// If no slice was found in mail message structure,
 	// initialize one for new mailbox to track message
 	// sequence numbers in it.
-	if _, found := node.MailboxContents[createUpd.User][createUpd.Mailbox]; !found {
-		contentsExisted = false
-		node.MailboxContents[createUpd.User][createUpd.Mailbox] = make([]string, 0, 6)
+	_, found := mailbox.Mails[createUpd.Mailbox]
+	if !found {
+		msgSeqNumExisted = false
+		mailbox.Mails[createUpd.Mailbox] = make([]string, 0, 6)
 	}
 
 	// If succeeded, add a new folder in user's main CRDT.
-	err = node.MailboxStructure[createUpd.User]["Structure"].AddEffect(createUpd.AddMailbox.Value, createUpd.AddMailbox.Tag, true)
+	err = mailbox.Structure.AddEffect(createUpd.AddMailbox.Value, createUpd.AddMailbox.Tag, true)
 	if err != nil {
 
-		level.Error(node.Logger).Log(
+		level.Error(mailbox.Logger).Log(
 			"msg", "fail during downstream CREATE execution, will clean up",
 			"err", err,
 		)
 
 		// If it did not exist, remove the just
-		// added CRDT from structure map.
-		if !structureExisted {
-			delete(node.MailboxStructure[createUpd.User], createUpd.Mailbox)
-		}
-
-		// If it did not exist, remove the just
-		// added slice from contents map.
-		if !contentsExisted {
-			delete(node.MailboxContents[createUpd.User], createUpd.Mailbox)
+		// added slice from mail message map.
+		if !msgSeqNumExisted {
+			delete(mailbox.Mails, createUpd.Mailbox)
 		}
 
 		// If it did not exist, attempt to remove
 		// the created Maildir.
 		if !maildirExisted {
 
-			err = maildir.Dir(posMaildir).Remove()
+			err = maildir.Dir(createMaildir).Remove()
 			if err != nil {
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "failed to remove created Maildir",
-					"err", err,
-				)
-			}
-		}
-
-		// If it did not exist, attempt to remove
-		// the created CRDT file.
-		if !crdtFileExisted {
-
-			err = os.Remove(posMailboxCRDTPath)
-			if err != nil {
-				level.Error(node.Logger).Log(
-					"msg", "failed to remove CRDT file of mailbox",
 					"err", err,
 				)
 			}
@@ -156,13 +86,9 @@ func (node *IMAPNode) ApplyCreate(msg comm.Msg) {
 
 // ApplyDelete performs the downstream part
 // of a DELETE operation.
-func (node *IMAPNode) ApplyDelete(msg comm.Msg) {
+func (mailbox *Mailbox) ApplyDelete(deleteUpd *comm.Msg_DELETE) {
 
-	deleteUpd := msg.Delete
-
-	// Build up paths before entering critical section.
-	delMailboxCRDTPath := filepath.Join(node.CRDTLayerRoot, deleteUpd.User, fmt.Sprintf("%s.log", deleteUpd.Mailbox))
-	delMaildir := filepath.Join(node.MaildirRoot, deleteUpd.User, deleteUpd.Mailbox)
+	delMaildir := filepath.Join(mailbox.MaildirPath, deleteUpd.Mailbox)
 
 	// Construct remove set from received mailbox values.
 	rmElements := make(map[string]string)
@@ -170,78 +96,55 @@ func (node *IMAPNode) ApplyDelete(msg comm.Msg) {
 		rmElements[element.Tag] = element.Value
 	}
 
-	// Lock node exclusively.
-	node.Lock.Lock()
-	defer node.Lock.Unlock()
+	// Lock mailbox exclusively.
+	mailbox.Lock.Lock()
+	defer mailbox.Lock.Unlock()
 
 	// Remove received pairs from user's main CRDT.
-	err := node.MailboxStructure[deleteUpd.User]["Structure"].RemoveEffect(rmElements, true)
+	err := mailbox.Structure.RemoveEffect(rmElements, true)
 	if err != nil {
-		level.Error(node.Logger).Log(
-			"msg", "failed to remove mailbox elements from user's main CRDT",
+		level.Error(mailbox.Logger).Log(
+			"msg", "failed to remove elements of mailbox folder to delete from user's structure CRDT",
 			"err", err,
 		)
 		os.Exit(1)
 	}
 
-	if node.MailboxStructure[deleteUpd.User]["Structure"].Lookup(deleteUpd.Mailbox) {
+	if mailbox.Structure.Lookup(deleteUpd.Mailbox) {
 
-		// Concurrent CREATE operations have put more instances
-		// of this mailbox into the user's main structure CRDT.
+		// Concurrent IMAP operations have declared interest in
+		// this mailbox by adding elements to the structure CRDT.
 		// Do not remove the underlying files. Instead, delete
 		// the mail files sent by the source node as representing
 		// the folder's content at the time of DELETE issuance.
-
-		// Construct remove set from received mail message values.
-		rmElements := make(map[string]string)
-		for _, element := range deleteUpd.RmvMails {
-			rmElements[element.Tag] = element.Value
-		}
-
-		// Remove all mail message elements marked as the
-		// perceived content on source replica at time of
-		// deletion from mailbox.
-		node.MailboxStructure[deleteUpd.User][deleteUpd.Mailbox].RemoveEffect(rmElements, true)
-		if err != nil {
-			level.Error(node.Logger).Log(
-				"msg", "failed to remove mail message elements from user's mailbox CRDT",
-				"err", err,
-			)
-			os.Exit(1)
-		}
 
 		for _, mail := range deleteUpd.RmvMails {
 
 			var delFileName string
 			if deleteUpd.Mailbox == "INBOX" {
-				delFileName = filepath.Join(node.MaildirRoot, deleteUpd.User, "cur", mail.Value)
+				delFileName = filepath.Join(mailbox.MaildirPath, "cur", mail)
 			} else {
-				delFileName = filepath.Join(node.MaildirRoot, deleteUpd.User, deleteUpd.Mailbox, "cur", mail.Value)
+				delFileName = filepath.Join(mailbox.MaildirPath, deleteUpd.Mailbox, "cur", mail)
 			}
 
-			// Check if the deleted mail element marked
-			// all instances of that mail message.
-			if node.MailboxStructure[deleteUpd.User][deleteUpd.Mailbox].Lookup(mail.Value) != true {
+			// In that case, delete the file system object.
+			err := os.Remove(delFileName)
+			if err != nil {
+				level.Error(mailbox.Logger).Log(
+					"msg", "failed to remove an underlying mail file during downstream DELETE execution",
+					"err", err,
+				)
+				os.Exit(1)
+			}
 
-				// In that case, delete the file system object.
-				err := os.Remove(delFileName)
-				if err != nil {
-					level.Error(node.Logger).Log(
-						"msg", "failed to remove an underlying mail file during downstream DELETE execution",
-						"err", err,
-					)
-					os.Exit(1)
-				}
+			// As well as the mail's entries in the
+			// internal sequence number representation.
+			for msgNum, msgName := range mailbox.Mails[deleteUpd.Mailbox] {
 
-				// As well as the mail's entries in the
-				// internal sequence number representation.
-				for msgNum, msgName := range node.MailboxContents[deleteUpd.User][deleteUpd.Mailbox] {
+				if msgName == mail {
 
-					if msgName == mail.Value {
-
-						realMsgNum := msgNum + 1
-						node.MailboxContents[deleteUpd.User][deleteUpd.Mailbox] = append(node.MailboxContents[deleteUpd.User][deleteUpd.Mailbox][:msgNum], node.MailboxContents[deleteUpd.User][deleteUpd.Mailbox][realMsgNum:]...)
-					}
+					realMsgNum := msgNum + 1
+					mailbox.Mails[deleteUpd.Mailbox] = append(mailbox.Mails[deleteUpd.Mailbox][:msgNum], mailbox.Mails[deleteUpd.Mailbox][realMsgNum:]...)
 				}
 			}
 		}
@@ -253,29 +156,10 @@ func (node *IMAPNode) ApplyDelete(msg comm.Msg) {
 		// clean up of files and folders, and internal state
 		// representation manipulation is due.
 
-		// Remove CRDT from structure map if present.
-		if _, found := node.MailboxStructure[deleteUpd.User][deleteUpd.Mailbox]; found {
-			delete(node.MailboxStructure[deleteUpd.User], deleteUpd.Mailbox)
-		}
-
 		// Remove slice from contents map if present.
-		if _, found := node.MailboxContents[deleteUpd.User][deleteUpd.Mailbox]; found {
-			delete(node.MailboxContents[deleteUpd.User], deleteUpd.Mailbox)
-		}
-
-		// If it exists in file system,
-		// remove CRDT file of mailbox.
-		_, err = os.Stat(delMailboxCRDTPath)
-		if err == nil {
-
-			err = os.Remove(delMailboxCRDTPath)
-			if err != nil {
-				level.Error(node.Logger).Log(
-					"msg", "failed to remove CRDT file of mailbox",
-					"err", err,
-				)
-				os.Exit(1)
-			}
+		_, found := mailbox.Mails[deleteUpd.Mailbox]
+		if found {
+			delete(mailbox.Mails, deleteUpd.Mailbox)
 		}
 
 		// Remove files associated with deleted mailbox
@@ -285,8 +169,8 @@ func (node *IMAPNode) ApplyDelete(msg comm.Msg) {
 
 			err = maildir.Dir(delMaildir).Remove()
 			if err != nil {
-				level.Error(node.Logger).Log(
-					"msg", "failed to remove Maildir",
+				level.Error(mailbox.Logger).Log(
+					"msg", "failed to remove Maildir during downstream DELETE execution",
 					"err", err,
 				)
 				os.Exit(1)
@@ -297,33 +181,31 @@ func (node *IMAPNode) ApplyDelete(msg comm.Msg) {
 
 // ApplyAppend performs the downstream part
 // of an APPEND operation.
-func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
-
-	appendUpd := msg.Append
+func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 
 	// Construct path to potential new file.
 	var appendFileName string
 	if appendUpd.Mailbox == "INBOX" {
-		appendFileName = filepath.Join(node.MaildirRoot, appendUpd.User, "cur", appendUpd.AddMail.Value)
+		appendFileName = filepath.Join(mailbox.MaildirPath, appendUpd.User, "cur", appendUpd.AddMail.Value)
 	} else {
-		appendFileName = filepath.Join(node.MaildirRoot, appendUpd.User, appendUpd.Mailbox, "cur", appendUpd.AddMail.Value)
+		appendFileName = filepath.Join(mailbox.MaildirPath, appendUpd.User, appendUpd.Mailbox, "cur", appendUpd.AddMail.Value)
 	}
 
 	// Lock node exclusively.
-	node.Lock.Lock()
-	defer node.Lock.Unlock()
+	mailbox.Lock.Lock()
+	defer mailbox.Lock.Unlock()
 
 	// Check if specified mailbox from append message is present
 	// in user's main CRDT on this node.
-	if node.MailboxStructure[appendUpd.User]["Structure"].Lookup(appendUpd.Mailbox) {
+	if mailbox.MailboxStructure[appendUpd.User]["Structure"].Lookup(appendUpd.Mailbox) {
 
 		// Check if mail is not yet present on this node.
-		if node.MailboxStructure[appendUpd.User][appendUpd.Mailbox].Lookup(appendUpd.AddMail.Value) != true {
+		if mailbox.MailboxStructure[appendUpd.User][appendUpd.Mailbox].Lookup(appendUpd.AddMail.Value) != true {
 
 			// If so, place file content at correct location.
 			appendFile, err := os.Create(appendFileName)
 			if err != nil {
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "failed to create file for mail to append",
 					"err", err,
 				)
@@ -333,7 +215,7 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 			_, err = appendFile.Write(appendUpd.AddMail.Contents)
 			if err != nil {
 
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "fail during downstream APPEND execution, will clean up",
 					"err", err,
 				)
@@ -341,7 +223,7 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 				// Remove just created mail file.
 				err = os.Remove(appendFileName)
 				if err != nil {
-					level.Error(node.Logger).Log(
+					level.Error(mailbox.Logger).Log(
 						"msg", "failed to remove created mail file",
 						"err", err,
 					)
@@ -354,7 +236,7 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 			err = appendFile.Sync()
 			if err != nil {
 
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "fail during downstream APPEND execution, will clean up",
 					"err", err,
 				)
@@ -362,7 +244,7 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 				// Remove just created mail file.
 				err = os.Remove(appendFileName)
 				if err != nil {
-					level.Error(node.Logger).Log(
+					level.Error(mailbox.Logger).Log(
 						"msg", "failed to remove created mail file",
 						"err", err,
 					)
@@ -372,13 +254,13 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 			}
 
 			// Append new mail to mailbox' contents CRDT.
-			node.MailboxContents[appendUpd.User][appendUpd.Mailbox] = append(node.MailboxContents[appendUpd.User][appendUpd.Mailbox], appendUpd.AddMail.Value)
+			mailbox.MailboxContents[appendUpd.User][appendUpd.Mailbox] = append(mailbox.MailboxContents[appendUpd.User][appendUpd.Mailbox], appendUpd.AddMail.Value)
 
 			// If succeeded, add new mail to mailbox' CRDT.
-			err = node.MailboxStructure[appendUpd.User][appendUpd.Mailbox].AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true)
+			err = mailbox.MailboxStructure[appendUpd.User][appendUpd.Mailbox].AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true)
 			if err != nil {
 
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "fail during downstream APPEND execution, will clean up",
 					"err", err,
 				)
@@ -386,7 +268,7 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 				// Remove just created mail file.
 				err = os.Remove(appendFileName)
 				if err != nil {
-					level.Error(node.Logger).Log(
+					level.Error(mailbox.Logger).Log(
 						"msg", "failed to remove created mail file",
 						"err", err,
 					)
@@ -397,9 +279,9 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 		} else {
 
 			// Add new mail to mailbox' CRDT.
-			err := node.MailboxStructure[appendUpd.User][appendUpd.Mailbox].AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true)
+			err := mailbox.MailboxStructure[appendUpd.User][appendUpd.Mailbox].AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true)
 			if err != nil {
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "fail during downstream APPEND execution",
 					"err", err,
 				)
@@ -411,9 +293,7 @@ func (node *IMAPNode) ApplyAppend(msg comm.Msg) {
 
 // ApplyExpunge performs the downstream part
 // of an EXPUNGE operation.
-func (node *IMAPNode) ApplyExpunge(msg comm.Msg) {
-
-	expungeUpd := msg.Expunge
+func (mailbox *Mailbox) ApplyExpunge(expungeUpd *comm.Msg_EXPUNGE) {
 
 	// Construct remove set from received values.
 	rmElements := make(map[string]string)
@@ -424,23 +304,23 @@ func (node *IMAPNode) ApplyExpunge(msg comm.Msg) {
 	// Construct path to old file.
 	var delFileName string
 	if expungeUpd.Mailbox == "INBOX" {
-		delFileName = filepath.Join(node.MaildirRoot, expungeUpd.User, "cur", expungeUpd.RmvMail[0].Value)
+		delFileName = filepath.Join(mailbox.MaildirRoot, expungeUpd.User, "cur", expungeUpd.RmvMail[0].Value)
 	} else {
-		delFileName = filepath.Join(node.MaildirRoot, expungeUpd.User, expungeUpd.Mailbox, "cur", expungeUpd.RmvMail[0].Value)
+		delFileName = filepath.Join(mailbox.MaildirRoot, expungeUpd.User, expungeUpd.Mailbox, "cur", expungeUpd.RmvMail[0].Value)
 	}
 
 	// Lock node exclusively.
-	node.Lock.Lock()
-	defer node.Lock.Unlock()
+	mailbox.Lock.Lock()
+	defer mailbox.Lock.Unlock()
 
 	// Check if specified mailbox from expunge message is
 	// present in user's main CRDT on this node.
-	if node.MailboxStructure[expungeUpd.User]["Structure"].Lookup(expungeUpd.Mailbox) {
+	if mailbox.MailboxStructure[expungeUpd.User]["Structure"].Lookup(expungeUpd.Mailbox) {
 
 		// Delete supplied elements from mailbox.
-		err := node.MailboxStructure[expungeUpd.User][expungeUpd.Mailbox].RemoveEffect(rmElements, true)
+		err := mailbox.MailboxStructure[expungeUpd.User][expungeUpd.Mailbox].RemoveEffect(rmElements, true)
 		if err != nil {
-			level.Error(node.Logger).Log(
+			level.Error(mailbox.Logger).Log(
 				"msg", "failed to remove mail elements from respective mailbox CRDT",
 				"err", err,
 			)
@@ -449,12 +329,12 @@ func (node *IMAPNode) ApplyExpunge(msg comm.Msg) {
 
 		// Check if just removed elements marked all
 		// instances of mail file.
-		if node.MailboxStructure[expungeUpd.User][expungeUpd.Mailbox].Lookup(expungeUpd.RmvMail[0].Value) != true {
+		if mailbox.MailboxStructure[expungeUpd.User][expungeUpd.Mailbox].Lookup(expungeUpd.RmvMail[0].Value) != true {
 
 			// If that is the case, remove the file.
 			err := os.Remove(delFileName)
 			if err != nil {
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "failed to remove underlying mail file during downstream EXPUNGE execution",
 					"err", err,
 				)
@@ -462,14 +342,14 @@ func (node *IMAPNode) ApplyExpunge(msg comm.Msg) {
 			}
 		}
 
-		for msgNum, msgName := range node.MailboxContents[expungeUpd.User][expungeUpd.Mailbox] {
+		for msgNum, msgName := range mailbox.MailboxContents[expungeUpd.User][expungeUpd.Mailbox] {
 
 			// Find removed mail file's sequence number.
 			if msgName == expungeUpd.RmvMail[0].Value {
 
 				// Delete mail's sequence number from contents structure.
 				realMsgNum := msgNum + 1
-				node.MailboxContents[expungeUpd.User][expungeUpd.Mailbox] = append(node.MailboxContents[expungeUpd.User][expungeUpd.Mailbox][:msgNum], node.MailboxContents[expungeUpd.User][expungeUpd.Mailbox][realMsgNum:]...)
+				mailbox.MailboxContents[expungeUpd.User][expungeUpd.Mailbox] = append(mailbox.MailboxContents[expungeUpd.User][expungeUpd.Mailbox][:msgNum], mailbox.MailboxContents[expungeUpd.User][expungeUpd.Mailbox][realMsgNum:]...)
 			}
 		}
 	}
@@ -477,9 +357,7 @@ func (node *IMAPNode) ApplyExpunge(msg comm.Msg) {
 
 // ApplyStore performs the downstream part
 // of a STORE operation.
-func (node *IMAPNode) ApplyStore(msg comm.Msg) {
-
-	storeUpd := msg.Store
+func (mailbox *Mailbox) ApplyStore(storeUpd *comm.Msg_STORE) {
 
 	// Construct remove set from received values.
 	rmElements := make(map[string]string)
@@ -490,31 +368,31 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 	// Construct path to old file.
 	var delFileName string
 	if storeUpd.Mailbox == "INBOX" {
-		delFileName = filepath.Join(node.MaildirRoot, storeUpd.User, "cur", storeUpd.RmvMail[0].Value)
+		delFileName = filepath.Join(mailbox.MaildirRoot, storeUpd.User, "cur", storeUpd.RmvMail[0].Value)
 	} else {
-		delFileName = filepath.Join(node.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.RmvMail[0].Value)
+		delFileName = filepath.Join(mailbox.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.RmvMail[0].Value)
 	}
 
 	// Construct path to potential new file.
 	var storeFileName string
 	if storeUpd.Mailbox == "INBOX" {
-		storeFileName = filepath.Join(node.MaildirRoot, storeUpd.User, "cur", storeUpd.AddMail.Value)
+		storeFileName = filepath.Join(mailbox.MaildirRoot, storeUpd.User, "cur", storeUpd.AddMail.Value)
 	} else {
-		storeFileName = filepath.Join(node.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.AddMail.Value)
+		storeFileName = filepath.Join(mailbox.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.AddMail.Value)
 	}
 
 	// Lock node exclusively.
-	node.Lock.Lock()
-	defer node.Lock.Unlock()
+	mailbox.Lock.Lock()
+	defer mailbox.Lock.Unlock()
 
 	// Check if specified mailbox from store message is present
 	// in user's main CRDT on this node.
-	if node.MailboxStructure[storeUpd.User]["Structure"].Lookup(storeUpd.Mailbox) {
+	if mailbox.MailboxStructure[storeUpd.User]["Structure"].Lookup(storeUpd.Mailbox) {
 
 		// Delete supplied elements from mailbox.
-		err := node.MailboxStructure[storeUpd.User][storeUpd.Mailbox].RemoveEffect(rmElements, true)
+		err := mailbox.MailboxStructure[storeUpd.User][storeUpd.Mailbox].RemoveEffect(rmElements, true)
 		if err != nil {
-			level.Error(node.Logger).Log(
+			level.Error(mailbox.Logger).Log(
 				"msg", "failed to remove mail elements from respective mailbox CRDT",
 				"err", err,
 			)
@@ -523,12 +401,12 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 
 		// Check if just removed elements marked all
 		// instances of mail file.
-		if node.MailboxStructure[storeUpd.User][storeUpd.Mailbox].Lookup(storeUpd.RmvMail[0].Value) != true {
+		if mailbox.MailboxStructure[storeUpd.User][storeUpd.Mailbox].Lookup(storeUpd.RmvMail[0].Value) != true {
 
 			// If that is the case, remove the file.
 			err := os.Remove(delFileName)
 			if err != nil {
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "failed to remove underlying mail file during downstream STORE execution",
 					"err", err,
 				)
@@ -538,13 +416,13 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 
 		// Check if new mail name is not yet present
 		// on this node.
-		if node.MailboxStructure[storeUpd.User][storeUpd.Mailbox].Lookup(storeUpd.AddMail.Value) != true {
+		if mailbox.MailboxStructure[storeUpd.User][storeUpd.Mailbox].Lookup(storeUpd.AddMail.Value) != true {
 
 			// If not yet present on node, place file
 			// content at correct location.
 			storeFile, err := os.Create(storeFileName)
 			if err != nil {
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "failed to create mail file during downstream STORE execution",
 					"err", err,
 				)
@@ -554,7 +432,7 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 			_, err = storeFile.Write(storeUpd.AddMail.Contents)
 			if err != nil {
 
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "fail during downstream STORE execution, will clean up",
 					"err", err,
 				)
@@ -562,7 +440,7 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 				// Remove just created mail file.
 				err = os.Remove(storeFileName)
 				if err != nil {
-					level.Error(node.Logger).Log(
+					level.Error(mailbox.Logger).Log(
 						"msg", "failed to remove created mail file",
 						"err", err,
 					)
@@ -575,7 +453,7 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 			err = storeFile.Sync()
 			if err != nil {
 
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "fail during downstream STORE execution, will clean up",
 					"err", err,
 				)
@@ -583,7 +461,7 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 				// Remove just created mail file.
 				err = os.Remove(storeFileName)
 				if err != nil {
-					level.Error(node.Logger).Log(
+					level.Error(mailbox.Logger).Log(
 						"msg", "failed to remove created mail file",
 						"err", err,
 					)
@@ -593,10 +471,10 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 			}
 
 			// If succeeded, add renamed mail to mailbox' CRDT.
-			err = node.MailboxStructure[storeUpd.User][storeUpd.Mailbox].AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true)
+			err = mailbox.MailboxStructure[storeUpd.User][storeUpd.Mailbox].AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true)
 			if err != nil {
 
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "fail during downstream STORE execution, will clean up",
 					"err", err,
 				)
@@ -604,7 +482,7 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 				// Remove just created mail file.
 				err = os.Remove(storeFileName)
 				if err != nil {
-					level.Error(node.Logger).Log(
+					level.Error(mailbox.Logger).Log(
 						"msg", "failed to remove created mail file",
 						"err", err,
 					)
@@ -615,9 +493,9 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 		} else {
 
 			// Add renamed mail to mailbox' CRDT.
-			err = node.MailboxStructure[storeUpd.User][storeUpd.Mailbox].AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true)
+			err = mailbox.MailboxStructure[storeUpd.User][storeUpd.Mailbox].AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true)
 			if err != nil {
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "fail during downstream STORE execution",
 					"err", err,
 				)
@@ -625,49 +503,14 @@ func (node *IMAPNode) ApplyStore(msg comm.Msg) {
 			}
 		}
 
-		for msgNum, msgName := range node.MailboxContents[storeUpd.User][storeUpd.Mailbox] {
+		for msgNum, msgName := range mailbox.MailboxContents[storeUpd.User][storeUpd.Mailbox] {
 
 			// Find old mail file's sequence number.
 			if msgName == storeUpd.RmvMail[0].Value {
 
 				// Replace old file name with renamed new one.
-				node.MailboxContents[storeUpd.User][storeUpd.Mailbox][msgNum] = storeUpd.AddMail.Value
+				mailbox.MailboxContents[storeUpd.User][storeUpd.Mailbox][msgNum] = storeUpd.AddMail.Value
 			}
 		}
-	}
-}
-
-// ApplyCRDTUpd receives strings representing CRDT
-// update operations from receiver and executes them.
-func (node *IMAPNode) ApplyCRDTUpd(applyChan <-chan comm.Msg, doneChan chan<- struct{}) {
-
-	for {
-
-		// Receive update message from receiver
-		// via channel.
-		msg := <-applyChan
-
-		// Depending on received operation,
-		// parse remaining payload further.
-		switch msg.Operation {
-
-		case "create":
-			node.ApplyCreate(msg)
-
-		case "delete":
-			node.ApplyDelete(msg)
-
-		case "append":
-			node.ApplyAppend(msg)
-
-		case "expunge":
-			node.ApplyExpunge(msg)
-
-		case "store":
-			node.ApplyStore(msg)
-		}
-
-		// Signal receiver that update was performed.
-		doneChan <- struct{}{}
 	}
 }
