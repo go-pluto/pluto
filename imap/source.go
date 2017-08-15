@@ -33,6 +33,16 @@ type IMAPNode struct {
 	HierarchySeparator string
 }
 
+type Mailbox struct {
+	Logger             log.Logger
+	Lock               *sync.RWMutex
+	Structure          *crdt.ORSet
+	Mails              map[string][]string
+	CRDTPath           string
+	MaildirPath        string
+	HierarchySeparator string
+}
+
 // Functions
 
 // Select sets the current mailbox based on supplied
@@ -44,9 +54,9 @@ type IMAPNode struct {
 // (e.g. a missing mailbox to select) but otherwise correct
 // handling, this function would send a useful message to
 // the client and still return true.
-func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
+func (mailbox *Mailbox) Select(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
 
-	if (s.State != Authenticated) && (s.State != Mailbox) {
+	if (s.State != StateAuthenticated) && (s.State != StateMailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -66,9 +76,9 @@ func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (
 	}
 
 	// Split payload on every whitespace character.
-	mailboxes := strings.Split(req.Payload, " ")
+	reqMailboxes := strings.Split(req.Payload, " ")
 
-	if len(mailboxes) != 1 {
+	if len(reqMailboxes) != 1 {
 
 		// If there were more than two names supplied to select,
 		// this is a client error. Return BAD statement.
@@ -77,20 +87,18 @@ func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (
 		}, nil
 	}
 
-	// Save maildir for later use.
-	mailboxPath := s.UserMaildirPath
+	reqMailboxPath := mailbox.MaildirPath
 
 	// If any other mailbox than INBOX was specified,
 	// append it to mailbox in order to check it.
-	if mailboxes[0] != "INBOX" {
-		mailboxPath = filepath.Join(mailboxPath, mailboxes[0])
+	if reqMailboxes[0] != "INBOX" {
+		reqMailboxPath = filepath.Join(reqMailboxPath, reqMailboxes[0])
 	}
 
-	// Transform into real Maildir.
-	mailbox := maildir.Dir(mailboxPath)
+	reqMailbox := maildir.Dir(reqMailboxPath)
 
-	// Check if mailbox is existing and a conformant maildir folder.
-	err := mailbox.Check()
+	// Check if mailbox is existing and a correct maildir folder.
+	err := reqMailbox.Check()
 	if err != nil {
 
 		// If specified maildir did not turn out to be a valid one,
@@ -102,23 +110,19 @@ func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (
 
 	// Set selected mailbox in connection to supplied one
 	// and advance IMAP state of connection to Mailbox.
-	s.State = Mailbox
-	s.SelectedMailbox = mailboxes[0]
+	s.State = StateMailbox
+	s.SelectedMailbox = reqMailboxes[0]
 
-	node.Lock.RLock()
-	defer node.Lock.RUnlock()
-
-	// Store contents structure of selected mailbox
-	// for later convenient use.
-	selMailboxContents := node.MailboxContents[s.UserName][s.SelectedMailbox]
+	mailbox.Lock.RLock()
+	defer mailbox.Lock.RUnlock()
 
 	// Count how many mails do not have the \Seen
 	// flag attached, i.e. recent mails.
 	recentMails := 0
-	for _, mail := range selMailboxContents {
+	for _, mail := range mailbox.Mails[s.SelectedMailbox] {
 
 		// Retrieve flags of mail.
-		mailFlags, err := mailbox.Flags(mail, false)
+		mailFlags, err := reqMailbox.Flags(mail, false)
 		if err != nil {
 
 			// Return an vague explanation error to caller in
@@ -139,15 +143,15 @@ func (node *IMAPNode) Select(s *Session, req *Request, syncChan chan comm.Msg) (
 
 	// Send answer to requesting client.
 	return &Reply{
-		Text: fmt.Sprintf("* %d EXISTS\r\n* %d RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\n%s OK [READ-WRITE] SELECT completed", len(selMailboxContents), recentMails, req.Tag),
+		Text: fmt.Sprintf("* %d EXISTS\r\n* %d RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)]\r\n%s OK [READ-WRITE] SELECT completed", len(mailbox.Mails), recentMails, req.Tag),
 	}, nil
 }
 
-// Create attempts to create a mailbox with name
-// taken from payload of request.
-func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
+// Create attempts to create a mailbox folder with
+// the name taken from the payload of the request.
+func (mailbox *Mailbox) Create(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
 
-	if (s.State != Authenticated) && (s.State != Mailbox) {
+	if (s.State != StateAuthenticated) && (s.State != StateMailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -158,9 +162,9 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 	}
 
 	// Split payload on every space character.
-	posMailboxes := strings.Split(req.Payload, " ")
+	createMailboxFolders := strings.Split(req.Payload, " ")
 
-	if len(posMailboxes) != 1 {
+	if len(createMailboxFolders) != 1 {
 
 		// If payload did not contain exactly one element,
 		// this is a client error. Return BAD statement.
@@ -169,31 +173,29 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 		}, nil
 	}
 
-	// Trim supplied mailbox name of hierarchy separator if
-	// it was sent with a trailing one.
-	posMailbox := strings.TrimSuffix(posMailboxes[0], node.HierarchySeparator)
+	// Trim supplied mailbox folder name of hierarchy
+	// separator if it was sent with a trailing one.
+	createMailboxFolder := strings.TrimSuffix(createMailboxFolders[0], mailbox.HierarchySeparator)
 
-	if strings.ToUpper(posMailbox) == "INBOX" {
+	if strings.ToUpper(createMailboxFolder) == "INBOX" {
 
-		// If mailbox to-be-created was named INBOX,
+		// If mailbox folder to-be-created was named INBOX,
 		// this is a client error. Return NO response.
 		return &Reply{
 			Text: fmt.Sprintf("%s NO New mailbox cannot be named INBOX", req.Tag),
 		}, nil
 	}
 
-	// Build up paths before entering critical section.
-	posMaildir := maildir.Dir(filepath.Join(s.UserMaildirPath, posMailbox))
-	posMailboxCRDTPath := filepath.Join(s.UserCRDTPath, fmt.Sprintf("%s.log", posMailbox))
+	createMaildir := maildir.Dir(filepath.Join(mailbox.MaildirPath, createMailboxFolder))
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
-	node.Lock.Lock()
-	defer node.Lock.Unlock()
+	mailbox.Lock.Lock()
+	defer mailbox.Lock.Unlock()
 
-	if node.MailboxStructure[s.UserName]["Structure"].Lookup(posMailbox) {
+	if mailbox.Structure.Lookup(createMailboxFolder) {
 
-		// If mailbox to-be-created already exists for user,
+		// If mailbox folder to-be-created already exists for user,
 		// this is a client error. Return NO response.
 		return &Reply{
 			Text: fmt.Sprintf("%s NO New mailbox cannot be named after already existing mailbox", req.Tag),
@@ -201,7 +203,7 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 	}
 
 	// Create a new Maildir on stable storage.
-	err := posMaildir.Create()
+	err := createMaildir.Create()
 	if err != nil {
 
 		return &Reply{
@@ -210,43 +212,18 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 		}, fmt.Errorf("error while creating Maildir for new mailbox: %v", err)
 	}
 
-	// Initialize new ORSet for new mailbox.
-	posMailboxCRDT, err := crdt.InitORSetWithFile(posMailboxCRDTPath)
-	if err != nil {
+	// Initialize mail file slice for new mailbox folder
+	// to track message sequence numbers in it.
+	mailbox.Mails[createMailboxFolder] = make([]string, 0, 6)
 
-		// Perform clean up.
-		level.Error(node.Logger).Log(
-			"msg", "fail during source CREATE execution, will clean up",
-			"err", err,
-		)
-
-		// Attempt to remove Maildir.
-		err = posMaildir.Remove()
-		if err != nil {
-			level.Error(node.Logger).Log(
-				"msg", "failed to remove Maildir",
-				"err", err,
-			)
-		}
-
-		os.Exit(1)
-	}
-
-	// Place newly created CRDT in mailbox structure.
-	node.MailboxStructure[s.UserName][posMailbox] = posMailboxCRDT
-
-	// Initialize contents slice for new mailbox to track
-	// message sequence numbers in it.
-	node.MailboxContents[s.UserName][posMailbox] = make([]string, 0, 6)
-
-	// If succeeded, add a new folder in user's main CRDT
-	// and synchronise it to other replicas.
-	err = node.MailboxStructure[s.UserName]["Structure"].Add(posMailbox, func(args ...string) {
+	// If succeeded, add the folder as new item to the user's
+	// structure CRDT and synchronise with other replicas.
+	err = mailbox.Structure.Add(createMailboxFolder, func(args ...string) {
 		syncChan <- comm.Msg{
 			Operation: "create",
 			Create: &comm.Msg_CREATE{
 				User:    s.UserName,
-				Mailbox: posMailbox,
+				Mailbox: createMailboxFolder,
 				AddMailbox: &comm.Msg_Element{
 					Value: args[0],
 					Tag:   args[1],
@@ -256,31 +233,20 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 	})
 	if err != nil {
 
-		// Perform clean up.
-		level.Error(node.Logger).Log(
+		level.Error(mailbox.Logger).Log(
 			"msg", "fail during source CREATE execution, will clean up",
 			"err", err,
 		)
 
-		// Remove just added CRDT of new maildir from mailbox structure
-		// and corresponding contents slice.
-		delete(node.MailboxStructure[s.UserName], posMailbox)
-		delete(node.MailboxContents[s.UserName], posMailbox)
+		// Free space allocated for tracking mail files
+		// to be placed into created mailbox folder.
+		delete(mailbox.Mails, createMailboxFolder)
 
 		// Attempt to remove Maildir.
-		err = posMaildir.Remove()
+		err = createMaildir.Remove()
 		if err != nil {
-			level.Error(node.Logger).Log(
+			level.Error(mailbox.Logger).Log(
 				"msg", "failed to remove Maildir",
-				"err", err,
-			)
-		}
-
-		// Close CRDT file if possible.
-		err = node.MailboxStructure[s.UserName][posMailbox].File.Close()
-		if err != nil {
-			level.Error(node.Logger).Log(
-				"msg", "failed to close CRDT file",
 				"err", err,
 			)
 		}
@@ -295,9 +261,9 @@ func (node *IMAPNode) Create(s *Session, req *Request, syncChan chan comm.Msg) (
 
 // Delete attempts to remove an existing mailbox with
 // all included content in CRDT as well as file system.
-func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
+func (mailbox *Mailbox) Delete(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
 
-	if (s.State != Authenticated) && (s.State != Mailbox) {
+	if (s.State != StateAuthenticated) && (s.State != StateMailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -308,9 +274,9 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 	}
 
 	// Split payload on every space character.
-	delMailboxes := strings.Split(req.Payload, " ")
+	deleteMailboxFolders := strings.Split(req.Payload, " ")
 
-	if len(delMailboxes) != 1 {
+	if len(deleteMailboxFolders) != 1 {
 
 		// If payload did not contain exactly one element,
 		// this is a client error. Return BAD statement.
@@ -319,67 +285,52 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 		}, nil
 	}
 
-	// Trim supplied mailbox name of hierarchy separator if
-	// it was sent with a trailing one.
-	delMailbox := strings.TrimSuffix(delMailboxes[0], node.HierarchySeparator)
+	// Trim supplied mailbox folder name of hierarchy
+	// separator if it was sent with a trailing one.
+	deleteMailboxFolder := strings.TrimSuffix(deleteMailboxFolders[0], mailbox.HierarchySeparator)
 
-	if strings.ToUpper(delMailbox) == "INBOX" {
+	if strings.ToUpper(deleteMailboxFolder) == "INBOX" {
 
-		// If mailbox to-be-deleted was named INBOX,
+		// If mailbox folder to-be-deleted was named INBOX,
 		// this is a client error. Return NO response.
 		return &Reply{
 			Text: fmt.Sprintf("%s NO Forbidden to delete INBOX", req.Tag),
 		}, nil
 	}
 
-	// Build up paths before entering critical section.
-	delMailboxCRDTPath := filepath.Join(s.UserCRDTPath, fmt.Sprintf("%s.log", delMailbox))
-	delMaildir := maildir.Dir(filepath.Join(s.UserMaildirPath, delMailbox))
+	deleteMaildir := maildir.Dir(filepath.Join(mailbox.MaildirPath, deleteMailboxFolder))
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
-	node.Lock.Lock()
-	defer node.Lock.Unlock()
+	mailbox.Lock.Lock()
+	defer mailbox.Lock.Unlock()
 
 	// TODO: Add routines to take care of mailboxes that
 	//       are tagged with a \Noselect tag.
 
-	// Remove element from user's main CRDT and send out
+	// Remove element from user's structure CRDT and send out
 	// remove update operations to all other replicas.
-	err := node.MailboxStructure[s.UserName]["Structure"].Remove(delMailbox, func(args ...string) {
+	err := mailbox.Structure.Remove(deleteMailboxFolder, func(args ...string) {
 
-		// Prepare slices of Element structs to capture
-		// all value-tag-pairs to remove in mailbox structure
-		// and - in case of concurrent CREATEs downstream -
-		// in the affected mailbox representation.
-		rmvMailbox := make([]*comm.Msg_Element, (len(args) / 2))
-		rmvMails := make([]*comm.Msg_Element, len(node.MailboxStructure[s.UserName][delMailbox].Elements))
+		// Prepare slice of Element structs to capture all
+		// value-tag-pairs to remove in mailbox structure.
+		rmvMailboxFolder := make([]*comm.Msg_Element, (len(args) / 2))
 
 		for i := 0; i < (len(args) / 2); i++ {
 
-			rmvMailbox[i] = &comm.Msg_Element{
+			rmvMailboxFolder[i] = &comm.Msg_Element{
 				Value: args[(2 * i)],
 				Tag:   args[((2 * i) + 1)],
 			}
-		}
-
-		i := 0
-		for tag, value := range node.MailboxStructure[s.UserName][delMailbox].Elements {
-
-			rmvMails[i] = &comm.Msg_Element{
-				Value: value,
-				Tag:   tag,
-			}
-			i++
 		}
 
 		syncChan <- comm.Msg{
 			Operation: "delete",
 			Delete: &comm.Msg_DELETE{
 				User:       s.UserName,
-				Mailbox:    delMailbox,
-				RmvMailbox: rmvMailbox,
-				RmvMails:   rmvMails,
+				Mailbox:    deleteMailboxFolder,
+				RmvMailbox: rmvMailboxFolder,
+				// TODO: ADD ALL MAIL FILES FOR FIELD 'RmvMails'
 			},
 		}
 	})
@@ -395,45 +346,20 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 		}
 
 		// Otherwise, this is a write-back error of the updated CRDT
-		// log file. Reverting actions were already taken, log error.
-		level.Error(node.Logger).Log(
-			"msg", "failed to remove elements from user's main CRDT",
+		// file. Reverting actions were already taken, log error.
+		level.Error(mailbox.Logger).Log(
+			"msg", "failed to remove elements from user's structure CRDT",
 			"err", err,
 		)
 
 		os.Exit(1)
 	}
 
-	// Close file descriptor for CRDT file of this folder.
-	err = node.MailboxStructure[s.UserName][delMailbox].File.Close()
-	if err != nil {
+	delete(mailbox.Mails, deleteMailboxFolder)
 
-		// TODO: Maybe think about better way to clean up here?
-		return &Reply{
-			Text:   "* BAD Internal server error, sorry. Closing connection.",
-			Status: 1,
-		}, fmt.Errorf("failed to close file descriptor of CRDT file for mailbox: %v", err)
-	}
-
-	// Remove CRDT from mailbox structure and corresponding
-	// mail contents slice.
-	delete(node.MailboxStructure[s.UserName], delMailbox)
-	delete(node.MailboxContents[s.UserName], delMailbox)
-
-	// Remove CRDT file of mailbox.
-	err = os.Remove(delMailboxCRDTPath)
-	if err != nil {
-
-		// TODO: Maybe think about better way to clean up here?
-		return &Reply{
-			Text:   "* BAD Internal server error, sorry. Closing connection.",
-			Status: 1,
-		}, fmt.Errorf("error while deleting CRDT file of mailbox: %v", err)
-	}
-
-	// Remove files associated with deleted mailbox
-	// from stable storage.
-	err = delMaildir.Remove()
+	// Remove files associated with the deleted
+	// mailbox folder from stable storage.
+	err = deleteMaildir.Remove()
 	if err != nil {
 
 		// TODO: Maybe think about better way to clean up here?
@@ -450,9 +376,9 @@ func (node *IMAPNode) Delete(s *Session, req *Request, syncChan chan comm.Msg) (
 
 // List allows clients to learn about the mailboxes
 // available and also returns the hierarchy delimiter.
-func (node *IMAPNode) List(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
+func (mailbox *Mailbox) List(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
 
-	if (s.State != Authenticated) && (s.State != Mailbox) {
+	if (s.State != StateAuthenticated) && (s.State != StateMailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -483,35 +409,33 @@ func (node *IMAPNode) List(s *Session, req *Request, syncChan chan comm.Msg) (*R
 		}, nil
 	}
 
-	node.Lock.RLock()
+	mailbox.Lock.RLock()
+
+	// Retrieve all distinct elements present in structure.
+	mailboxFolders := mailbox.Structure.GetAllValues()
 
 	// Reserve space for answer.
-	listAnswerLines := make([]string, 0, (len(node.MailboxStructure[s.UserName]) - 1))
+	listAnswerLines := make([]string, 0, (len(mailboxFolders) - 1))
 
-	for mailbox := range node.MailboxStructure[s.UserName] {
+	for _, mailboxFolder := range mailboxFolders {
 
-		// Do not consider structure element.
-		if mailbox != "Structure" {
+		// Split currently considered mailbox folder
+		// name at defined hierarchy separator.
+		mailboxParts := strings.Split(mailboxFolder, mailbox.HierarchySeparator)
 
-			// Split currently considered mailbox name at
-			// defined hierarchy separator.
-			mailboxParts := strings.Split(mailbox, node.HierarchySeparator)
+		if (listArgs[1] == "*") || (len(mailboxParts) == 1) {
 
-			if (listArgs[1] == "*") || (len(mailboxParts) == 1) {
-
-				// Either always include a mailbox in the response
-				// or only when it is a top level mailbox.
-				listAnswerLines = append(listAnswerLines, fmt.Sprintf("* LIST () \"%s\" %s", node.HierarchySeparator, mailbox))
-			}
+			// Either always include a mailbox in the response
+			// or only when it is a top level mailbox.
+			listAnswerLines = append(listAnswerLines, fmt.Sprintf("* LIST () \"%s\" %s", mailbox.HierarchySeparator, mailboxFolder))
 		}
 	}
 
-	node.Lock.RUnlock()
+	mailbox.Lock.RUnlock()
 
 	var answer string
 	for _, listAnswerLine := range listAnswerLines {
 
-		// Append answer line.
 		if answer == "" {
 			answer = fmt.Sprintf("%s\r\n", listAnswerLine)
 		} else {
@@ -532,11 +456,9 @@ func (node *IMAPNode) List(s *Session, req *Request, syncChan chan comm.Msg) (*R
 
 // AppendBegin checks environment conditions and returns
 // a message specifying the awaited number of bytes.
-func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
+func (mailbox *Mailbox) AppendBegin(s *Session, req *Request) (*Await, error) {
 
-	var numBytesRaw string
-
-	if (s.State != Authenticated) && (s.State != Mailbox) {
+	if (s.State != StateAuthenticated) && (s.State != StateMailbox) {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -568,6 +490,7 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 	}
 
 	// Depending on amount of arguments, store them.
+	var numBytesRaw string
 	switch lenAppendArgs {
 
 	case 2:
@@ -586,7 +509,7 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 		numBytesRaw = appendArgs[3]
 	}
 
-	// If user specified inbox, set it accordingly.
+	// If user specified INBOX, set it accordingly.
 	if strings.ToUpper(appendInProg.Mailbox) == "INBOX" {
 		appendInProg.Mailbox = "INBOX"
 	}
@@ -627,22 +550,21 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 		}, nil
 	}
 
-	// Construct path to maildir on node.
 	if appendInProg.Mailbox == "INBOX" {
-		appendInProg.Maildir = maildir.Dir(s.UserMaildirPath)
+		appendInProg.Maildir = maildir.Dir(mailbox.MaildirPath)
 	} else {
-		appendInProg.Maildir = maildir.Dir(filepath.Join(s.UserMaildirPath, appendInProg.Mailbox))
+		appendInProg.Maildir = maildir.Dir(filepath.Join(mailbox.MaildirPath, appendInProg.Mailbox))
 	}
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
-	node.Lock.Lock()
+	mailbox.Lock.Lock()
 
-	if node.MailboxStructure[s.UserName]["Structure"].Lookup(appendInProg.Mailbox) != true {
+	if mailbox.Structure.Lookup(appendInProg.Mailbox) != true {
 
-		node.Lock.Unlock()
+		mailbox.Lock.Unlock()
 
-		// If mailbox to append message to does not exist,
+		// If mailbox folder to append message to does not exist,
 		// this is a client error. Return NO response.
 		return &Await{
 			Text: fmt.Sprintf("%s NO [TRYCREATE] Mailbox to append to does not exist", req.Tag),
@@ -660,9 +582,9 @@ func (node *IMAPNode) AppendBegin(s *Session, req *Request) (*Await, error) {
 
 // AppendEnd receives the mail file associated with a
 // prior AppendBegin.
-func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.Msg) (*Reply, error) {
+func (mailbox *Mailbox) AppendEnd(s *Session, content []byte, syncChan chan comm.Msg) (*Reply, error) {
 
-	defer node.Lock.Unlock()
+	defer mailbox.Lock.Unlock()
 	defer func() {
 		s.AppendInProg = nil
 	}()
@@ -718,12 +640,12 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	}
 	mailFileName := filepath.Base(mailFileNamePath)
 
-	// Append new mail to mailbox' contents CRDT.
-	node.MailboxContents[s.UserName][s.AppendInProg.Mailbox] = append(node.MailboxContents[s.UserName][s.AppendInProg.Mailbox], mailFileName)
+	// Append new mail to mail file tracking slice.
+	mailbox.Mails[s.AppendInProg.Mailbox] = append(mailbox.Mails[s.AppendInProg.Mailbox], mailFileName)
 
 	// Add new mail to mailbox' CRDT and send update
 	// message to other replicas.
-	err = node.MailboxStructure[s.UserName][s.AppendInProg.Mailbox].Add(mailFileName, func(args ...string) {
+	err = mailbox.Structure.Add(s.AppendInProg.Mailbox, func(args ...string) {
 		syncChan <- comm.Msg{
 			Operation: "append",
 			Append: &comm.Msg_APPEND{
@@ -739,14 +661,14 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 	})
 	if err != nil {
 
-		level.Error(node.Logger).Log(
+		level.Error(mailbox.Logger).Log(
 			"msg", "fail during source APPEND execution, will clean up",
 			"err", err,
 		)
 
 		err := os.Remove(mailFileNamePath)
 		if err != nil {
-			level.Error(node.Logger).Log(
+			level.Error(mailbox.Logger).Log(
 				"msg", "failed to remove created mail message",
 				"err", err,
 			)
@@ -765,9 +687,9 @@ func (node *IMAPNode) AppendEnd(s *Session, content []byte, syncChan chan comm.M
 // Expunge deletes messages permanently from currently
 // selected mailbox that have been flagged as Deleted
 // prior to calling this function.
-func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
+func (mailbox *Mailbox) Expunge(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
 
-	if s.State != Mailbox {
+	if s.State != StateMailbox {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -789,9 +711,9 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 	// Construct path to Maildir to expunge.
 	var expMaildir maildir.Dir
 	if s.SelectedMailbox == "INBOX" {
-		expMaildir = maildir.Dir(filepath.Join(s.UserMaildirPath, "cur"))
+		expMaildir = maildir.Dir(filepath.Join(mailbox.MaildirPath, "cur"))
 	} else {
-		expMaildir = maildir.Dir(filepath.Join(s.UserMaildirPath, s.SelectedMailbox, "cur"))
+		expMaildir = maildir.Dir(filepath.Join(mailbox.MaildirPath, s.SelectedMailbox, "cur"))
 	}
 
 	// Reserve space for mails to expunge.
@@ -804,12 +726,12 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
-	node.Lock.Lock()
-	defer node.Lock.Unlock()
+	mailbox.Lock.Lock()
+	defer mailbox.Lock.Unlock()
 
 	// Save all mails possibly to delete and
 	// number of these files.
-	numExpMails := len(node.MailboxContents[s.UserName][s.SelectedMailbox])
+	numExpMails := len(mailbox.Mails[s.SelectedMailbox])
 
 	// Only do the work if there are any mails
 	// present in mailbox.
@@ -819,7 +741,7 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 		for i := (numExpMails - 1); i >= 0; i-- {
 
 			// Retrieve all flags of fetched mail.
-			mailFlags, err := expMaildir.Flags(node.MailboxContents[s.UserName][s.SelectedMailbox][i], false)
+			mailFlags, err := expMaildir.Flags(mailbox.Mails[s.SelectedMailbox][i], false)
 			if err != nil {
 
 				return &Reply{
@@ -838,10 +760,10 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 		// Reserve space for answer lines.
 		expAnswerLines = make([]string, 0, len(expMailNums))
 
-		for _, msgNum := range expMailNums {
+		for _, mailSeqNum := range expMailNums {
 
 			// Remove each mail to expunge from mailbox CRDT.
-			err := node.MailboxStructure[s.UserName][s.SelectedMailbox].Remove(node.MailboxContents[s.UserName][s.SelectedMailbox][msgNum], func(args ...string) {
+			err := mailbox.MailboxStructure[s.UserName][s.SelectedMailbox].Remove(mailbox.MailboxContents[s.UserName][s.SelectedMailbox][mailSeqNum], func(args ...string) {
 
 				// Prepare slice of Element structs to capture
 				// all value-tag-pairs to remove.
@@ -868,15 +790,15 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
-				level.Error(node.Logger).Log(
-					"msg", fmt.Sprintf("failed to remove mail '%v' from user's selected mailbox CRDT", node.MailboxContents[s.UserName][s.SelectedMailbox][msgNum]),
+				level.Error(mailbox.Logger).Log(
+					"msg", fmt.Sprintf("failed to remove mail '%v' from user's selected mailbox CRDT", mailbox.MailboxContents[s.UserName][s.SelectedMailbox][mailSeqNum]),
 					"err", err,
 				)
 				os.Exit(1)
 			}
 
 			// Construct path to file.
-			expMailPath := filepath.Join(string(expMaildir), node.MailboxContents[s.UserName][s.SelectedMailbox][msgNum])
+			expMailPath := filepath.Join(string(expMaildir), mailbox.MailboxContents[s.UserName][s.SelectedMailbox][mailSeqNum])
 
 			// Remove the file.
 			err = os.Remove(expMailPath)
@@ -889,11 +811,11 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 			}
 
 			// Immediately remove mail from contents structure.
-			realMsgNum := msgNum + 1
-			node.MailboxContents[s.UserName][s.SelectedMailbox] = append(node.MailboxContents[s.UserName][s.SelectedMailbox][:msgNum], node.MailboxContents[s.UserName][s.SelectedMailbox][realMsgNum:]...)
+			realMailSeqNum := mailSeqNum + 1
+			mailbox.MailboxContents[s.UserName][s.SelectedMailbox] = append(mailbox.MailboxContents[s.UserName][s.SelectedMailbox][:mailSeqNum], mailbox.MailboxContents[s.UserName][s.SelectedMailbox][realMailSeqNum:]...)
 
 			// Append individual remove answer to answer lines.
-			expAnswerLines = append(expAnswerLines, fmt.Sprintf("* %d EXPUNGE", realMsgNum))
+			expAnswerLines = append(expAnswerLines, fmt.Sprintf("* %d EXPUNGE", realMailSeqNum))
 		}
 
 		for _, expAnswerLine := range expAnswerLines {
@@ -921,13 +843,9 @@ func (node *IMAPNode) Expunge(s *Session, req *Request, syncChan chan comm.Msg) 
 // Store takes in message sequence numbers and some set
 // of flags to change in those messages and changes the
 // attributes for these mails throughout the system.
-func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
+func (mailbox *Mailbox) Store(s *Session, req *Request, syncChan chan comm.Msg) (*Reply, error) {
 
-	// Set updated flags list indicator
-	// initially to false.
-	silent := false
-
-	if s.State != Mailbox {
+	if s.State != StateMailbox {
 
 		// If connection was not in correct state when this
 		// command was executed, this is a client error.
@@ -967,6 +885,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 
 	// If client requested not to receive the updated
 	// flags list, set indicator to false.
+	silent := false
 	if strings.HasSuffix(dataItemType, ".SILENT") {
 		silent = true
 	}
@@ -986,29 +905,27 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 	// case of INBOX as current location.
 	var selectedMailbox string
 	if s.SelectedMailbox == "INBOX" {
-		selectedMailbox = s.UserMaildirPath
+		selectedMailbox = mailbox.MaildirPath
 	} else {
-		selectedMailbox = filepath.Join(s.UserMaildirPath, s.SelectedMailbox)
+		selectedMailbox = filepath.Join(mailbox.MaildirPath, s.SelectedMailbox)
 	}
 
-	// Build up paths before entering critical section.
-	mailMaildir := maildir.Dir(selectedMailbox)
+	storeMaildir := maildir.Dir(selectedMailbox)
 
 	// Lock node exclusively to make execution
 	// of following CRDT operations atomic.
-	node.Lock.Lock()
+	mailbox.Lock.Lock()
 
-	// Retrieve number of messages in mailbox.
-	lenMailboxContents := len(node.MailboxContents[s.UserName][s.SelectedMailbox])
+	numMails := len(mailbox.Mails[s.SelectedMailbox])
 
 	// Parse sequence numbers argument (first parameter).
 	// CAUTION: We expect this function to fail if supplied
 	//          message sequence numbers did not refer to
 	//          existing messages in mailbox.
-	msgNums, err := ParseSeqNumbers(storeArgs[0], lenMailboxContents)
+	mailSeqNums, err := ParseSeqNumbers(storeArgs[0], numMails)
 	if err != nil {
 
-		node.Lock.Unlock()
+		mailbox.Lock.Unlock()
 
 		// Parsing sequence numbers from STORE request produced
 		// an error. Return tagged BAD response.
@@ -1018,9 +935,9 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 	}
 
 	// Prepare answer slice.
-	answerLines := make([]string, 0, len(msgNums))
+	answerLines := make([]string, 0, len(mailSeqNums))
 
-	for _, msgNum := range msgNums {
+	for _, mailSeqNum := range mailSeqNums {
 
 		// Initialize runes slice for new flags of mail.
 		newMailFlags := make([]rune, 0, 5)
@@ -1048,14 +965,13 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 			newMailFlags = append(newMailFlags, 'T')
 		}
 
-		// Retrieve mail file name.
-		mailFileName := node.MailboxContents[s.UserName][s.SelectedMailbox][msgNum]
+		mailFileName := mailbox.Mails[s.SelectedMailbox][mailSeqNum]
 
 		// Read message content from file.
 		mailFileContent, err := ioutil.ReadFile(filepath.Join(selectedMailbox, "cur", mailFileName))
 		if err != nil {
 
-			node.Lock.Unlock()
+			mailbox.Lock.Unlock()
 
 			return &Reply{
 				Text:   "* BAD Internal server error, sorry. Closing connection.",
@@ -1064,10 +980,10 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 		}
 
 		// Retrieve flags included in mail file name.
-		mailFlags, err := mailMaildir.Flags(mailFileName, false)
+		mailFlags, err := storeMaildir.Flags(mailFileName, false)
 		if err != nil {
 
-			node.Lock.Unlock()
+			mailbox.Lock.Unlock()
 
 			return &Reply{
 				Text:   "* BAD Internal server error, sorry. Closing connection.",
@@ -1119,10 +1035,10 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 
 			// Set just constructed new flags string in mail's
 			// file name (renaming it).
-			newMailFileName, err := mailMaildir.SetFlags(mailFileName, string(newMailFlags), false)
+			newMailFileName, err := storeMaildir.SetFlags(mailFileName, string(newMailFlags), false)
 			if err != nil {
 
-				node.Lock.Unlock()
+				mailbox.Lock.Unlock()
 
 				return &Reply{
 					Text:   "* BAD Internal server error, sorry. Closing connection.",
@@ -1134,7 +1050,7 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 
 			// First, remove the former name of the mail file
 			// but do not yet send out an update operation.
-			err = node.MailboxStructure[s.UserName][s.SelectedMailbox].Remove(mailFileName, func(args ...string) {
+			err = mailbox.MailboxStructure[s.UserName][s.SelectedMailbox].Remove(mailFileName, func(args ...string) {
 
 				// Prepare slice of Element structs to capture
 				// all value-tag-pairs to remove.
@@ -1152,17 +1068,17 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "failed to remove old mail name from selected mailbox CRDT",
 					"err", err,
 				)
-				node.Lock.Unlock()
+				mailbox.Lock.Unlock()
 				os.Exit(1)
 			}
 
 			// Second, add the new mail file's name and finally
 			// instruct all other nodes to do the same.
-			err = node.MailboxStructure[s.UserName][s.SelectedMailbox].Add(newMailFileName, func(args ...string) {
+			err = mailbox.MailboxStructure[s.UserName][s.SelectedMailbox].Add(newMailFileName, func(args ...string) {
 
 				syncChan <- comm.Msg{
 					Operation: "store",
@@ -1182,23 +1098,21 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
-				level.Error(node.Logger).Log(
+				level.Error(mailbox.Logger).Log(
 					"msg", "failed to add renamed mail name to selected mailbox CRDT",
 					"err", err,
 				)
-				node.Lock.Unlock()
+				mailbox.Lock.Unlock()
 				os.Exit(1)
 			}
 
 			// If we are done with that, also replace the mail's
-			// file name in the corresponding contents slice.
-			node.MailboxContents[s.UserName][s.SelectedMailbox][msgNum] = newMailFileName
+			// file name in the corresponding mail file slice.
+			mailbox.Mails[s.SelectedMailbox][mailSeqNum] = newMailFileName
 		}
 
-		// Check if client requested update information.
 		if silent != true {
 
-			// Build new flags list for answer.
 			answerFlagString := ""
 
 			for _, newFlag := range newMailFlags {
@@ -1250,16 +1164,14 @@ func (node *IMAPNode) Store(s *Session, req *Request, syncChan chan comm.Msg) (*
 			}
 
 			// Append this file's FETCH answer.
-			realMsgNum := msgNum + 1
-			answerLines = append(answerLines, fmt.Sprintf("* %d FETCH (FLAGS (%s))", realMsgNum, answerFlagString))
+			realMailSeqNum := mailSeqNum + 1
+			answerLines = append(answerLines, fmt.Sprintf("* %d FETCH (FLAGS (%s))", realMailSeqNum, answerFlagString))
 		}
 	}
 
-	node.Lock.Unlock()
+	mailbox.Lock.Unlock()
 
 	var answer string
-
-	// Check if client requested update information.
 	if silent != true {
 
 		for _, answerLine := range answerLines {
