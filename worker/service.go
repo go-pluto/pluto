@@ -29,6 +29,7 @@ type Metrics struct {
 
 type service struct {
 	imapNode     *imap.IMAPNode
+	mailboxes    map[string]*imap.Mailbox
 	tlsConfig    *tls.Config
 	config       config.Worker
 	sessions     map[string]*imap.Session
@@ -44,7 +45,7 @@ type service struct {
 type Service interface {
 
 	// Init initializes node-type specific fields.
-	Init(syncSendChan chan comm.Msg) error
+	Init(logger log.Logger, sep string, syncSendChan chan comm.Msg) error
 
 	// ApplyCRDTUpd receives strings representing CRDT
 	// update operations from receiver and executes them.
@@ -104,18 +105,10 @@ type Service interface {
 // NewService takes in all required parameters for spinning
 // up a new worker node, runs initialization code, and returns
 // a service struct for this node type wrapping all information.
-func NewService(name string, logger log.Logger, tlsConfig *tls.Config, config *config.Config) Service {
+func NewService(name string, tlsConfig *tls.Config, config *config.Config) Service {
 
 	return &service{
-		imapNode: &imap.IMAPNode{
-			Logger:             logger,
-			Lock:               &sync.RWMutex{},
-			MailboxStructure:   make(map[string]map[string]*crdt.ORSet),
-			MailboxContents:    make(map[string]map[string][]string),
-			CRDTLayerRoot:      config.Workers[name].CRDTLayerRoot,
-			MaildirRoot:        config.Workers[name].MaildirRoot,
-			HierarchySeparator: config.IMAP.HierarchySeparator,
-		},
+		mailboxes: make(map[string]*imap.Mailbox),
 		tlsConfig: tlsConfig,
 		config:    config.Workers[name],
 		sessions:  make(map[string]*imap.Session),
@@ -126,10 +119,10 @@ func NewService(name string, logger log.Logger, tlsConfig *tls.Config, config *c
 // Init executes functions organizing files and folders
 // needed for this node and passes on the synchronization
 // channel to the service.
-func (s *service) Init(syncSendChan chan comm.Msg) error {
+func (s *service) Init(logger log.Logger, sep string, syncSendChan chan comm.Msg) error {
 
-	// Find all Maildir and CRDT files for this node.
-	err := s.findFiles()
+	// Build internal CRDT state.
+	err := s.constructState(logger, sep)
 	if err != nil {
 		return err
 	}
@@ -146,16 +139,18 @@ func (s *service) Init(syncSendChan chan comm.Msg) error {
 	return err
 }
 
-// findFiles below this node's CRDT root layer.
-func (s *service) findFiles() error {
+// constructState reads in each user's structure
+// CRDT and builds an internal state representation
+// from found information.
+func (s *service) constructState(logger log.Logger, sep string) error {
 
 	// Find all files below this node's CRDT root layer.
-	userFolders, err := filepath.Glob(filepath.Join(s.imapNode.CRDTLayerRoot, "*"))
+	folders, err := filepath.Glob(filepath.Join(s.config.CRDTLayerRoot, "*"))
 	if err != nil {
 		return fmt.Errorf("globbing for CRDT folders of users failed with: %v", err)
 	}
 
-	for _, folder := range userFolders {
+	for _, folder := range folders {
 
 		// Retrieve information about accessed file.
 		folderInfo, err := os.Stat(folder)
@@ -163,44 +158,67 @@ func (s *service) findFiles() error {
 			return fmt.Errorf("error during stat'ing possible user CRDT folder: %v", err)
 		}
 
-		// Only consider folders for building up CRDT map.
+		// Only consider folders for building CRDT state.
 		if folderInfo.IsDir() {
 
 			// Extract last part of path, the user name.
 			userName := filepath.Base(folder)
 
 			// Read in mailbox structure CRDT from file.
-			userMainCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, "mailbox-structure.log"))
+			structureCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, "structure.crdt"))
 			if err != nil {
-				return fmt.Errorf("reading CRDT failed: %v", err)
+				return fmt.Errorf("reading structure CRDT failed: %v", err)
 			}
 
-			// Store main CRDT in designated map for user name.
-			s.imapNode.MailboxStructure[userName] = make(map[string]*crdt.ORSet)
-			s.imapNode.MailboxStructure[userName]["Structure"] = userMainCRDT
+			s.mailboxes[userName] = &imap.Mailbox{
+				Logger:             logger,
+				Lock:               &sync.RWMutex{},
+				Structure:          structureCRDT,
+				Mails:              make(map[string][]string),
+				CRDTPath:           filepath.Join(s.config.CRDTLayerRoot, userName),
+				MaildirPath:        filepath.Join(s.config.MaildirRoot, userName),
+				HierarchySeparator: sep,
+			}
 
-			// Already initialize slice to track order in mailbox.
-			s.imapNode.MailboxContents[userName] = make(map[string][]string)
+			// Retrieve the names of all mailbox folders
+			// this user has present in the mailbox.
+			mailboxFolders := structureCRDT.GetAllValues()
 
-			// Retrieve all mailboxes the user possesses
-			// according to main CRDT.
-			userMailboxes := userMainCRDT.GetAllValues()
+			var mailboxFolderCur string
+			for _, mailboxFolder := range mailboxFolders {
 
-			for _, userMailbox := range userMailboxes {
+				// Prepare some space for found mail files.
+				s.mailboxes[userName].Mails[mailboxFolder] = make([]string, 0, 6)
 
-				// Read in each mailbox CRDT from file.
-				userMailboxCRDT, err := crdt.InitORSetFromFile(filepath.Join(folder, fmt.Sprintf("%s.log", userMailbox)))
-				if err != nil {
-					return fmt.Errorf("reading CRDT failed: %v", err)
+				if mailboxFolder == "INBOX" {
+					mailboxFolderCur = filepath.Join(s.config.MaildirRoot, userName, "cur")
+				} else {
+					mailboxFolderCur = filepath.Join(s.config.MaildirRoot, userName, mailboxFolder, "cur")
 				}
 
-				// Store each read-in CRDT in map under the respective
-				// mailbox name in user's main CRDT.
-				s.imapNode.MailboxStructure[userName][userMailbox] = userMailboxCRDT
+				// Read file system content (mail messages)
+				// into internal state.
+				err := filepath.Walk(mailboxFolderCur, func(path string, info os.FileInfo, err error) error {
 
-				// Read in mails in respective mailbox in order to
-				// allow sequence numbers actions.
-				s.imapNode.MailboxContents[userName][userMailbox] = userMailboxCRDT.GetAllValues()
+					if err != nil {
+						return err
+					}
+
+					// Do not consider the "cur" folder itself.
+					if path == mailboxFolderCur {
+						return nil
+					}
+
+					// If we found a mail file, append it to the internal list.
+					if info.Mode().IsRegular() {
+						s.mailboxes[userName].Mails[mailboxFolder] = append(s.mailboxes[userName].Mails[mailboxFolder], info.Name())
+					}
+
+					return nil
+				})
+				if err != nil {
+					return fmt.Errorf("error while walking user Maildir: %v", err)
+				}
 			}
 		}
 	}
@@ -208,11 +226,50 @@ func (s *service) findFiles() error {
 	return nil
 }
 
-// ApplyCRDTUpd passes on the required arguments for
-// invoking the IMAP node's ApplyCRDTUpd function so
-// that CRDT messages will get applied in background.
+// ApplyCRDTUpd receives strings representing CRDT
+// update operations from receiver and executes them.
 func (s *service) ApplyCRDTUpd(applyCRDTUpd <-chan comm.Msg, doneCRDTUpd chan<- struct{}) {
-	s.imapNode.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
+
+	for {
+
+		// Receive update message from receiver
+		// via channel.
+		msg := <-applyChan
+
+		// Depending on received operation,
+		// parse remaining payload further.
+		switch msg.Operation {
+
+		case "create":
+
+			// Based on specified user in message,
+			// select correct mailbox to manipulate.
+			mailbox := s.mailboxes[msg.Create.User]
+
+			// Execute authoritative function to
+			// apply received updates.
+			mailbox.ApplyCreate(msg.Create)
+
+		case "delete":
+			mailbox := s.mailboxes[msg.Delete.User]
+			mailbox.ApplyDelete(msg.Delete)
+
+		case "append":
+			mailbox := s.mailboxes[msg.Append.User]
+			mailbox.ApplyAppend(msg.Append)
+
+		case "expunge":
+			mailbox := s.mailboxes[msg.Expunge.User]
+			mailbox.ApplyExpunge(msg.Expunge)
+
+		case "store":
+			mailbox := s.mailboxes[msg.Store.User]
+			mailbox.ApplyStore(msg.Store)
+		}
+
+		// Signal receiver that update was performed.
+		doneChan <- struct{}{}
+	}
 }
 
 // Serve invokes the main gRPC Serve() function.
@@ -226,7 +283,7 @@ func (s *service) Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.C
 
 	// Create new connection tracking object.
 	s.sessions[clientCtx.ClientID] = &imap.Session{
-		State:             imap.Authenticated,
+		State:             imap.StateAuthenticated,
 		ClientID:          clientCtx.ClientID,
 		UserName:          clientCtx.UserName,
 		RespWorker:        clientCtx.RespWorker,
