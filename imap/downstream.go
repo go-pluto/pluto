@@ -89,7 +89,6 @@ func (mailbox *Mailbox) ApplyDelete(deleteUpd *comm.Msg_DELETE) {
 
 	delMaildir := filepath.Join(mailbox.MaildirPath, deleteUpd.Mailbox)
 
-	// Construct remove set from received mailbox values.
 	rmElements := make(map[string]string)
 	for _, element := range deleteUpd.RmvMailbox {
 		rmElements[element.Tag] = element.Value
@@ -366,21 +365,18 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 // of an EXPUNGE operation.
 func (mailbox *Mailbox) ApplyExpunge(expungeUpd *comm.Msg_EXPUNGE) {
 
-	// Construct remove set from received values.
 	rmElements := make(map[string]string)
 	for _, element := range expungeUpd.RmvMail {
 		rmElements[element.Tag] = element.Value
 	}
 
-	// Construct path to old file.
 	var delFileName string
 	if expungeUpd.Mailbox == "INBOX" {
-		delFileName = filepath.Join(mailbox.MaildirRoot, expungeUpd.User, "cur", expungeUpd.RmvMail[0].Value)
+		delFileName = filepath.Join(mailbox.MaildirPath, "cur", expungeUpd.RmvMail[0].Value)
 	} else {
-		delFileName = filepath.Join(mailbox.MaildirRoot, expungeUpd.User, expungeUpd.Mailbox, "cur", expungeUpd.RmvMail[0].Value)
+		delFileName = filepath.Join(mailbox.MaildirPath, expungeUpd.Mailbox, "cur", expungeUpd.RmvMail[0].Value)
 	}
 
-	// Lock node exclusively.
 	mailbox.Lock.Lock()
 	defer mailbox.Lock.Unlock()
 
@@ -430,29 +426,28 @@ func (mailbox *Mailbox) ApplyExpunge(expungeUpd *comm.Msg_EXPUNGE) {
 // of a STORE operation.
 func (mailbox *Mailbox) ApplyStore(storeUpd *comm.Msg_STORE) {
 
-	// Construct remove set from received values.
 	rmElements := make(map[string]string)
 	for _, element := range storeUpd.RmvMail {
 		rmElements[element.Tag] = element.Value
 	}
 
-	// Construct path to old file.
 	var delFileName string
 	if storeUpd.Mailbox == "INBOX" {
-		delFileName = filepath.Join(mailbox.MaildirRoot, storeUpd.User, "cur", storeUpd.RmvMail[0].Value)
+		delFileName = filepath.Join(mailbox.MaildirPath, "cur", storeUpd.RmvMail[0].Value)
 	} else {
-		delFileName = filepath.Join(mailbox.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.RmvMail[0].Value)
+		delFileName = filepath.Join(mailbox.MaildirPath, storeUpd.Mailbox, "cur", storeUpd.RmvMail[0].Value)
 	}
 
-	// Construct path to potential new file.
+	storeMaildir := mailbox.MaildirPath
 	var storeFileName string
+
 	if storeUpd.Mailbox == "INBOX" {
-		storeFileName = filepath.Join(mailbox.MaildirRoot, storeUpd.User, "cur", storeUpd.AddMail.Value)
+		storeFileName = filepath.Join(mailbox.MaildirPath, "cur", storeUpd.AddMail.Value)
 	} else {
-		storeFileName = filepath.Join(mailbox.MaildirRoot, storeUpd.User, storeUpd.Mailbox, "cur", storeUpd.AddMail.Value)
+		storeMaildir = filepath.Join(mailbox.MaildirPath, storeUpd.Mailbox)
+		storeFileName = filepath.Join(mailbox.MaildirPath, storeUpd.Mailbox, "cur", storeUpd.AddMail.Value)
 	}
 
-	// Lock node exclusively.
 	mailbox.Lock.Lock()
 	defer mailbox.Lock.Unlock()
 
