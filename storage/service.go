@@ -21,11 +21,10 @@ import (
 // Structs
 
 type service struct {
-	imapNode      *imap.IMAPNode
-	mailboxes     map[string]*imap.Mailbox
 	tlsConfig     *tls.Config
 	config        config.Storage
 	peersToSubnet map[string]string
+	mailboxes     map[string]*imap.Mailbox
 	sessions      map[string]*imap.Session
 	Name          string
 	IMAPNodeGRPC  *grpc.Server
@@ -102,10 +101,10 @@ type Service interface {
 func NewService(name string, tlsConfig *tls.Config, config *config.Config) Service {
 
 	return &service{
-		mailboxes:     make(map[string]*imap.Mailbox),
 		tlsConfig:     tlsConfig,
 		config:        config.Storage,
 		peersToSubnet: make(map[string]string),
+		mailboxes:     make(map[string]*imap.Mailbox),
 		sessions:      make(map[string]*imap.Session),
 		Name:          name,
 		SyncSendChans: make(map[string]chan comm.Msg),
@@ -234,7 +233,47 @@ func (s *service) constructState(logger log.Logger, sep string) error {
 // invoking the IMAP node's ApplyCRDTUpd function so
 // that CRDT messages will get applied in background.
 func (s *service) ApplyCRDTUpd(applyCRDTUpd <-chan comm.Msg, doneCRDTUpd chan<- struct{}) {
-	s.imapNode.ApplyCRDTUpd(applyCRDTUpd, doneCRDTUpd)
+
+	for {
+
+		// Receive update message from
+		// receiver via channel.
+		msg := <-applyChan
+
+		// Depending on received operation,
+		// parse remaining payload further.
+		switch msg.Operation {
+
+		case "create":
+
+			// Based on specified user in message,
+			// select correct mailbox to manipulate.
+			mailbox := s.mailboxes[msg.Create.User]
+
+			// Execute authoritative function to
+			// apply received updates.
+			mailbox.ApplyCreate(msg.Create)
+
+		case "delete":
+			mailbox := s.mailboxes[msg.Delete.User]
+			mailbox.ApplyDelete(msg.Delete)
+
+		case "append":
+			mailbox := s.mailboxes[msg.Append.User]
+			mailbox.ApplyAppend(msg.Append)
+
+		case "expunge":
+			mailbox := s.mailboxes[msg.Expunge.User]
+			mailbox.ApplyExpunge(msg.Expunge)
+
+		case "store":
+			mailbox := s.mailboxes[msg.Store.User]
+			mailbox.ApplyStore(msg.Store)
+		}
+
+		// Signal receiver that an update was performed.
+		doneChan <- struct{}{}
+	}
 }
 
 // Serve invokes the main gRPC Serve() function.
@@ -253,8 +292,6 @@ func (s *service) Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.C
 		UserName:          clientCtx.UserName,
 		RespWorker:        clientCtx.RespWorker,
 		StorageSubnetChan: s.SyncSendChans[s.peersToSubnet[clientCtx.RespWorker]],
-		UserCRDTPath:      filepath.Join(s.config.CRDTLayerRoot, clientCtx.UserName),
-		UserMaildirPath:   filepath.Join(s.config.MaildirRoot, clientCtx.UserName),
 		AppendInProg:      nil,
 	}
 
@@ -294,7 +331,7 @@ func (s *service) Select(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Select(sess, req, sess.StorageSubnetChan)
+	reply, err := s.mailboxes[sess.UserName].Select(sess, req, sess.StorageSubnetChan)
 
 	return reply, err
 }
@@ -318,7 +355,7 @@ func (s *service) Create(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Create(sess, req, sess.StorageSubnetChan)
+	reply, err := s.mailboxes[sess.UserName].Create(sess, req, sess.StorageSubnetChan)
 
 	return reply, err
 }
@@ -341,7 +378,7 @@ func (s *service) Delete(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Delete(sess, req, sess.StorageSubnetChan)
+	reply, err := s.mailboxes[sess.UserName].Delete(sess, req, sess.StorageSubnetChan)
 
 	return reply, err
 }
@@ -365,7 +402,7 @@ func (s *service) List(ctx context.Context, comd *imap.Command) (*imap.Reply, er
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.List(sess, req, sess.StorageSubnetChan)
+	reply, err := s.mailboxes[sess.UserName].List(sess, req, sess.StorageSubnetChan)
 
 	return reply, err
 }
@@ -389,7 +426,7 @@ func (s *service) AppendBegin(ctx context.Context, comd *imap.Command) (*imap.Aw
 	}
 
 	// Forward gathered info to IMAP function.
-	await, err := s.imapNode.AppendBegin(sess, req)
+	await, err := s.mailboxes[sess.UserName].AppendBegin(sess, req)
 
 	return await, err
 }
@@ -413,7 +450,7 @@ func (s *service) AppendEnd(ctx context.Context, mailFile *imap.MailFile) (*imap
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.AppendEnd(sess, mailFile.Content, sess.StorageSubnetChan)
+	reply, err := s.mailboxes[sess.UserName].AppendEnd(sess, mailFile.Content, sess.StorageSubnetChan)
 
 	return reply, err
 }
@@ -430,7 +467,7 @@ func (s *service) AppendAbort(ctx context.Context, abort *imap.Abort) (*imap.Con
 
 	// Remove in-progress meta data.
 	sess.AppendInProg = nil
-	s.imapNode.Lock.Unlock()
+	s.mailboxes[sess.UserName].Lock.Unlock()
 
 	return &imap.Confirmation{
 		Status: 0,
@@ -457,7 +494,7 @@ func (s *service) Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply,
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Expunge(sess, req, sess.StorageSubnetChan)
+	reply, err := s.mailboxes[sess.UserName].Expunge(sess, req, sess.StorageSubnetChan)
 
 	return reply, err
 }
@@ -482,7 +519,7 @@ func (s *service) Store(ctx context.Context, comd *imap.Command) (*imap.Reply, e
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Store(sess, req, sess.StorageSubnetChan)
+	reply, err := s.mailboxes[sess.UserName].Store(sess, req, sess.StorageSubnetChan)
 
 	return reply, err
 }

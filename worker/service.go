@@ -28,10 +28,9 @@ type Metrics struct {
 }
 
 type service struct {
-	imapNode     *imap.IMAPNode
-	mailboxes    map[string]*imap.Mailbox
 	tlsConfig    *tls.Config
 	config       config.Worker
+	mailboxes    map[string]*imap.Mailbox
 	sessions     map[string]*imap.Session
 	Name         string
 	IMAPNodeGRPC *grpc.Server
@@ -108,9 +107,9 @@ type Service interface {
 func NewService(name string, tlsConfig *tls.Config, config *config.Config) Service {
 
 	return &service{
-		mailboxes: make(map[string]*imap.Mailbox),
 		tlsConfig: tlsConfig,
 		config:    config.Workers[name],
+		mailboxes: make(map[string]*imap.Mailbox),
 		sessions:  make(map[string]*imap.Session),
 		Name:      name,
 	}
@@ -232,8 +231,8 @@ func (s *service) ApplyCRDTUpd(applyCRDTUpd <-chan comm.Msg, doneCRDTUpd chan<- 
 
 	for {
 
-		// Receive update message from receiver
-		// via channel.
+		// Receive update message from
+		// receiver via channel.
 		msg := <-applyChan
 
 		// Depending on received operation,
@@ -267,7 +266,7 @@ func (s *service) ApplyCRDTUpd(applyCRDTUpd <-chan comm.Msg, doneCRDTUpd chan<- 
 			mailbox.ApplyStore(msg.Store)
 		}
 
-		// Signal receiver that update was performed.
+		// Signal receiver that an update was performed.
 		doneChan <- struct{}{}
 	}
 }
@@ -288,8 +287,6 @@ func (s *service) Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.C
 		UserName:          clientCtx.UserName,
 		RespWorker:        clientCtx.RespWorker,
 		StorageSubnetChan: nil,
-		UserCRDTPath:      filepath.Join(s.config.CRDTLayerRoot, clientCtx.UserName),
-		UserMaildirPath:   filepath.Join(s.config.MaildirRoot, clientCtx.UserName),
 		AppendInProg:      nil,
 	}
 
@@ -329,7 +326,7 @@ func (s *service) Select(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Select(sess, req, s.SyncSendChan)
+	reply, err := s.mailboxes[sess.UserName].Select(sess, req, s.SyncSendChan)
 
 	return reply, err
 }
@@ -353,7 +350,7 @@ func (s *service) Create(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Create(sess, req, s.SyncSendChan)
+	reply, err := s.mailboxes[sess.UserName].Create(sess, req, s.SyncSendChan)
 
 	return reply, err
 }
@@ -376,7 +373,7 @@ func (s *service) Delete(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Delete(sess, req, s.SyncSendChan)
+	reply, err := s.mailboxes[sess.UserName].Delete(sess, req, s.SyncSendChan)
 
 	return reply, err
 }
@@ -400,7 +397,7 @@ func (s *service) List(ctx context.Context, comd *imap.Command) (*imap.Reply, er
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.List(sess, req, s.SyncSendChan)
+	reply, err := s.mailboxes[sess.UserName].List(sess, req, s.SyncSendChan)
 
 	return reply, err
 }
@@ -424,7 +421,7 @@ func (s *service) AppendBegin(ctx context.Context, comd *imap.Command) (*imap.Aw
 	}
 
 	// Forward gathered info to IMAP function.
-	await, err := s.imapNode.AppendBegin(sess, req)
+	await, err := s.mailboxes[sess.UserName].AppendBegin(sess, req)
 
 	return await, err
 }
@@ -448,7 +445,7 @@ func (s *service) AppendEnd(ctx context.Context, mailFile *imap.MailFile) (*imap
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.AppendEnd(sess, mailFile.Content, s.SyncSendChan)
+	reply, err := s.mailboxes[sess.UserName].AppendEnd(sess, mailFile.Content, s.SyncSendChan)
 
 	return reply, err
 }
@@ -465,7 +462,7 @@ func (s *service) AppendAbort(ctx context.Context, abort *imap.Abort) (*imap.Con
 
 	// Remove in-progress meta data.
 	sess.AppendInProg = nil
-	s.imapNode.Lock.Unlock()
+	s.mailboxes[sess.UserName].Lock.Unlock()
 
 	return &imap.Confirmation{
 		Status: 0,
@@ -492,7 +489,7 @@ func (s *service) Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply,
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Expunge(sess, req, s.SyncSendChan)
+	reply, err := s.mailboxes[sess.UserName].Expunge(sess, req, s.SyncSendChan)
 
 	return reply, err
 }
@@ -517,7 +514,7 @@ func (s *service) Store(ctx context.Context, comd *imap.Command) (*imap.Reply, e
 	}
 
 	// Forward gathered info to IMAP function.
-	reply, err := s.imapNode.Store(sess, req, s.SyncSendChan)
+	reply, err := s.mailboxes[sess.UserName].Store(sess, req, s.SyncSendChan)
 
 	return reply, err
 }

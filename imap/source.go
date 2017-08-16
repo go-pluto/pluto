@@ -19,20 +19,12 @@ import (
 
 // Structs
 
-// IMAPNode unifies needed management elements
-// for nodes types worker and storage. This allows
-// for one single place to define behaviour of
-// handling IMAP as well as CRDT update requests.
-type IMAPNode struct {
-	Logger             log.Logger
-	Lock               *sync.RWMutex
-	MailboxStructure   map[string]map[string]*crdt.ORSet
-	MailboxContents    map[string]map[string][]string
-	CRDTLayerRoot      string
-	MaildirRoot        string
-	HierarchySeparator string
-}
-
+// Mailbox represents the state of one user's
+// mailbox in the provided email service. It
+// serializes access for mutating state, contains
+// the structure OR-Set, keeps track of message
+// sequence numbers, and provides user-specific
+// path values in the file system.
 type Mailbox struct {
 	Logger             log.Logger
 	Lock               *sync.RWMutex
