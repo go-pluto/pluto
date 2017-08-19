@@ -4,42 +4,39 @@ package comm;
 
 message Msg {
 
-    message Element {
-        string value = 1;
-        string tag = 2;
-        bytes contents = 3;
-    }
-
     message CREATE {
         string user = 1;
         string mailbox = 2;
-        Element addMailbox = 3;
+        string addTag = 3;
     }
 
     message DELETE {
         string user = 1;
         string mailbox = 2;
-        repeated Element rmvMailbox = 3;
+        repeated string rmvTag = 3;
         repeated string rmvMails = 4;
     }
 
     message APPEND {
         string user = 1;
         string mailbox = 2;
-        Element addMail = 3;
+        string addTag = 3;
+        bytes addContent = 4;
     }
 
     message EXPUNGE {
         string user = 1;
         string mailbox = 2;
-        repeated Element rmvMail = 3;
+        string rmvTag = 3;
+        string addTag = 4;
     }
 
     message STORE {
         string user = 1;
         string mailbox = 2;
-        repeated Element rmvMail = 3;
-        Element addMail = 4;
+        string rmvTag = 3;
+        string addTag = 4;
+        bytes addContent = 5;
     }
 
     string replica = 1;

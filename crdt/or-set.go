@@ -53,7 +53,8 @@ func InitORSetWithFile(fileName string) (*ORSet, error) {
 	s.File = f
 
 	// Write newly created CRDT file to stable storage.
-	if err = s.WriteORSetToFile(); err != nil {
+	err = s.WriteORSetToFile()
+	if err != nil {
 		return nil, fmt.Errorf("error during CRDT file write-back: %v", err)
 	}
 
@@ -150,12 +151,14 @@ func (s *ORSet) WriteORSetToFile() error {
 	}
 
 	// Adjust file size to just written length of string.
-	if err := s.File.Truncate(int64(newNumOfBytes)); err != nil {
+	err = s.File.Truncate(int64(newNumOfBytes))
+	if err != nil {
 		return fmt.Errorf("error while truncating CRDT file '%s' to new size: %v", s.File.Name(), err)
 	}
 
 	// Save to stable storage.
-	if err := s.File.Sync(); err != nil {
+	err = s.File.Sync()
+	if err != nil {
 		return fmt.Errorf("could not synchronise CRDT file '%s' contents to stable storage: %v", s.File.Name(), err)
 	}
 
@@ -276,7 +279,8 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsWriteBack bool) error 
 
 		// Each time we see such tag in this replica's
 		// set, we delete it.
-		if _, found := s.Elements[rTag]; found {
+		_, found := s.Elements[rTag]
+		if found {
 			delete(s.Elements, rTag)
 		}
 	}
@@ -289,9 +293,8 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsWriteBack bool) error 
 	err := s.WriteORSetToFile()
 	if err != nil {
 
-		// Error during write-back to stable storage.
-
-		// Revert just made changes.
+		// Error during write-back to stable
+		// storage, revert just made changes.
 		for tag, value := range rSet {
 			s.AddEffect(value, tag, false)
 		}
@@ -339,7 +342,8 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 
 	// Execute the effect part of the update remove.
 	// Also, write changes back to stable storage.
-	if err := s.RemoveEffect(rmElements, true); err != nil {
+	err := s.RemoveEffect(rmElements, true)
+	if err != nil {
 		return err
 	}
 
