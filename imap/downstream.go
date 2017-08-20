@@ -365,60 +365,113 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 // of an EXPUNGE operation.
 func (mailbox *Mailbox) ApplyExpunge(expungeUpd *comm.Msg_EXPUNGE) {
 
-	rmElements := make(map[string]string)
-	for _, element := range expungeUpd.RmvMail {
-		rmElements[element.Tag] = element.Value
+	createdMailbox := false
+
+	rmElements := map[string]string{
+		expungeUpd.RmvTag: expungeUpd.Mailbox,
 	}
 
+	expungeMaildir := mailbox.MaildirPath
 	var delFileName string
+
 	if expungeUpd.Mailbox == "INBOX" {
-		delFileName = filepath.Join(mailbox.MaildirPath, "cur", expungeUpd.RmvMail[0].Value)
+		delFileName = filepath.Join(mailbox.MaildirPath, "cur", expungeUpd.RmvTag)
 	} else {
-		delFileName = filepath.Join(mailbox.MaildirPath, expungeUpd.Mailbox, "cur", expungeUpd.RmvMail[0].Value)
+		expungeMaildir = filepath.Join(mailbox.MaildirPath, expungeUpd.Mailbox)
+		delFileName = filepath.Join(mailbox.MaildirPath, expungeUpd.Mailbox, "cur", expungeUpd.RmvTag)
 	}
 
 	mailbox.Lock.Lock()
 	defer mailbox.Lock.Unlock()
 
-	// Check if specified mailbox from expunge message is
-	// present in user's main CRDT on this node.
-	if mailbox.MailboxStructure[expungeUpd.User]["Structure"].Lookup(expungeUpd.Mailbox) {
+	err := mailbox.Structure.RemoveEffect(rmElements, true)
+	if err != nil {
+		level.Error(mailbox.Logger).Log(
+			"msg", "failed to remove mail elements from structure CRDT",
+			"err", err,
+		)
+		os.Exit(1)
+	}
 
-		// Delete supplied elements from mailbox.
-		err := mailbox.MailboxStructure[expungeUpd.User][expungeUpd.Mailbox].RemoveEffect(rmElements, true)
-		if err != nil {
+	for msgNum, msgName := range mailbox.Mails[expungeUpd.Mailbox] {
+
+		// Find removed mail file's sequence number.
+		if msgName == expungeUpd.RmvTag {
+
+			// Delete mail's sequence number from message
+			// sequence number tracking structure.
+			realMsgNum := msgNum + 1
+			mailbox.Mails[expungeUpd.Mailbox] = append(mailbox.Mails[expungeUpd.Mailbox][:msgNum], mailbox.Mails[expungeUpd.Mailbox][realMsgNum:]...)
+		}
+	}
+
+	// Remove the respective mail message file.
+	err = os.Remove(delFileName)
+	if err != nil {
+
+		// Only an error not related to the non-existence
+		// of the file is an error we need to handle.
+		if !os.IsNotExist(err) {
 			level.Error(mailbox.Logger).Log(
-				"msg", "failed to remove mail elements from respective mailbox CRDT",
+				"msg", "failed to remove underlying mail file during downstream EXPUNGE execution",
 				"err", err,
 			)
 			os.Exit(1)
 		}
+	}
 
-		// Check if just removed elements marked all
-		// instances of mail file.
-		if mailbox.MailboxStructure[expungeUpd.User][expungeUpd.Mailbox].Lookup(expungeUpd.RmvMail[0].Value) != true {
+	// Check if the specified mailbox folder to remove the message from
+	// is not present. If that is the case, create the mailbox folder.
+	if !mailbox.Structure.Lookup(expungeUpd.Mailbox) {
 
-			// If that is the case, remove the file.
-			err := os.Remove(delFileName)
+		createdMailbox = true
+
+		_, err := os.Stat(expungeMaildir)
+		if os.IsNotExist(err) {
+
+			err = maildir.Dir(expungeMaildir).Create()
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to remove underlying mail file during downstream EXPUNGE execution",
+					"msg", "missing mailbox folder could not be created in downstream EXPUNGE operation",
 					"err", err,
 				)
 				os.Exit(1)
 			}
 		}
 
-		for msgNum, msgName := range mailbox.MailboxContents[expungeUpd.User][expungeUpd.Mailbox] {
+		_, found := mailbox.Mails[expungeUpd.Mailbox]
+		if !found {
+			mailbox.Mails[expungeUpd.Mailbox] = make([]string, 0, 6)
+		}
+	}
 
-			// Find removed mail file's sequence number.
-			if msgName == expungeUpd.RmvMail[0].Value {
+	// Add the mailbox-addTag pair to structure CRDT.
+	// This declares the interest of this operation in
+	// the upper-level mailbox folder.
+	err = mailbox.Structure.AddEffect(expungeUpd.Mailbox, expungeUpd.AddTag, true)
+	if err != nil {
 
-				// Delete mail's sequence number from contents structure.
-				realMsgNum := msgNum + 1
-				mailbox.MailboxContents[expungeUpd.User][expungeUpd.Mailbox] = append(mailbox.MailboxContents[expungeUpd.User][expungeUpd.Mailbox][:msgNum], mailbox.MailboxContents[expungeUpd.User][expungeUpd.Mailbox][realMsgNum:]...)
+		level.Error(mailbox.Logger).Log(
+			"msg", "fail during downstream EXPUNGE execution, will clean up",
+			"err", err,
+		)
+
+		// If we had to create the mailbox folder,
+		// remove that state again.
+		if createdMailbox {
+
+			delete(mailbox.Mails, expungeUpd.Mailbox)
+
+			err = maildir.Dir(expungeMaildir).Remove()
+			if err != nil {
+				level.Error(mailbox.Logger).Log(
+					"msg", "failed to remove created Maildir during clean up of failed downstream EXPUNGE operation",
+					"err", err,
+				)
 			}
 		}
+
+		os.Exit(1)
 	}
 }
 
