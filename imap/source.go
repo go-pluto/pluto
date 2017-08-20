@@ -208,18 +208,15 @@ func (mailbox *Mailbox) Create(s *Session, req *Request, syncChan chan comm.Msg)
 	// to track message sequence numbers in it.
 	mailbox.Mails[createMailboxFolder] = make([]string, 0, 6)
 
-	// If succeeded, add the folder as new item to the user's
-	// structure CRDT and synchronise with other replicas.
+	// Add the folder as new item to the user's structure CRDT
+	// and synchronize with other replicas.
 	err = mailbox.Structure.Add(createMailboxFolder, func(args ...string) {
 		syncChan <- comm.Msg{
 			Operation: "create",
 			Create: &comm.Msg_CREATE{
 				User:    s.UserName,
 				Mailbox: createMailboxFolder,
-				AddMailbox: &comm.Msg_Element{
-					Value: args[0],
-					Tag:   args[1],
-				},
+				AddTag:  args[1],
 			},
 		}
 	})
@@ -238,7 +235,7 @@ func (mailbox *Mailbox) Create(s *Session, req *Request, syncChan chan comm.Msg)
 		err = createMaildir.Remove()
 		if err != nil {
 			level.Error(mailbox.Logger).Log(
-				"msg", "failed to remove Maildir",
+				"msg", "failed to remove Maildir during clean up of failed source CREATE execution",
 				"err", err,
 			)
 		}
@@ -297,45 +294,59 @@ func (mailbox *Mailbox) Delete(s *Session, req *Request, syncChan chan comm.Msg)
 	mailbox.Lock.Lock()
 	defer mailbox.Lock.Unlock()
 
+	// Check if mailbox folder to delete actually
+	// exists in email service state.
+	if !mailbox.Structure.Lookup(deleteMailboxFolder) {
+		return &Reply{
+			Text: fmt.Sprintf("%s NO Cannot delete folder that does not exist", req.Tag),
+		}, nil
+	}
+
+	// Record mail message state of mailbox folder
+	// to delete in order to send it downstream.
+	files, err := ioutil.ReadDir(filepath.Join(mailbox.MaildirPath, deleteMailboxFolder, "cur"))
+	if err != nil {
+		return &Reply{
+			Text:   "* BAD Internal server error, sorry. Closing connection.",
+			Status: 1,
+		}, fmt.Errorf("error while recording mail file state: %v", err)
+	}
+
+	rmvMails := make([]string, len(files))
+	for p := 0; p < len(files); p++ {
+
+		// Include the element if it is a regular file.
+		if files[p].Mode().IsRegular() {
+			rmvMails[p] = files[p].Name()
+		}
+	}
+
 	// TODO: Add routines to take care of mailboxes that
 	//       are tagged with a \Noselect tag.
 
 	// Remove element from user's structure CRDT and send out
 	// remove update operations to all other replicas.
-	err := mailbox.Structure.Remove(deleteMailboxFolder, func(args ...string) {
+	err = mailbox.Structure.Remove(deleteMailboxFolder, func(args ...string) {
 
 		// Prepare slice of Element structs to capture all
 		// value-tag-pairs to remove in mailbox structure.
-		rmvMailboxFolder := make([]*comm.Msg_Element, (len(args) / 2))
+		rmvTags := make([]string, (len(args) / 2))
 
 		for i := 0; i < (len(args) / 2); i++ {
-
-			rmvMailboxFolder[i] = &comm.Msg_Element{
-				Value: args[(2 * i)],
-				Tag:   args[((2 * i) + 1)],
-			}
+			rmvTags[i] = args[((2 * i) + 1)]
 		}
 
 		syncChan <- comm.Msg{
 			Operation: "delete",
 			Delete: &comm.Msg_DELETE{
-				User:       s.UserName,
-				Mailbox:    deleteMailboxFolder,
-				RmvMailbox: rmvMailboxFolder,
-				// TODO: ADD ALL MAIL FILES FOR FIELD 'RmvMails'
+				User:     s.UserName,
+				Mailbox:  deleteMailboxFolder,
+				RmvTags:  rmvTags,
+				RmvMails: rmvMails,
 			},
 		}
 	})
 	if err != nil {
-
-		if err.Error() == "element to be removed not found in set" {
-
-			// Check if error was caused by client, trying to
-			// delete an non-existent mailbox.
-			return &Reply{
-				Text: fmt.Sprintf("%s NO Cannot delete folder that does not exist", req.Tag),
-			}, nil
-		}
 
 		// Otherwise, this is a write-back error of the updated CRDT
 		// file. Reverting actions were already taken, log error.
@@ -552,7 +563,7 @@ func (mailbox *Mailbox) AppendBegin(s *Session, req *Request) (*Await, error) {
 	// of following CRDT operations atomic.
 	mailbox.Lock.Lock()
 
-	if mailbox.Structure.Lookup(appendInProg.Mailbox) != true {
+	if !mailbox.Structure.Lookup(appendInProg.Mailbox) {
 
 		mailbox.Lock.Unlock()
 
