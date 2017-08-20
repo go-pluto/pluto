@@ -184,19 +184,19 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 	// the folder name as value and the mail file name
 	// as tag in downstream message.
 
+	// We need to track if we had to create the
+	// mailbox folder in case we need to revert.
+	createdMailbox := false
+
 	appendMaildir := mailbox.MaildirPath
 	var appendFileName string
 
 	if appendUpd.Mailbox == "INBOX" {
-		appendFileName = filepath.Join(mailbox.MaildirPath, "cur", appendUpd.AddMail.Tag)
+		appendFileName = filepath.Join(mailbox.MaildirPath, "cur", appendUpd.AddTag)
 	} else {
 		appendMaildir = filepath.Join(mailbox.MaildirPath, appendUpd.Mailbox)
-		appendFileName = filepath.Join(mailbox.MaildirPath, appendUpd.Mailbox, "cur", appendUpd.AddMail.Tag)
+		appendFileName = filepath.Join(mailbox.MaildirPath, appendUpd.Mailbox, "cur", appendUpd.AddTag)
 	}
-
-	// We need to track if we had to create the
-	// mailbox folder in case we need to revert.
-	createdMailbox := false
 
 	mailbox.Lock.Lock()
 	defer mailbox.Lock.Unlock()
@@ -213,7 +213,7 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 			err = maildir.Dir(appendMaildir).Create()
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "missing mailbox folder could not be created in downstream APPEND operation",
+					"msg", "missing mailbox folder could not be created in downstream APPEND execution",
 					"err", err,
 				)
 				os.Exit(1)
@@ -231,7 +231,7 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 	if err != nil {
 
 		level.Error(mailbox.Logger).Log(
-			"msg", "failed to create file for mail to append in downstream APPEND operation",
+			"msg", "failed to create file for mail to append in downstream APPEND execution",
 			"err", err,
 		)
 
@@ -244,7 +244,7 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 			err = maildir.Dir(appendMaildir).Remove()
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to remove created Maildir during clean up of failed downstream APPEND operation",
+					"msg", "failed to remove created Maildir during clean up of failed downstream APPEND execution",
 					"err", err,
 				)
 			}
@@ -254,11 +254,11 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 	}
 
 	// Write received message content to created file.
-	_, err = appendFile.Write(appendUpd.AddMail.Contents)
+	_, err = appendFile.Write(appendUpd.AddContent)
 	if err != nil {
 
 		level.Error(mailbox.Logger).Log(
-			"msg", "failed to write message content in downstream APPEND operation",
+			"msg", "failed to write message content in downstream APPEND execution",
 			"err", err,
 		)
 
@@ -266,7 +266,7 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 		err = os.Remove(appendFileName)
 		if err != nil {
 			level.Error(mailbox.Logger).Log(
-				"msg", "failed to remove created mail file during clean up of failed downstream APPEND operation",
+				"msg", "failed to remove created mail file during clean up of failed downstream APPEND execution",
 				"err", err,
 			)
 		}
@@ -278,7 +278,7 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 			err = maildir.Dir(appendMaildir).Remove()
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to remove created Maildir during clean up of failed downstream APPEND operation",
+					"msg", "failed to remove created Maildir during clean up of failed downstream APPEND execution",
 					"err", err,
 				)
 			}
@@ -292,14 +292,14 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 	if err != nil {
 
 		level.Error(mailbox.Logger).Log(
-			"msg", "failed to sync message to stable storage in downstream APPEND operation",
+			"msg", "failed to sync message to stable storage in downstream APPEND execution",
 			"err", err,
 		)
 
 		err = os.Remove(appendFileName)
 		if err != nil {
 			level.Error(mailbox.Logger).Log(
-				"msg", "failed to remove created mail file during clean up of failed downstream APPEND operation",
+				"msg", "failed to remove created mail file during clean up of failed downstream APPEND execution",
 				"err", err,
 			)
 		}
@@ -311,7 +311,7 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 			err = maildir.Dir(appendMaildir).Remove()
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to remove created Maildir during clean up of failed downstream APPEND operation",
+					"msg", "failed to remove created Maildir during clean up of failed downstream APPEND execution",
 					"err", err,
 				)
 			}
@@ -323,23 +323,23 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 	// Append new mail file name to message sequence
 	// numbers tracking structure.
 	// Mind: tag in this case means mail file name.
-	mailbox.Mails[appendUpd.Mailbox] = append(mailbox.Mails[appendUpd.Mailbox], appendUpd.AddMail.Tag)
+	mailbox.Mails[appendUpd.Mailbox] = append(mailbox.Mails[appendUpd.Mailbox], appendUpd.AddTag)
 
 	// Declare interest of the APPEND operation in the involved
-	// mailbox folder by putting the (folder, mail file name)
-	// pair into the structure OR-Set.
-	err = mailbox.Structure.AddEffect(appendUpd.AddMail.Value, appendUpd.AddMail.Tag, true)
+	// mailbox folder by putting the mailbox-file-name pair
+	// into the structure OR-Set.
+	err = mailbox.Structure.AddEffect(appendUpd.Mailbox, appendUpd.AddTag, true)
 	if err != nil {
 
 		level.Error(mailbox.Logger).Log(
-			"msg", "failed to manipulate structure OR-Set in downstream APPEND operation",
+			"msg", "failed to update structure OR-Set in downstream APPEND execution",
 			"err", err,
 		)
 
 		err = os.Remove(appendFileName)
 		if err != nil {
 			level.Error(mailbox.Logger).Log(
-				"msg", "failed to remove created mail file during clean up of failed downstream APPEND operation",
+				"msg", "failed to remove created mail file during clean up of failed downstream APPEND execution",
 				"err", err,
 			)
 		}
@@ -351,7 +351,7 @@ func (mailbox *Mailbox) ApplyAppend(appendUpd *comm.Msg_APPEND) {
 			err = maildir.Dir(appendMaildir).Remove()
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to remove created Maildir during clean up of failed downstream APPEND operation",
+					"msg", "failed to remove created Maildir during clean up of failed downstream APPEND execution",
 					"err", err,
 				)
 			}
@@ -479,157 +479,178 @@ func (mailbox *Mailbox) ApplyExpunge(expungeUpd *comm.Msg_EXPUNGE) {
 // of a STORE operation.
 func (mailbox *Mailbox) ApplyStore(storeUpd *comm.Msg_STORE) {
 
-	rmElements := make(map[string]string)
-	for _, element := range storeUpd.RmvMail {
-		rmElements[element.Tag] = element.Value
-	}
+	createdMailbox := false
 
-	var delFileName string
-	if storeUpd.Mailbox == "INBOX" {
-		delFileName = filepath.Join(mailbox.MaildirPath, "cur", storeUpd.RmvMail[0].Value)
-	} else {
-		delFileName = filepath.Join(mailbox.MaildirPath, storeUpd.Mailbox, "cur", storeUpd.RmvMail[0].Value)
+	rmElements := map[string]string{
+		storeUpd.RmvTag: storeUpd.Mailbox,
 	}
 
 	storeMaildir := mailbox.MaildirPath
+	var delFileName string
 	var storeFileName string
 
 	if storeUpd.Mailbox == "INBOX" {
-		storeFileName = filepath.Join(mailbox.MaildirPath, "cur", storeUpd.AddMail.Value)
+		delFileName = filepath.Join(mailbox.MaildirPath, "cur", storeUpd.RmvTag)
+		storeFileName = filepath.Join(mailbox.MaildirPath, "cur", storeUpd.AddTag)
 	} else {
 		storeMaildir = filepath.Join(mailbox.MaildirPath, storeUpd.Mailbox)
-		storeFileName = filepath.Join(mailbox.MaildirPath, storeUpd.Mailbox, "cur", storeUpd.AddMail.Value)
+		delFileName = filepath.Join(mailbox.MaildirPath, storeUpd.Mailbox, "cur", storeUpd.RmvTag)
+		storeFileName = filepath.Join(mailbox.MaildirPath, storeUpd.Mailbox, "cur", storeUpd.AddTag)
 	}
 
 	mailbox.Lock.Lock()
 	defer mailbox.Lock.Unlock()
 
-	// Check if specified mailbox from store message is present
-	// in user's main CRDT on this node.
-	if mailbox.MailboxStructure[storeUpd.User]["Structure"].Lookup(storeUpd.Mailbox) {
+	err := mailbox.Structure.RemoveEffect(rmElements, true)
+	if err != nil {
+		level.Error(mailbox.Logger).Log(
+			"msg", "failed to remove mail elements from structure CRDT in downstream STORE execution",
+			"err", err,
+		)
+		os.Exit(1)
+	}
 
-		// Delete supplied elements from mailbox.
-		err := mailbox.MailboxStructure[storeUpd.User][storeUpd.Mailbox].RemoveEffect(rmElements, true)
-		if err != nil {
+	// Remove the respective mail message file.
+	err = os.Remove(delFileName)
+	if err != nil {
+
+		// Only an error not related to the non-existence
+		// of the file is an error we need to handle.
+		if !os.IsNotExist(err) {
 			level.Error(mailbox.Logger).Log(
-				"msg", "failed to remove mail elements from respective mailbox CRDT",
+				"msg", "failed to remove underlying mail file in downstream STORE execution",
 				"err", err,
 			)
 			os.Exit(1)
 		}
+	}
 
-		// Check if just removed elements marked all
-		// instances of mail file.
-		if mailbox.MailboxStructure[storeUpd.User][storeUpd.Mailbox].Lookup(storeUpd.RmvMail[0].Value) != true {
+	// Check if the specified mailbox folder to store the message to is
+	// not present. If that is the case, create the mailbox folder.
+	if !mailbox.Structure.Lookup(storeUpd.Mailbox) {
 
-			// If that is the case, remove the file.
-			err := os.Remove(delFileName)
+		createdMailbox = true
+
+		_, err := os.Stat(storeMaildir)
+		if os.IsNotExist(err) {
+
+			err = maildir.Dir(storeMaildir).Create()
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to remove underlying mail file during downstream STORE execution",
+					"msg", "missing mailbox folder could not be created in downstream STORE execution",
 					"err", err,
 				)
 				os.Exit(1)
 			}
 		}
 
-		// Check if new mail name is not yet present
-		// on this node.
-		if mailbox.MailboxStructure[storeUpd.User][storeUpd.Mailbox].Lookup(storeUpd.AddMail.Value) != true {
+		_, found := mailbox.Mails[storeUpd.Mailbox]
+		if !found {
+			mailbox.Mails[storeUpd.Mailbox] = make([]string, 0, 6)
+		}
+	}
 
-			// If not yet present on node, place file
-			// content at correct location.
-			storeFile, err := os.Create(storeFileName)
+	// Create a file system object under correct name.
+	storeFile, err := os.Create(storeFileName)
+	if err != nil {
+
+		level.Error(mailbox.Logger).Log(
+			"msg", "failed to create file for mail to append in downstream STORE execution",
+			"err", err,
+		)
+
+		// If we had to create the mailbox folder,
+		// remove that state again.
+		if createdMailbox {
+
+			delete(mailbox.Mails, storeUpd.Mailbox)
+
+			err = maildir.Dir(storeMaildir).Remove()
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to create mail file during downstream STORE execution",
+					"msg", "failed to remove created Maildir during clean up of failed downstream STORE execution",
 					"err", err,
 				)
-				os.Exit(1)
-			}
-
-			_, err = storeFile.Write(storeUpd.AddMail.Contents)
-			if err != nil {
-
-				level.Error(mailbox.Logger).Log(
-					"msg", "fail during downstream STORE execution, will clean up",
-					"err", err,
-				)
-
-				// Remove just created mail file.
-				err = os.Remove(storeFileName)
-				if err != nil {
-					level.Error(mailbox.Logger).Log(
-						"msg", "failed to remove created mail file",
-						"err", err,
-					)
-				}
-
-				os.Exit(1)
-			}
-
-			// Sync content to stable storage.
-			err = storeFile.Sync()
-			if err != nil {
-
-				level.Error(mailbox.Logger).Log(
-					"msg", "fail during downstream STORE execution, will clean up",
-					"err", err,
-				)
-
-				// Remove just created mail file.
-				err = os.Remove(storeFileName)
-				if err != nil {
-					level.Error(mailbox.Logger).Log(
-						"msg", "failed to remove created mail file",
-						"err", err,
-					)
-				}
-
-				os.Exit(1)
-			}
-
-			// If succeeded, add renamed mail to mailbox' CRDT.
-			err = mailbox.MailboxStructure[storeUpd.User][storeUpd.Mailbox].AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true)
-			if err != nil {
-
-				level.Error(mailbox.Logger).Log(
-					"msg", "fail during downstream STORE execution, will clean up",
-					"err", err,
-				)
-
-				// Remove just created mail file.
-				err = os.Remove(storeFileName)
-				if err != nil {
-					level.Error(mailbox.Logger).Log(
-						"msg", "failed to remove created mail file",
-						"err", err,
-					)
-				}
-
-				os.Exit(1)
-			}
-		} else {
-
-			// Add renamed mail to mailbox' CRDT.
-			err = mailbox.MailboxStructure[storeUpd.User][storeUpd.Mailbox].AddEffect(storeUpd.AddMail.Value, storeUpd.AddMail.Tag, true)
-			if err != nil {
-				level.Error(mailbox.Logger).Log(
-					"msg", "fail during downstream STORE execution",
-					"err", err,
-				)
-				os.Exit(1)
 			}
 		}
 
-		for msgNum, msgName := range mailbox.MailboxContents[storeUpd.User][storeUpd.Mailbox] {
+		os.Exit(1)
+	}
 
-			// Find old mail file's sequence number.
-			if msgName == storeUpd.RmvMail[0].Value {
+	// Write received message content to created file.
+	_, err = storeFile.Write(storeUpd.AddContent)
+	if err != nil {
 
-				// Replace old file name with renamed new one.
-				mailbox.MailboxContents[storeUpd.User][storeUpd.Mailbox][msgNum] = storeUpd.AddMail.Value
+		level.Error(mailbox.Logger).Log(
+			"msg", "failed to write message content in downstream STORE execution",
+			"err", err,
+		)
+
+		// Remove just created mail file.
+		err = os.Remove(storeFileName)
+		if err != nil {
+			level.Error(mailbox.Logger).Log(
+				"msg", "failed to remove created mail file during clean up of failed downstream STORE execution",
+				"err", err,
+			)
+		}
+
+		if createdMailbox {
+
+			delete(mailbox.Mails, storeUpd.Mailbox)
+
+			err = maildir.Dir(storeMaildir).Remove()
+			if err != nil {
+				level.Error(mailbox.Logger).Log(
+					"msg", "failed to remove created Maildir during clean up of failed downstream STORE execution",
+					"err", err,
+				)
 			}
+		}
+
+		os.Exit(1)
+	}
+
+	// Sync content to stable storage.
+	err = storeFile.Sync()
+	if err != nil {
+
+		level.Error(mailbox.Logger).Log(
+			"msg", "failed to sync message to stable storage in downstream STORE execution",
+			"err", err,
+		)
+
+		err = os.Remove(storeFileName)
+		if err != nil {
+			level.Error(mailbox.Logger).Log(
+				"msg", "failed to remove created mail file during clean up of failed downstream STORE execution",
+				"err", err,
+			)
+		}
+
+		if createdMailbox {
+
+			delete(mailbox.Mails, storeUpd.Mailbox)
+
+			err = maildir.Dir(storeMaildir).Remove()
+			if err != nil {
+				level.Error(mailbox.Logger).Log(
+					"msg", "failed to remove created Maildir during clean up of failed downstream STORE execution",
+					"err", err,
+				)
+			}
+		}
+
+		os.Exit(1)
+	}
+
+	for msgNum, msgName := range mailbox.Mails[storeUpd.Mailbox] {
+
+		// Find old mail file's sequence number.
+		if msgName == storeUpd.RmvTag {
+
+			// Replace old file name with new one.
+			mailbox.Mails[storeUpd.Mailbox][msgNum] = storeUpd.AddTag
 		}
 	}
 }
