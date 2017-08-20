@@ -35,7 +35,7 @@ func (mailbox *Mailbox) ApplyCreate(createUpd *comm.Msg_CREATE) {
 		err = maildir.Dir(createMaildir).Create()
 		if err != nil {
 			level.Error(mailbox.Logger).Log(
-				"msg", "maildir for new mailbox folder could not be created",
+				"msg", "maildir for new mailbox folder could not be created in downstream CREATE execution",
 				"err", err,
 			)
 			os.Exit(1)
@@ -51,8 +51,8 @@ func (mailbox *Mailbox) ApplyCreate(createUpd *comm.Msg_CREATE) {
 		mailbox.Mails[createUpd.Mailbox] = make([]string, 0, 6)
 	}
 
-	// If succeeded, add a new folder in user's main CRDT.
-	err = mailbox.Structure.AddEffect(createUpd.AddMailbox.Value, createUpd.AddMailbox.Tag, true)
+	// Add a new mailbox folder in structure CRDT.
+	err = mailbox.Structure.AddEffect(createUpd.Mailbox, createUpd.AddTag, true)
 	if err != nil {
 
 		level.Error(mailbox.Logger).Log(
@@ -73,7 +73,7 @@ func (mailbox *Mailbox) ApplyCreate(createUpd *comm.Msg_CREATE) {
 			err = maildir.Dir(createMaildir).Remove()
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to remove created Maildir",
+					"msg", "failed to remove created Maildir during clean up of failed downstream CREATE execution",
 					"err", err,
 				)
 			}
@@ -90,8 +90,8 @@ func (mailbox *Mailbox) ApplyDelete(deleteUpd *comm.Msg_DELETE) {
 	delMaildir := filepath.Join(mailbox.MaildirPath, deleteUpd.Mailbox)
 
 	rmElements := make(map[string]string)
-	for _, element := range deleteUpd.RmvMailbox {
-		rmElements[element.Tag] = element.Value
+	for _, tag := range deleteUpd.RmvTags {
+		rmElements[tag] = deleteUpd.Mailbox
 	}
 
 	mailbox.Lock.Lock()
@@ -128,7 +128,7 @@ func (mailbox *Mailbox) ApplyDelete(deleteUpd *comm.Msg_DELETE) {
 			err := os.Remove(delFileName)
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to remove an underlying mail file during downstream DELETE execution",
+					"msg", "failed to remove an underlying mail file in downstream DELETE execution",
 					"err", err,
 				)
 				os.Exit(1)
@@ -167,7 +167,7 @@ func (mailbox *Mailbox) ApplyDelete(deleteUpd *comm.Msg_DELETE) {
 			err = maildir.Dir(delMaildir).Remove()
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to remove Maildir during downstream DELETE execution",
+					"msg", "failed to remove Maildir in downstream DELETE execution",
 					"err", err,
 				)
 				os.Exit(1)
@@ -387,7 +387,7 @@ func (mailbox *Mailbox) ApplyExpunge(expungeUpd *comm.Msg_EXPUNGE) {
 	err := mailbox.Structure.RemoveEffect(rmElements, true)
 	if err != nil {
 		level.Error(mailbox.Logger).Log(
-			"msg", "failed to remove mail elements from structure CRDT",
+			"msg", "failed to remove mail elements from structure CRDT in downstream EXPUNGE execution",
 			"err", err,
 		)
 		os.Exit(1)
@@ -413,7 +413,7 @@ func (mailbox *Mailbox) ApplyExpunge(expungeUpd *comm.Msg_EXPUNGE) {
 		// of the file is an error we need to handle.
 		if !os.IsNotExist(err) {
 			level.Error(mailbox.Logger).Log(
-				"msg", "failed to remove underlying mail file during downstream EXPUNGE execution",
+				"msg", "failed to remove underlying mail file in downstream EXPUNGE execution",
 				"err", err,
 			)
 			os.Exit(1)
@@ -432,7 +432,7 @@ func (mailbox *Mailbox) ApplyExpunge(expungeUpd *comm.Msg_EXPUNGE) {
 			err = maildir.Dir(expungeMaildir).Create()
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "missing mailbox folder could not be created in downstream EXPUNGE operation",
+					"msg", "missing mailbox folder could not be created in downstream EXPUNGE execution",
 					"err", err,
 				)
 				os.Exit(1)
@@ -465,7 +465,7 @@ func (mailbox *Mailbox) ApplyExpunge(expungeUpd *comm.Msg_EXPUNGE) {
 			err = maildir.Dir(expungeMaildir).Remove()
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to remove created Maildir during clean up of failed downstream EXPUNGE operation",
+					"msg", "failed to remove created Maildir during clean up of failed downstream EXPUNGE execution",
 					"err", err,
 				)
 			}

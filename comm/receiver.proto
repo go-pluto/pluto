@@ -13,7 +13,7 @@ message Msg {
     message DELETE {
         string user = 1;
         string mailbox = 2;
-        repeated string rmvTag = 3;
+        repeated string rmvTags = 3;
         repeated string rmvMails = 4;
     }
 
