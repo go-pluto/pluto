@@ -210,7 +210,7 @@ func (mailbox *Mailbox) Create(s *Session, req *Request, syncChan chan comm.Msg)
 
 	// Add the folder as new item to the user's structure CRDT
 	// and synchronize with other replicas.
-	err = mailbox.Structure.Add(createMailboxFolder, func(args ...string) {
+	err = mailbox.Structure.Add(createMailboxFolder, "", func(args ...string) {
 		syncChan <- comm.Msg{
 			Operation: "create",
 			Create: &comm.Msg_CREATE{
@@ -320,6 +320,8 @@ func (mailbox *Mailbox) Delete(s *Session, req *Request, syncChan chan comm.Msg)
 			rmvMails[p] = files[p].Name()
 		}
 	}
+
+	fmt.Printf("files: %#v\nrmvMails: %#v\n", files, rmvMails)
 
 	// TODO: Add routines to take care of mailboxes that
 	//       are tagged with a \Noselect tag.
@@ -648,17 +650,14 @@ func (mailbox *Mailbox) AppendEnd(s *Session, content []byte, syncChan chan comm
 
 	// Add new mail to mailbox' CRDT and send update
 	// message to other replicas.
-	err = mailbox.Structure.Add(s.AppendInProg.Mailbox, func(args ...string) {
+	err = mailbox.Structure.Add(s.AppendInProg.Mailbox, mailFileName, func(args ...string) {
 		syncChan <- comm.Msg{
 			Operation: "append",
 			Append: &comm.Msg_APPEND{
-				User:    s.UserName,
-				Mailbox: s.AppendInProg.Mailbox,
-				AddMail: &comm.Msg_Element{
-					Value:    args[0],
-					Tag:      args[1],
-					Contents: content,
-				},
+				User:       s.UserName,
+				Mailbox:    s.AppendInProg.Mailbox,
+				AddTag:     mailFileName,
+				AddContent: content,
 			},
 		}
 	})
@@ -672,7 +671,7 @@ func (mailbox *Mailbox) AppendEnd(s *Session, content []byte, syncChan chan comm
 		err := os.Remove(mailFileNamePath)
 		if err != nil {
 			level.Error(mailbox.Logger).Log(
-				"msg", "failed to remove created mail message",
+				"msg", "failed to remove created mail message during clean up of failed source APPEND execution",
 				"err", err,
 			)
 		}
@@ -785,7 +784,8 @@ func (mailbox *Mailbox) Expunge(s *Session, req *Request, syncChan chan comm.Msg
 					Expunge: &comm.Msg_EXPUNGE{
 						User:    s.UserName,
 						Mailbox: s.SelectedMailbox,
-						RmvMail: rmvMails,
+						RmvTag:  nil,
+						AddTag:  nil,
 					},
 				}
 			})
@@ -794,14 +794,14 @@ func (mailbox *Mailbox) Expunge(s *Session, req *Request, syncChan chan comm.Msg
 				// This is a write-back error of the updated mailbox CRDT
 				// log file. Reverting actions were already taken, log error.
 				level.Error(mailbox.Logger).Log(
-					"msg", fmt.Sprintf("failed to remove mail '%v' from user's selected mailbox CRDT", mailbox.MailboxContents[s.UserName][s.SelectedMailbox][mailSeqNum]),
+					"msg", fmt.Sprintf("failed to remove mail '%v' from user's structure CRDT", mailbox.MailboxContents[s.UserName][s.SelectedMailbox][mailSeqNum]),
 					"err", err,
 				)
 				os.Exit(1)
 			}
 
 			// Construct path to file.
-			expMailPath := filepath.Join(string(expMaildir), mailbox.MailboxContents[s.UserName][s.SelectedMailbox][mailSeqNum])
+			expMailPath := filepath.Join(string(expMaildir), mailbox.Mails[s.SelectedMailbox][mailSeqNum])
 
 			// Remove the file.
 			err = os.Remove(expMailPath)
@@ -815,7 +815,7 @@ func (mailbox *Mailbox) Expunge(s *Session, req *Request, syncChan chan comm.Msg
 
 			// Immediately remove mail from contents structure.
 			realMailSeqNum := mailSeqNum + 1
-			mailbox.MailboxContents[s.UserName][s.SelectedMailbox] = append(mailbox.MailboxContents[s.UserName][s.SelectedMailbox][:mailSeqNum], mailbox.MailboxContents[s.UserName][s.SelectedMailbox][realMailSeqNum:]...)
+			mailbox.Mails[s.SelectedMailbox] = append(mailbox.Mails[s.SelectedMailbox][:mailSeqNum], mailbox.Mails[s.SelectedMailbox][realMailSeqNum:]...)
 
 			// Append individual remove answer to answer lines.
 			expAnswerLines = append(expAnswerLines, fmt.Sprintf("* %d EXPUNGE", realMailSeqNum))
@@ -1082,18 +1082,14 @@ func (mailbox *Mailbox) Store(s *Session, req *Request, syncChan chan comm.Msg) 
 			// Second, add the new mail file's name and finally
 			// instruct all other nodes to do the same.
 			err = mailbox.MailboxStructure[s.UserName][s.SelectedMailbox].Add(newMailFileName, func(args ...string) {
-
 				syncChan <- comm.Msg{
 					Operation: "store",
 					Store: &comm.Msg_STORE{
-						User:    s.UserName,
-						Mailbox: s.SelectedMailbox,
-						RmvMail: rmvMails,
-						AddMail: &comm.Msg_Element{
-							Value:    args[0],
-							Tag:      args[1],
-							Contents: mailFileContent,
-						},
+						User:       s.UserName,
+						Mailbox:    s.SelectedMailbox,
+						RmvTag:     nil,
+						AddTag:     nil,
+						AddContent: mailFileContent,
 					},
 				}
 			})

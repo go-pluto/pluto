@@ -250,10 +250,13 @@ func (s *ORSet) AddEffect(e string, tag string, needsWriteBack bool) error {
 // the update instruction is send downstream to all other
 // replicas via the send function which takes care of the
 // reliable causally-ordered broadcast.
-func (s *ORSet) Add(e string, send sendFunc) error {
+func (s *ORSet) Add(e string, tag string, send sendFunc) error {
 
-	// Create a new unique tag.
-	tag := uuid.NewV4().String()
+	// If an empty tag was supplied,
+	// create a new unique UUID tag.
+	if tag == "" {
+		tag = uuid.NewV4().String()
+	}
 
 	// Apply effect part of update add.
 	// Write changes back to stable storage.
