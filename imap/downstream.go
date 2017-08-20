@@ -97,7 +97,7 @@ func (mailbox *Mailbox) ApplyDelete(deleteUpd *comm.Msg_DELETE) {
 	mailbox.Lock.Lock()
 	defer mailbox.Lock.Unlock()
 
-	// Remove received pairs from user's main CRDT.
+	// Remove received pairs from structure CRDT.
 	err := mailbox.Structure.RemoveEffect(rmElements, true)
 	if err != nil {
 		level.Error(mailbox.Logger).Log(
@@ -124,7 +124,7 @@ func (mailbox *Mailbox) ApplyDelete(deleteUpd *comm.Msg_DELETE) {
 				delFileName = filepath.Join(mailbox.MaildirPath, deleteUpd.Mailbox, "cur", mail)
 			}
 
-			// In that case, delete the file system object.
+			// Delete the file system object.
 			err := os.Remove(delFileName)
 			if err != nil {
 				level.Error(mailbox.Logger).Log(
@@ -148,8 +148,8 @@ func (mailbox *Mailbox) ApplyDelete(deleteUpd *comm.Msg_DELETE) {
 
 	} else {
 
-		// This DELETE operation removed the entire presence of
-		// this folder from the user's mailbox. Thus, file system
+		// This DELETE operation removed the entire presence of this
+		// mailbox folder from the user's mailbox. Thus, file system
 		// clean up of files and folders, and internal state
 		// representation manipulation is due.
 
