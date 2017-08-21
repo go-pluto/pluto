@@ -112,7 +112,7 @@ func createUserFiles(crdtLayerRoot string, maildirRoot string, start int, end in
 
 		if !exists(structureFile) {
 
-			data := fmt.Sprintf("SU5CT1g=;%s\n", uuid.NewV4().String())
+			data := fmt.Sprintf("SU5CT1g=;%s", uuid.NewV4().String())
 			err := ioutil.WriteFile(structureFile, []byte(data), 0644)
 			if err != nil {
 				return err
