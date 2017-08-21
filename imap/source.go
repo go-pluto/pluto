@@ -216,7 +216,7 @@ func (mailbox *Mailbox) Create(s *Session, req *Request, syncChan chan comm.Msg)
 			Create: &comm.Msg_CREATE{
 				User:    s.UserName,
 				Mailbox: createMailboxFolder,
-				AddTag:  args[1],
+				AddTag:  args[0],
 			},
 		}
 	})
@@ -329,21 +329,12 @@ func (mailbox *Mailbox) Delete(s *Session, req *Request, syncChan chan comm.Msg)
 	// Remove element from user's structure CRDT and send out
 	// remove update operations to all other replicas.
 	err = mailbox.Structure.Remove(deleteMailboxFolder, func(args ...string) {
-
-		// Prepare slice of Element structs to capture all
-		// value-tag-pairs to remove in mailbox structure.
-		rmvTags := make([]string, (len(args) / 2))
-
-		for i := 0; i < (len(args) / 2); i++ {
-			rmvTags[i] = args[((2 * i) + 1)]
-		}
-
 		syncChan <- comm.Msg{
 			Operation: "delete",
 			Delete: &comm.Msg_DELETE{
 				User:     s.UserName,
 				Mailbox:  deleteMailboxFolder,
-				RmvTags:  rmvTags,
+				RmvTags:  args,
 				RmvMails: rmvMails,
 			},
 		}
@@ -645,11 +636,12 @@ func (mailbox *Mailbox) AppendEnd(s *Session, content []byte, syncChan chan comm
 	}
 	mailFileName := filepath.Base(mailFileNamePath)
 
-	// Append new mail to mail file tracking slice.
+	// Append new mail file name to message
+	// number tracking structure.
 	mailbox.Mails[s.AppendInProg.Mailbox] = append(mailbox.Mails[s.AppendInProg.Mailbox], mailFileName)
 
-	// Add new mail to mailbox' CRDT and send update
-	// message to other replicas.
+	// Add mailbox-mail-file pair to structure CRDT
+	// and send an update message to other replicas.
 	err = mailbox.Structure.Add(s.AppendInProg.Mailbox, mailFileName, func(args ...string) {
 		syncChan <- comm.Msg{
 			Operation: "append",
@@ -710,7 +702,6 @@ func (mailbox *Mailbox) Expunge(s *Session, req *Request, syncChan chan comm.Msg
 		}, nil
 	}
 
-	// Construct path to Maildir to expunge.
 	var expMaildir maildir.Dir
 	if s.SelectedMailbox == "INBOX" {
 		expMaildir = maildir.Dir(filepath.Join(mailbox.MaildirPath, "cur"))
@@ -764,43 +755,32 @@ func (mailbox *Mailbox) Expunge(s *Session, req *Request, syncChan chan comm.Msg
 
 		for _, mailSeqNum := range expMailNums {
 
-			// Remove each mail to expunge from mailbox CRDT.
-			err := mailbox.MailboxStructure[s.UserName][s.SelectedMailbox].Remove(mailbox.MailboxContents[s.UserName][s.SelectedMailbox][mailSeqNum], func(args ...string) {
-
-				// Prepare slice of Element structs to capture
-				// all value-tag-pairs to remove.
-				rmvMails := make([]*comm.Msg_Element, (len(args) / 2))
-
-				for i := 0; i < (len(args) / 2); i++ {
-
-					rmvMails[i] = &comm.Msg_Element{
-						Value: args[(2 * i)],
-						Tag:   args[((2 * i) + 1)],
-					}
-				}
-
-				syncChan <- comm.Msg{
-					Operation: "expunge",
-					Expunge: &comm.Msg_EXPUNGE{
-						User:    s.UserName,
-						Mailbox: s.SelectedMailbox,
-						RmvTag:  nil,
-						AddTag:  nil,
-					},
-				}
-			})
+			// Remove each mail to expunge from structure CRDT.
+			err := mailbox.Structure.RemovePair(s.SelectedMailbox, mailbox.Mails[s.SelectedMailbox][mailSeqNum], func(args ...string) {})
 			if err != nil {
 
-				// This is a write-back error of the updated mailbox CRDT
+				// This is a write-back error of the updated structure CRDT
 				// log file. Reverting actions were already taken, log error.
 				level.Error(mailbox.Logger).Log(
-					"msg", fmt.Sprintf("failed to remove mail '%v' from user's structure CRDT", mailbox.MailboxContents[s.UserName][s.SelectedMailbox][mailSeqNum]),
+					"msg", fmt.Sprintf("failed to remove mail '%v' from user's structure CRDT", mailbox.Mails[s.SelectedMailbox][mailSeqNum]),
 					"err", err,
 				)
 				os.Exit(1)
 			}
 
-			// Construct path to file.
+			// Add a mailbox-new-UUID pair to the structure CRDT.
+			err = mailbox.Structure.Add(s.SelectedMailbox, "", func(args ...string) {
+				syncChan <- comm.Msg{
+					Operation: "expunge",
+					Expunge: &comm.Msg_EXPUNGE{
+						User:    s.UserName,
+						Mailbox: s.SelectedMailbox,
+						RmvTag:  mailbox.Mails[s.SelectedMailbox][mailSeqNum],
+						AddTag:  args[0],
+					},
+				}
+			})
+
 			expMailPath := filepath.Join(string(expMaildir), mailbox.Mails[s.SelectedMailbox][mailSeqNum])
 
 			// Remove the file.
@@ -904,8 +884,6 @@ func (mailbox *Mailbox) Store(s *Session, req *Request, syncChan chan comm.Msg) 
 		}, nil
 	}
 
-	// Set currently selected mailbox with respect to special
-	// case of INBOX as current location.
 	var selectedMailbox string
 	if s.SelectedMailbox == "INBOX" {
 		selectedMailbox = mailbox.MaildirPath
@@ -937,7 +915,6 @@ func (mailbox *Mailbox) Store(s *Session, req *Request, syncChan chan comm.Msg) 
 		}, nil
 	}
 
-	// Prepare answer slice.
 	answerLines := make([]string, 0, len(mailSeqNums))
 
 	for _, mailSeqNum := range mailSeqNums {
@@ -1005,7 +982,7 @@ func (mailbox *Mailbox) Store(s *Session, req *Request, syncChan chan comm.Msg) 
 				// Iterate over all characters of the currently present
 				// flags of the mail and check if they are present in
 				// new flags string as well. If not, add it.
-				if strings.ContainsRune(newMailFlagsString, char) != true {
+				if !strings.ContainsRune(newMailFlagsString, char) {
 					newMailFlags = append(newMailFlags, char)
 				}
 			}
@@ -1049,30 +1026,15 @@ func (mailbox *Mailbox) Store(s *Session, req *Request, syncChan chan comm.Msg) 
 				}, fmt.Errorf("error renaming mail file in STORE operation: %v", err)
 			}
 
-			var rmvMails []*comm.Msg_Element
-
 			// First, remove the former name of the mail file
 			// but do not yet send out an update operation.
-			err = mailbox.MailboxStructure[s.UserName][s.SelectedMailbox].Remove(mailFileName, func(args ...string) {
-
-				// Prepare slice of Element structs to capture
-				// all value-tag-pairs to remove.
-				rmvMails = make([]*comm.Msg_Element, (len(args) / 2))
-
-				for i := 0; i < (len(args) / 2); i++ {
-
-					rmvMails[i] = &comm.Msg_Element{
-						Value: args[(2 * i)],
-						Tag:   args[((2 * i) + 1)],
-					}
-				}
-			})
+			err = mailbox.Structure.RemovePair(s.SelectedMailbox, mailFileName, func(args ...string) {})
 			if err != nil {
 
-				// This is a write-back error of the updated mailbox CRDT
+				// This is a write-back error of the updated structure CRDT
 				// log file. Reverting actions were already taken, log error.
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to remove old mail name from selected mailbox CRDT",
+					"msg", "failed to remove old mail name from structure CRDT",
 					"err", err,
 				)
 				mailbox.Lock.Unlock()
@@ -1081,32 +1043,32 @@ func (mailbox *Mailbox) Store(s *Session, req *Request, syncChan chan comm.Msg) 
 
 			// Second, add the new mail file's name and finally
 			// instruct all other nodes to do the same.
-			err = mailbox.MailboxStructure[s.UserName][s.SelectedMailbox].Add(newMailFileName, func(args ...string) {
+			err = mailbox.Structure.Add(s.SelectedMailbox, newMailFileName, func(args ...string) {
 				syncChan <- comm.Msg{
 					Operation: "store",
 					Store: &comm.Msg_STORE{
 						User:       s.UserName,
 						Mailbox:    s.SelectedMailbox,
-						RmvTag:     nil,
-						AddTag:     nil,
+						RmvTag:     mailFileName,
+						AddTag:     newMailFileName,
 						AddContent: mailFileContent,
 					},
 				}
 			})
 			if err != nil {
 
-				// This is a write-back error of the updated mailbox CRDT
+				// This is a write-back error of the updated structure CRDT
 				// log file. Reverting actions were already taken, log error.
 				level.Error(mailbox.Logger).Log(
-					"msg", "failed to add renamed mail name to selected mailbox CRDT",
+					"msg", "failed to add renamed mail name to structure CRDT",
 					"err", err,
 				)
 				mailbox.Lock.Unlock()
 				os.Exit(1)
 			}
 
-			// If we are done with that, also replace the mail's
-			// file name in the corresponding mail file slice.
+			// Replace the mail's file name in the message
+			// sequence number tracking structure.
 			mailbox.Mails[s.SelectedMailbox][mailSeqNum] = newMailFileName
 		}
 
