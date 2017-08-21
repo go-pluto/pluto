@@ -23,8 +23,8 @@ type ORSet struct {
 }
 
 // sendFunc is used as a parameter to below defined
-// AddSendDownstream function that broadcasts an update
-// payload to all other replicas.
+// functions that broadcast an update payload to
+// downstream replicas.
 type sendFunc func(...string)
 
 // Functions
@@ -216,10 +216,10 @@ func (s *ORSet) Lookup(e string) bool {
 // defined by the specification. It is executed by all
 // replicas of the data set including the source node. It
 // inserts given element and tag into the set representation.
-func (s *ORSet) AddEffect(e string, tag string, needsWriteBack bool) error {
+func (s *ORSet) AddEffect(e string, t string, needsWriteBack bool) error {
 
 	// Insert data element e at key tag.
-	s.Elements[tag] = e
+	s.Elements[t] = e
 
 	if !needsWriteBack {
 		return nil
@@ -229,14 +229,9 @@ func (s *ORSet) AddEffect(e string, tag string, needsWriteBack bool) error {
 	err := s.WriteORSetToFile()
 	if err != nil {
 
-		// Error during write-back to stable storage.
-
-		// Prepare remove set consistent of just added element.
-		rSet := make(map[string]string)
-		rSet[tag] = e
-
-		// Revert just made changes.
-		s.RemoveEffect(rSet, false)
+		// Error during write-back to stable storage,
+		// remove just added value-tag pair.
+		s.RemovePairEffect(e, t, false, false)
 
 		return fmt.Errorf("error during writing CRDT file back: %v", err)
 	}
@@ -250,23 +245,23 @@ func (s *ORSet) AddEffect(e string, tag string, needsWriteBack bool) error {
 // the update instruction is send downstream to all other
 // replicas via the send function which takes care of the
 // reliable causally-ordered broadcast.
-func (s *ORSet) Add(e string, tag string, send sendFunc) error {
+func (s *ORSet) Add(e string, t string, send sendFunc) error {
 
 	// If an empty tag was supplied,
 	// create a new unique UUID tag.
-	if tag == "" {
-		tag = uuid.NewV4().String()
+	if t == "" {
+		t = uuid.NewV4().String()
 	}
 
 	// Apply effect part of update add.
 	// Write changes back to stable storage.
-	err := s.AddEffect(e, tag, true)
+	err := s.AddEffect(e, t, true)
 	if err != nil {
 		return err
 	}
 
 	// Send to other involved nodes.
-	send(e, tag)
+	send(t)
 
 	return nil
 }
@@ -280,8 +275,8 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsWriteBack bool) error 
 	// Range over set of received tags to-be-deleted.
 	for rTag := range rSet {
 
-		// Each time we see such tag in this replica's
-		// set, we delete it.
+		// Each time we see such tag in this
+		// replica's set, we delete it.
 		_, found := s.Elements[rTag]
 		if found {
 			delete(s.Elements, rTag)
@@ -292,7 +287,7 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsWriteBack bool) error 
 		return nil
 	}
 
-	// Instructed to write changes back to file.
+	// Write changes back to file.
 	err := s.WriteORSetToFile()
 	if err != nil {
 
@@ -302,7 +297,7 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsWriteBack bool) error 
 			s.AddEffect(value, tag, false)
 		}
 
-		return fmt.Errorf("error during writing CRDT file back: %v", err)
+		return fmt.Errorf("error during write-back of CRDT file: %v", err)
 	}
 
 	return nil
@@ -311,7 +306,7 @@ func (s *ORSet) RemoveEffect(rSet map[string]string, needsWriteBack bool) error 
 // Remove is a helper function only to be executed
 // by the source node of an update remove operation.
 // It first handles the prepare part by checking the
-// deletion precondition and creating a remove set
+// deletion precondition and creating a remove-set
 // and afterwards executes the effect part locally and
 // sends out the remove message to all other replicas.
 func (s *ORSet) Remove(e string, send sendFunc) error {
@@ -322,23 +317,21 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 	}
 
 	// Initialize list of arguments to send out.
-	args := make([]string, 0, 8)
+	args := make([]string, 0, 5)
 
 	// Initialize set of elements to remove.
 	rmElements := make(map[string]string)
 
-	// Otherwise range over set elements.
 	for tag, value := range s.Elements {
 
 		if e == value {
 
 			// If we see the element to-be-deleted, we add
-			// the associated tag into our prepared remove set.
+			// the associated tag into our prepared remove-set.
 			rmElements[tag] = e
 
-			// And we also append it to the list of arguments
+			// We also append the tag to the list of arguments
 			// that will be sent out to other replicas.
-			args = append(args, e)
 			args = append(args, tag)
 		}
 	}
@@ -352,6 +345,63 @@ func (s *ORSet) Remove(e string, send sendFunc) error {
 
 	// Send arguments to other replicas.
 	send(args...)
+
+	return nil
+}
+
+// RemovePairEffect is the effect part of a pair-remove
+// operation. It is executed by all replicas of the data
+// set including the source node. It removes supplied
+// value-tag pair from the ORSet's set.
+func (s *ORSet) RemovePairEffect(e string, t string, needsPreCond bool, needsWriteBack bool) error {
+
+	found := false
+
+	for tag, value := range s.Elements {
+
+		// We found the pair to remove,
+		// so delete the entry from the set.
+		if (e == value) && (t == tag) {
+			found = true
+			delete(s.Elements, t)
+		}
+	}
+
+	if needsPreCond && !found {
+		return fmt.Errorf("pair to be removed not found in set")
+	}
+
+	if !needsWriteBack {
+		return nil
+	}
+
+	// Write changes back to file.
+	err := s.WriteORSetToFile()
+	if err != nil {
+
+		// Error during write-back to stable
+		// storage, revert just made changes.
+		s.AddEffect(e, t, false)
+
+		return fmt.Errorf("error during write-back of CRDT file: %v", err)
+	}
+
+	return nil
+}
+
+// RemovePair is a helper function only to be executed
+// by the source node of an pair-remove operation.
+// It removes the exactly specified value-tag pair.
+func (s *ORSet) RemovePair(e string, t string, send sendFunc) error {
+
+	// Delete the pair from the set, if present.
+	err := s.RemovePairEffect(e, t, true, true)
+	if err != nil {
+		return err
+	}
+
+	// Send arguments to other replicas.
+	send(t)
 
 	return nil
 }
