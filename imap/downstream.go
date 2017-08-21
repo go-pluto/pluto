@@ -644,6 +644,40 @@ func (mailbox *Mailbox) ApplyStore(storeUpd *comm.Msg_STORE) {
 		os.Exit(1)
 	}
 
+	// Add the mailbox-new-mail-name pair into
+	// the structure CRDT.
+	err = mailbox.Structure.AddEffect(storeUpd.Mailbox, storeUpd.AddTag, true)
+	if err != nil {
+
+		level.Error(mailbox.Logger).Log(
+			"msg", "failed to update structure OR-Set in downstream STORE execution",
+			"err", err,
+		)
+
+		err = os.Remove(storeFileName)
+		if err != nil {
+			level.Error(mailbox.Logger).Log(
+				"msg", "failed to remove created mail file during clean up of failed downstream STORE execution",
+				"err", err,
+			)
+		}
+
+		if createdMailbox {
+
+			delete(mailbox.Mails, storeUpd.Mailbox)
+
+			err = maildir.Dir(storeMaildir).Remove()
+			if err != nil {
+				level.Error(mailbox.Logger).Log(
+					"msg", "failed to remove created Maildir during clean up of failed downstream STORE execution",
+					"err", err,
+				)
+			}
+		}
+
+		os.Exit(1)
+	}
+
 	for msgNum, msgName := range mailbox.Mails[storeUpd.Mailbox] {
 
 		// Find old mail file's sequence number.
