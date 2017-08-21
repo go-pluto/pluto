@@ -42,7 +42,7 @@ type Service interface {
 
 	// ApplyCRDTUpd receives strings representing CRDT
 	// update operations from receiver and executes them.
-	ApplyCRDTUpd(applyCRDTUpd <-chan comm.Msg, doneCRDTUpd chan<- struct{})
+	ApplyCRDTUpd(applyChan <-chan comm.Msg, doneChan chan<- struct{})
 
 	// Serve invokes the main gRPC Serve() function.
 	Serve(socket net.Listener) error
@@ -232,7 +232,7 @@ func (s *service) constructState(logger log.Logger, sep string) error {
 // ApplyCRDTUpd passes on the required arguments for
 // invoking the IMAP node's ApplyCRDTUpd function so
 // that CRDT messages will get applied in background.
-func (s *service) ApplyCRDTUpd(applyCRDTUpd <-chan comm.Msg, doneCRDTUpd chan<- struct{}) {
+func (s *service) ApplyCRDTUpd(applyChan <-chan comm.Msg, doneChan chan<- struct{}) {
 
 	for {
 
