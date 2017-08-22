@@ -26,6 +26,7 @@ type service struct {
 	peersToSubnet map[string]string
 	mailboxes     map[string]*imap.Mailbox
 	sessions      map[string]*imap.Session
+	sessionsLock  *sync.RWMutex
 	Name          string
 	IMAPNodeGRPC  *grpc.Server
 	SyncSendChans map[string]chan comm.Msg
@@ -106,6 +107,7 @@ func NewService(name string, tlsConfig *tls.Config, config *config.Config) Servi
 		peersToSubnet: make(map[string]string),
 		mailboxes:     make(map[string]*imap.Mailbox),
 		sessions:      make(map[string]*imap.Session),
+		sessionsLock:  &sync.RWMutex{},
 		Name:          name,
 		SyncSendChans: make(map[string]chan comm.Msg),
 	}
@@ -285,6 +287,8 @@ func (s *service) Serve(socket net.Listener) error {
 // connection on this node.
 func (s *service) Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.Confirmation, error) {
 
+	s.sessionsLock.Lock()
+
 	// Create new connection tracking object.
 	s.sessions[clientCtx.ClientID] = &imap.Session{
 		State:             imap.StateAuthenticated,
@@ -295,6 +299,8 @@ func (s *service) Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.C
 		AppendInProg:      nil,
 	}
 
+	s.sessionsLock.Unlock()
+
 	return &imap.Confirmation{
 		Status: 0,
 	}, nil
@@ -304,8 +310,12 @@ func (s *service) Prepare(ctx context.Context, clientCtx *imap.Context) (*imap.C
 // information associated with it.
 func (s *service) Close(ctx context.Context, clientCtx *imap.Context) (*imap.Confirmation, error) {
 
+	s.sessionsLock.Lock()
+
 	// Delete connection-tracking object from sessions map.
 	delete(s.sessions, clientCtx.ClientID)
+
+	s.sessionsLock.Unlock()
 
 	return &imap.Confirmation{
 		Status: 0,
@@ -316,11 +326,13 @@ func (s *service) Close(ctx context.Context, clientCtx *imap.Context) (*imap.Con
 // payload to user-instructed value.
 func (s *service) Select(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
+	s.sessionsLock.RLock()
+
 	// Retrieve active IMAP connection context
 	// from map of all known to this node.
-	// Note: ClientID is expected to truly identify
-	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
+
+	s.sessionsLock.RUnlock()
 
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
@@ -340,11 +352,13 @@ func (s *service) Select(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 // name taken from payload of request.
 func (s *service) Create(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
+	s.sessionsLock.RLock()
+
 	// Retrieve active IMAP connection context
 	// from map of all known to this node.
-	// Note: ClientID is expected to truly identify
-	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
+
+	s.sessionsLock.RUnlock()
 
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
@@ -363,11 +377,13 @@ func (s *service) Create(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 // Delete an existing mailbox with all included content.
 func (s *service) Delete(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
+	s.sessionsLock.RLock()
+
 	// Retrieve active IMAP connection context
 	// from map of all known to this node.
-	// Note: ClientID is expected to truly identify
-	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
+
+	s.sessionsLock.RUnlock()
 
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
@@ -387,11 +403,13 @@ func (s *service) Delete(ctx context.Context, comd *imap.Command) (*imap.Reply, 
 // available and also returns the hierarchy delimiter.
 func (s *service) List(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
+	s.sessionsLock.RLock()
+
 	// Retrieve active IMAP connection context
 	// from map of all known to this node.
-	// Note: ClientID is expected to truly identify
-	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
+
+	s.sessionsLock.RUnlock()
 
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
@@ -411,11 +429,13 @@ func (s *service) List(ctx context.Context, comd *imap.Command) (*imap.Reply, er
 // a message specifying the awaited number of bytes.
 func (s *service) AppendBegin(ctx context.Context, comd *imap.Command) (*imap.Await, error) {
 
+	s.sessionsLock.RLock()
+
 	// Retrieve active IMAP connection context
 	// from map of all known to this node.
-	// Note: ClientID is expected to truly identify
-	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
+
+	s.sessionsLock.RUnlock()
 
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
@@ -435,11 +455,13 @@ func (s *service) AppendBegin(ctx context.Context, comd *imap.Command) (*imap.Aw
 // prior AppendBegin.
 func (s *service) AppendEnd(ctx context.Context, mailFile *imap.MailFile) (*imap.Reply, error) {
 
+	s.sessionsLock.RLock()
+
 	// Retrieve active IMAP connection context
 	// from map of all known to this node.
-	// Note: ClientID is expected to truly identify
-	// exactly one device session (thus, no locking).
 	sess := s.sessions[mailFile.ClientID]
+
+	s.sessionsLock.RUnlock()
 
 	// Make sure that an APPEND is actually in progress.
 	if sess.AppendInProg == nil {
@@ -459,11 +481,13 @@ func (s *service) AppendEnd(ctx context.Context, mailFile *imap.MailFile) (*imap
 // APPEND command from an internal node in case of client error.
 func (s *service) AppendAbort(ctx context.Context, abort *imap.Abort) (*imap.Confirmation, error) {
 
+	s.sessionsLock.RLock()
+
 	// Retrieve active IMAP connection context
 	// from map of all known to this node.
-	// Note: ClientID is expected to truly identify
-	// exactly one device session (thus, no locking).
 	sess := s.sessions[abort.ClientID]
+
+	s.sessionsLock.RUnlock()
 
 	// Remove in-progress meta data.
 	sess.AppendInProg = nil
@@ -479,11 +503,13 @@ func (s *service) AppendAbort(ctx context.Context, abort *imap.Abort) (*imap.Con
 // prior to calling this function.
 func (s *service) Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
+	s.sessionsLock.RLock()
+
 	// Retrieve active IMAP connection context
 	// from map of all known to this node.
-	// Note: ClientID is expected to truly identify
-	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
+
+	s.sessionsLock.RUnlock()
 
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
@@ -504,11 +530,13 @@ func (s *service) Expunge(ctx context.Context, comd *imap.Command) (*imap.Reply,
 // attributes for these mails throughout the system.
 func (s *service) Store(ctx context.Context, comd *imap.Command) (*imap.Reply, error) {
 
+	s.sessionsLock.RLock()
+
 	// Retrieve active IMAP connection context
 	// from map of all known to this node.
-	// Note: ClientID is expected to truly identify
-	// exactly one device session (thus, no locking).
 	sess := s.sessions[comd.ClientID]
+
+	s.sessionsLock.RUnlock()
 
 	// Parse received raw request into struct.
 	req, err := imap.ParseRequest(comd.Text)
