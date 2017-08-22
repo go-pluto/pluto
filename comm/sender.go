@@ -50,15 +50,16 @@ func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *t
 	// Create and initialize what we need for
 	// a CRDT sender routine.
 	sender := &Sender{
-		lock:      &sync.Mutex{},
-		logger:    logger,
-		name:      name,
-		tlsConfig: tlsConfig,
-		inc:       make(chan Msg),
-		msgInLog:  make(chan struct{}, 1),
-		incVClock: incVClock,
-		updVClock: updVClock,
-		nodes:     nodes,
+		lock:        &sync.Mutex{},
+		logger:      logger,
+		name:        name,
+		tlsConfig:   tlsConfig,
+		inc:         make(chan Msg),
+		msgInLog:    make(chan struct{}, 1),
+		incVClock:   incVClock,
+		updVClock:   updVClock,
+		nodes:       nodes,
+		syncStreams: make(map[string]Receiver_IncomingClient),
 	}
 
 	// Open log file descriptor for writing.
