@@ -90,13 +90,13 @@ func SenderOptions(tlsConfig *tls.Config) []grpc.DialOption {
 	creds := credentials.NewTLS(tlsConfig)
 
 	return []grpc.DialOption{
-		grpc.WithCompressor(comp),
-		grpc.WithDecompressor(decomp),
 		grpc.WithBackoffMaxDelay(8 * time.Second),
 		grpc.WithBlock(),
-		grpc.WithTimeout(26 * time.Second),
+		grpc.WithCompressor(comp),
+		grpc.WithDecompressor(decomp),
 		grpc.WithDefaultCallOptions(callOpts...),
 		grpc.WithKeepaliveParams(kaParams),
+		grpc.WithTimeout(26 * time.Second),
 		grpc.WithTransportCredentials(creds),
 	}
 }
