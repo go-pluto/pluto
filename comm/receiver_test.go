@@ -22,17 +22,11 @@ import (
 var (
 	confStatus = uint32(0)
 
-	writeInc1 = []byte("hello")
-	writeInc2 = []byte("\nwhat\r\tabout!\"§$%&/()=strange#+?`?`?°°°characters")
-	writeInc3 = []byte("∰☕✔😉")
-	writeInc4 = []byte("1234567890")
-	writeInc5 = []byte(fmt.Sprintf("%g", math.MaxFloat64))
-
-	checkInc1 = []byte("5;hello")
-	checkInc2 = []byte("53;\nwhat\r\tabout!\"§$%&/()=strange#+?`?`?°°°characters")
-	checkInc3 = []byte("13;∰☕✔😉")
-	checkInc4 = []byte("10;1234567890")
-	checkInc5 = []byte(fmt.Sprintf("23;%g", math.MaxFloat64))
+	inc1 = []byte("5;hello")
+	inc2 = []byte("53;\nwhat\r\tabout!\"§$%&/()=strange#+?`?`?°°°characters")
+	inc3 = []byte("13;∰☕✔😉")
+	inc4 = []byte("10;1234567890")
+	inc5 = []byte(fmt.Sprintf("23;%g", math.MaxFloat64))
 
 	/*
 		payload1 := Msg{
@@ -196,8 +190,8 @@ func TestIncoming(t *testing.T) {
 
 	// Value 1.
 	// Write first value to log file.
-	conf, err := recv.Incoming(context.Background(), &BinMsg{
-		Data: writeInc1,
+	conf, err := recv.Incoming(context.Background(), &BinMsgs{
+		Data: inc1,
 	})
 	assert.Nilf(t, err, "expected nil error for Incoming() but received: %v", err)
 
@@ -210,12 +204,12 @@ func TestIncoming(t *testing.T) {
 	// Read content of log file for inspection.
 	content, err := ioutil.ReadFile(tmpLogFile)
 	assert.Nilf(t, err, "expected nil error for ReadFile() but received: %v", err)
-	assert.Equalf(t, checkInc1, content, "expected '%s' in log file but found: %v", checkInc1, content)
+	assert.Equalf(t, inc1, content, "expected '%s' in log file but found: %v", inc1, content)
 
 	// Value 2.
 	// Write second value to file.
-	conf, err = recv.Incoming(context.Background(), &BinMsg{
-		Data: writeInc2,
+	conf, err = recv.Incoming(context.Background(), &BinMsgs{
+		Data: inc2,
 	})
 	assert.Nilf(t, err, "expected nil error for Incoming() but received: %v", err)
 
@@ -226,13 +220,13 @@ func TestIncoming(t *testing.T) {
 	content, err = ioutil.ReadFile(tmpLogFile)
 	assert.Nilf(t, err, "expected nil error for ReadFile() but received: %v", err)
 
-	content = bytes.TrimPrefix(content, checkInc1)
-	assert.Equalf(t, checkInc2, content, "expected '%s' in log file but found: %v", checkInc2, content)
+	content = bytes.TrimPrefix(content, inc1)
+	assert.Equalf(t, inc2, content, "expected '%s' in log file but found: %v", inc2, content)
 
 	// Value 3.
 	// Write third value to file.
-	conf, err = recv.Incoming(context.Background(), &BinMsg{
-		Data: writeInc3,
+	conf, err = recv.Incoming(context.Background(), &BinMsgs{
+		Data: inc3,
 	})
 	assert.Nilf(t, err, "expected nil error for Incoming() but received: %v", err)
 
@@ -243,14 +237,14 @@ func TestIncoming(t *testing.T) {
 	content, err = ioutil.ReadFile(tmpLogFile)
 	assert.Nilf(t, err, "expected nil error for ReadFile() but received: %v", err)
 
-	content = bytes.TrimPrefix(content, checkInc1)
-	content = bytes.TrimPrefix(content, checkInc2)
-	assert.Equalf(t, checkInc3, content, "expected '%s' in log file but found: %v", checkInc3, content)
+	content = bytes.TrimPrefix(content, inc1)
+	content = bytes.TrimPrefix(content, inc2)
+	assert.Equalf(t, inc3, content, "expected '%s' in log file but found: %v", inc3, content)
 
 	// Value 4.
 	// Write fourth value to file.
-	conf, err = recv.Incoming(context.Background(), &BinMsg{
-		Data: writeInc4,
+	conf, err = recv.Incoming(context.Background(), &BinMsgs{
+		Data: inc4,
 	})
 	assert.Nilf(t, err, "expected nil error for Incoming() but received: %v", err)
 
@@ -261,15 +255,15 @@ func TestIncoming(t *testing.T) {
 	content, err = ioutil.ReadFile(tmpLogFile)
 	assert.Nilf(t, err, "expected nil error for ReadFile() but received: %v", err)
 
-	content = bytes.TrimPrefix(content, checkInc1)
-	content = bytes.TrimPrefix(content, checkInc2)
-	content = bytes.TrimPrefix(content, checkInc3)
-	assert.Equalf(t, checkInc4, content, "expected '%s' in log file but found: %v", checkInc4, content)
+	content = bytes.TrimPrefix(content, inc1)
+	content = bytes.TrimPrefix(content, inc2)
+	content = bytes.TrimPrefix(content, inc3)
+	assert.Equalf(t, inc4, content, "expected '%s' in log file but found: %v", inc4, content)
 
 	// Value 5.
 	// Write fifth value to file.
-	conf, err = recv.Incoming(context.Background(), &BinMsg{
-		Data: writeInc5,
+	conf, err = recv.Incoming(context.Background(), &BinMsgs{
+		Data: inc5,
 	})
 	assert.Nilf(t, err, "expected nil error for Incoming() but received: %v", err)
 
@@ -280,11 +274,11 @@ func TestIncoming(t *testing.T) {
 	content, err = ioutil.ReadFile(tmpLogFile)
 	assert.Nilf(t, err, "expected nil error for ReadFile() but received: %v", err)
 
-	content = bytes.TrimPrefix(content, checkInc1)
-	content = bytes.TrimPrefix(content, checkInc2)
-	content = bytes.TrimPrefix(content, checkInc3)
-	content = bytes.TrimPrefix(content, checkInc4)
-	assert.Equalf(t, checkInc5, content, "expected '%s' in log file but found: %v", checkInc5, content)
+	content = bytes.TrimPrefix(content, inc1)
+	content = bytes.TrimPrefix(content, inc2)
+	content = bytes.TrimPrefix(content, inc3)
+	content = bytes.TrimPrefix(content, inc4)
+	assert.Equalf(t, inc5, content, "expected '%s' in log file but found: %v", inc5, content)
 }
 
 // TestApplyStoredMsgs executes a white-box unit
