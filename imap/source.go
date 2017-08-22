@@ -321,8 +321,6 @@ func (mailbox *Mailbox) Delete(s *Session, req *Request, syncChan chan comm.Msg)
 		}
 	}
 
-	fmt.Printf("files: %#v\nrmvMails: %#v\n", files, rmvMails)
-
 	// TODO: Add routines to take care of mailboxes that
 	//       are tagged with a \Noselect tag.
 

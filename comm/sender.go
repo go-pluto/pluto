@@ -24,18 +24,18 @@ import (
 // Sender bundles information needed for sending
 // out sync messages via CRDTs.
 type Sender struct {
-	lock        *sync.Mutex
-	logger      log.Logger
-	name        string
-	tlsConfig   *tls.Config
-	gRPCOptions []grpc.DialOption
-	inc         chan Msg
-	msgInLog    chan struct{}
-	writeLog    *os.File
-	updLog      *os.File
-	incVClock   chan string
-	updVClock   chan map[string]uint32
-	nodes       map[string]string
+	lock      *sync.Mutex
+	logger    log.Logger
+	name      string
+	tlsConfig *tls.Config
+	inc       chan Msg
+	msgInLog  chan struct{}
+	writeLog  *os.File
+	updLog    *os.File
+	incVClock chan string
+	updVClock chan map[string]uint32
+	nodes     map[string]string
+	syncConns map[string]ReceiverClient
 }
 
 // Functions
@@ -59,6 +59,7 @@ func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *t
 		incVClock: incVClock,
 		updVClock: updVClock,
 		nodes:     nodes,
+		syncConns: make(map[string]ReceiverClient),
 	}
 
 	// Open log file descriptor for writing.
@@ -76,7 +77,32 @@ func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *t
 	sender.updLog = upd
 
 	// Prepare gRPC call options for later use.
-	sender.gRPCOptions = SenderOptions(sender.tlsConfig)
+	gRPCOptions := SenderOptions(sender.tlsConfig)
+
+	for node, addr := range sender.nodes {
+
+		// Connect to downstream replica.
+		conn, err := grpc.Dial(addr, gRPCOptions...)
+		for err != nil {
+			level.Debug(sender.logger).Log(
+				"msg", "failed to dial, trying again...",
+				"remote_node", node,
+				"remote_addr", addr,
+				"err", err,
+			)
+			conn, err = grpc.Dial(addr, gRPCOptions...)
+		}
+
+		level.Debug(sender.logger).Log(
+			"msg", "successfully connected",
+			"remote_node", node,
+			"remote_addr", addr,
+		)
+
+		// Create new gRPC client stub and save
+		// it to synchronization map.
+		sender.syncConns[node] = NewReceiverClient(conn)
+	}
 
 	// Start brokering routine in background.
 	go sender.BrokerMsgs()
@@ -297,36 +323,15 @@ func (sender *Sender) SendMsgs() {
 			wg := &sync.WaitGroup{}
 
 			// Prepare buffered completion channel for routines.
-			retStatus := make(chan string, len(sender.nodes))
+			retStatus := make(chan string, len(sender.syncConns))
 
-			for node, addr := range sender.nodes {
+			for node, client := range sender.syncConns {
 
 				wg.Add(1)
 
-				go func(retStatus chan string, node string, addr string, opts []grpc.DialOption, binMsg *BinMsg, logger log.Logger) {
+				go func(retStatus chan string, node string, addr string, client ReceiverClient, binMsg *BinMsg, logger log.Logger) {
 
 					defer wg.Done()
-
-					// Connect to downstream replica.
-					conn, err := grpc.Dial(addr, opts...)
-					for err != nil {
-						level.Debug(logger).Log(
-							"msg", "failed to dial, trying again...",
-							"remote_node", node,
-							"remote_addr", addr,
-							"err", err,
-						)
-						conn, err = grpc.Dial(addr, opts...)
-					}
-
-					level.Debug(logger).Log(
-						"msg", "successfully connected",
-						"remote_node", node,
-						"remote_addr", addr,
-					)
-
-					// Create new gRPC client stub.
-					client := NewReceiverClient(conn)
 
 					// Send BinMsg to downstream replica.
 					conf, err := client.Incoming(context.Background(), binMsg)
@@ -354,10 +359,10 @@ func (sender *Sender) SendMsgs() {
 
 					// Indicate success via channel.
 					retStatus <- "0"
-				}(retStatus, node, addr, sender.gRPCOptions, binMsg, sender.logger)
+				}(retStatus, node, sender.nodes[node], client, binMsg, sender.logger)
 			}
 
-			for i := 0; i < len(sender.nodes); i++ {
+			for i := 0; i < len(sender.syncConns); i++ {
 
 				// Wait and check received string on channel.
 				retStat := <-retStatus
