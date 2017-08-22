@@ -418,7 +418,7 @@ func TestAdd(t *testing.T) {
 	// v2.
 	assert.Equalf(t, false, s.Lookup(v2), "expected '%v' not to be in set but Lookup() returns true", v2)
 
-	err = s.Add(v2, func(args ...string) { msg1 = args })
+	err = s.Add(v2, "", func(args ...string) { msg1 = args })
 	assert.Nilf(t, err, "expected Add() to return nil error but received: %v", err)
 
 	assert.Equalf(t, true, s.Lookup(v2), "expected '%v' to be in set but Lookup() returns false", v2)
@@ -426,7 +426,7 @@ func TestAdd(t *testing.T) {
 	// v4.
 	assert.Equalf(t, false, s.Lookup(v4), "expected '%v' not to be in set but Lookup() returns true", v4)
 
-	err = s.Add(v4, func(args ...string) { msg2 = args })
+	err = s.Add(v4, "", func(args ...string) { msg2 = args })
 	assert.Nilf(t, err, "expected Add() to return nil error but received: %v", err)
 
 	assert.Equalf(t, true, s.Lookup(v4), "expected '%v' to be in set but Lookup() returns false", v4)
@@ -434,34 +434,29 @@ func TestAdd(t *testing.T) {
 	// v6.
 	assert.Equalf(t, false, s.Lookup(v6), "expected '%v' not to be in set but Lookup() returns true", v6)
 
-	err = s.Add(v6, func(args ...string) { msg3 = args })
+	err = s.Add(v6, "", func(args ...string) { msg3 = args })
 	assert.Nilf(t, err, "expected Add() to return nil error but received: %v", err)
 
 	assert.Equalf(t, true, s.Lookup(v6), "expected '%v' to be in set but Lookup() returns false", v6)
 
 	// Check received arguments.
 
-	assert.Equal(t, 2, len(msg1), "msg1 should be of length 2")
-	assert.Equal(t, 2, len(msg2), "msg2 should be of length 2")
-	assert.Equal(t, 2, len(msg3), "msg3 should be of length 2")
+	assert.Equal(t, 1, len(msg1), "msg1 should be of length 1")
+	assert.Equal(t, 1, len(msg2), "msg2 should be of length 1")
+	assert.Equal(t, 1, len(msg3), "msg3 should be of length 1")
 
-	assert.Equalf(t, v2, msg1[0], "msg1[0] = '%v' should be equal to v2 = '%v'", msg1[0], v2)
-	assert.Equalf(t, v4, msg2[0], "msg2[0] = '%v' should be equal to v4 = '%v'", msg2[0], v4)
-	assert.Equalf(t, v6, msg3[0], "msg3[0] = '%v' should be equal to v6 = '%v'", msg3[0], v6)
-
-	assert.Equalf(t, 36, len(msg1[1]), "expected tag of msg1 = '%s' to be of length 36 but was %d", msg1[1], len(msg1[1]))
-	assert.Equalf(t, 36, len(msg2[1]), "expected tag of msg2 = '%s' to be of length 36 but was %d", msg2[1], len(msg2[1]))
-	assert.Equalf(t, 36, len(msg3[1]), "expected tag of msg3 = '%s' to be of length 36 but was %d", msg3[1], len(msg3[1]))
+	assert.Equalf(t, 36, len(msg1[0]), "expected tag of msg1 = '%s' to be of length 36 but was %d", msg1[0], len(msg1[0]))
+	assert.Equalf(t, 36, len(msg2[0]), "expected tag of msg2 = '%s' to be of length 36 but was %d", msg2[0], len(msg2[0]))
+	assert.Equalf(t, 36, len(msg3[0]), "expected tag of msg3 = '%s' to be of length 36 but was %d", msg3[0], len(msg3[0]))
 
 	// Test second add of an element that is
 	// already contained in set.
 
-	err = s.Add(v2, func(args ...string) { msg4 = args })
+	err = s.Add(v2, "", func(args ...string) { msg4 = args })
 	assert.Nilf(t, err, "expected Add() to return nil error but received: %v", err)
 
 	assert.Equalf(t, 4, len(s.Elements), "expected set to contain exactly 4 elements but found %d instead", len(s.Elements))
-	assert.Equalf(t, msg1[0], msg4[0], "expected values of msg1 and msg4 to be equal but '%s' != '%s'", msg1[0], msg4[0])
-	assert.NotEqualf(t, msg1[1], msg4[1], "expected tags of msg1 and msg4 not to be equal but '%s' == '%s'", msg1[1], msg4[1])
+	assert.NotEqualf(t, msg1[0], msg4[0], "expected tags of msg1 and msg4 not to be equal but '%s' == '%s'", msg1[0], msg4[0])
 }
 
 // TestRemoveEffect executes a white-box unit test
@@ -658,22 +653,22 @@ func TestRemove(t *testing.T) {
 
 	// In order to delete keys, we need to add some first.
 
-	err = s.Add(v2, func(args ...string) {})
+	err = s.Add(v2, "", func(args ...string) {})
 	assert.Nilf(t, err, "expected Add() to return nil error but received: %v", err)
 
-	err = s.Add(v3, func(args ...string) {})
+	err = s.Add(v3, "", func(args ...string) {})
 	assert.Nilf(t, err, "expected Add() to return nil error but received: %v", err)
 
-	err = s.Add(v4, func(args ...string) {})
+	err = s.Add(v4, "", func(args ...string) {})
 	assert.Nilf(t, err, "expected Add() to return nil error but received: %v", err)
 
-	err = s.Add(v2, func(args ...string) {})
+	err = s.Add(v2, "", func(args ...string) {})
 	assert.Nilf(t, err, "expected Add() to return nil error but received: %v", err)
 
-	err = s.Add(v2, func(args ...string) {})
+	err = s.Add(v2, "", func(args ...string) {})
 	assert.Nilf(t, err, "expected Add() to return nil error but received: %v", err)
 
-	err = s.Add(v2, func(args ...string) {})
+	err = s.Add(v2, "", func(args ...string) {})
 	assert.Nilf(t, err, "expected Add() to return nil error but received: %v", err)
 
 	// Delete value that is only present once in set.
@@ -686,7 +681,7 @@ func TestRemove(t *testing.T) {
 	assert.Equalf(t, false, s.Lookup(v3), "expected '%v' not to be in set but Lookup() returns true", v3)
 	assert.Equalf(t, true, s.Lookup(v4), "expected '%v' to be in set but Lookup() returns false", v4)
 
-	assert.Equalf(t, 2, len(msg1), "expected msg1 to contain exactly 2 elements but found %d", len(msg1))
+	assert.Equalf(t, 1, len(msg1), "expected msg1 to contain exactly 1 elements but found %d", len(msg1))
 
 	// Delete all tags corresponding to value v2.
 	err = s.Remove(v2, func(args ...string) { msg2 = args })
@@ -697,5 +692,5 @@ func TestRemove(t *testing.T) {
 	assert.Equalf(t, false, s.Lookup(v3), "expected '%v' not to be in set but Lookup() returns true", v3)
 	assert.Equalf(t, true, s.Lookup(v4), "expected '%v' to be in set but Lookup() returns false", v4)
 
-	assert.Equalf(t, 8, len(msg2), "expected msg2 to contain exactly 8 elements but found %d", len(msg2))
+	assert.Equalf(t, 4, len(msg2), "expected msg2 to contain exactly 4 elements but found %d", len(msg2))
 }
