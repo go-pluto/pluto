@@ -22,38 +22,35 @@ func ReceiverOptions(tlsConfig *tls.Config) []grpc.ServerOption {
 	// Use pluto-internal TLS config for credentials.
 	creds := credentials.NewTLS(tlsConfig)
 
-	// Use GZIP for compression and decompression.
-	comp := grpc.NewGZIPCompressor()
-	decomp := grpc.NewGZIPDecompressor()
-
-	kaParams := keepalive.ServerParameters{
-		// Any internal connection will be closed after
-		// 5 minutes of being in idle state.
-		MaxConnectionIdle: 5 * time.Minute,
-		// The receiver will ping the other node after
-		// 1 minute of inactivity for keepalive.
-		Time: 1 * time.Minute,
-		// If no response to such keepalive ping is received
-		// after 30 seconds, the connection is closed.
-		Timeout: 30 * time.Second,
-	}
-
 	enfPolicy := keepalive.EnforcementPolicy{
 		// Clients connecting to this receiver should wait
-		// at least 1 minute before sending a keepalive.
-		MinTime: 1 * time.Minute,
+		// at least 30 seconds before sending a keepalive.
+		MinTime: 30 * time.Second,
 		// Expect keepalives even when no streams are active.
 		PermitWithoutStream: true,
 	}
 
+	kaParams := keepalive.ServerParameters{
+		// The receiver will ping the other node after
+		// 30 seconds of inactivity for keepalive.
+		Time: 30 * time.Second,
+		// If no response to such keepalive ping is received
+		// after 20 seconds, the connection is closed.
+		Timeout: 20 * time.Second,
+	}
+
+	// Use GZIP for compression and decompression.
+	comp := grpc.NewGZIPCompressor()
+	decomp := grpc.NewGZIPDecompressor()
+
 	return []grpc.ServerOption{
 		grpc.Creds(creds),
-		grpc.RPCCompressor(comp),
-		grpc.RPCDecompressor(decomp),
+		grpc.KeepaliveEnforcementPolicy(enfPolicy),
+		grpc.KeepaliveParams(kaParams),
 		grpc.MaxRecvMsgSize(maxMsgSize),
 		grpc.MaxSendMsgSize(maxMsgSize),
-		grpc.KeepaliveParams(kaParams),
-		grpc.KeepaliveEnforcementPolicy(enfPolicy),
+		grpc.RPCCompressor(comp),
+		grpc.RPCDecompressor(decomp),
 	}
 }
 
@@ -77,11 +74,11 @@ func SenderOptions(tlsConfig *tls.Config) []grpc.DialOption {
 
 	kaParams := keepalive.ClientParameters{
 		// The client will ping the other node after
-		// 1 minute of inactivity for keepalive.
-		Time: 1 * time.Minute,
+		// 30 seconds of inactivity for keepalive.
+		Time: 30 * time.Second,
 		// If no response to such keepalive ping is received
-		// after 30 seconds, the connection is closed.
-		Timeout: 30 * time.Second,
+		// after 20 seconds, the connection is closed.
+		Timeout: 20 * time.Second,
 		// Expect keepalives even when no streams are active.
 		PermitWithoutStream: true,
 	}
