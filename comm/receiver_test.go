@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/context"
 )
 
 // Variables
@@ -153,10 +154,6 @@ func TestTriggerMsgApplier(t *testing.T) {
 	assert.Equalf(t, 3, numSignals, "expected to receive 3 triggers but actually received %d", numSignals)
 }
 
-/*
-TODO: We have to update this function to use streams
-      instead of passing BinMsgs directly. More complicated.
-
 // TestIncoming executes a white-box unit
 // test on implemented Incoming() function.
 func TestIncoming(t *testing.T) {
@@ -289,7 +286,6 @@ func TestIncoming(t *testing.T) {
 	content = bytes.TrimPrefix(content, checkInc4)
 	assert.Equalf(t, checkInc5, content, "expected '%s' in log file but found: %v", checkInc5, content)
 }
-*/
 
 // TestApplyStoredMsgs executes a white-box unit
 // test on implemented ApplyStoredMsgs() function.

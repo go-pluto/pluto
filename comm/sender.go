@@ -24,18 +24,18 @@ import (
 // Sender bundles information needed for sending
 // out sync messages via CRDTs.
 type Sender struct {
-	lock        *sync.Mutex
-	logger      log.Logger
-	name        string
-	tlsConfig   *tls.Config
-	inc         chan Msg
-	msgInLog    chan struct{}
-	writeLog    *os.File
-	updLog      *os.File
-	incVClock   chan string
-	updVClock   chan map[string]uint32
-	nodes       map[string]string
-	syncStreams map[string]Receiver_IncomingClient
+	lock      *sync.Mutex
+	logger    log.Logger
+	name      string
+	tlsConfig *tls.Config
+	inc       chan Msg
+	msgInLog  chan struct{}
+	writeLog  *os.File
+	updLog    *os.File
+	incVClock chan string
+	updVClock chan map[string]uint32
+	nodes     map[string]string
+	syncConns map[string]ReceiverClient
 }
 
 // Functions
@@ -50,16 +50,16 @@ func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *t
 	// Create and initialize what we need for
 	// a CRDT sender routine.
 	sender := &Sender{
-		lock:        &sync.Mutex{},
-		logger:      logger,
-		name:        name,
-		tlsConfig:   tlsConfig,
-		inc:         make(chan Msg),
-		msgInLog:    make(chan struct{}, 1),
-		incVClock:   incVClock,
-		updVClock:   updVClock,
-		nodes:       nodes,
-		syncStreams: make(map[string]Receiver_IncomingClient),
+		lock:      &sync.Mutex{},
+		logger:    logger,
+		name:      name,
+		tlsConfig: tlsConfig,
+		inc:       make(chan Msg),
+		msgInLog:  make(chan struct{}, 1),
+		incVClock: incVClock,
+		updVClock: updVClock,
+		nodes:     nodes,
+		syncConns: make(map[string]ReceiverClient),
 	}
 
 	// Open log file descriptor for writing.
@@ -99,25 +99,9 @@ func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *t
 			"remote_addr", addr,
 		)
 
-		// Create new gRPC client stub.
-		client := NewReceiverClient(conn)
-
-		// Establish a bidirectional stream between
-		// this and the current downstream node.
-		stream, err := client.Incoming(context.Background())
-		if err != nil {
-
-			level.Debug(sender.logger).Log(
-				"msg", "failed to establish bidirectional stream",
-				"remote_node", node,
-				"remote_addr", addr,
-				"err", err,
-			)
-
-			return nil, fmt.Errorf("failed to establish downstream sync connection: %v", err)
-		}
-
-		sender.syncStreams[node] = stream
+		// Create new gRPC client stub and save
+		// it to synchronization map.
+		sender.syncConns[node] = NewReceiverClient(conn)
 	}
 
 	// Start brokering routine in background.
@@ -339,18 +323,18 @@ func (sender *Sender) SendMsgs() {
 			wg := &sync.WaitGroup{}
 
 			// Prepare buffered completion channel for routines.
-			retStatus := make(chan string, len(sender.syncStreams))
+			retStatus := make(chan string, len(sender.syncConns))
 
-			for node, stream := range sender.syncStreams {
+			for node, client := range sender.syncConns {
 
 				wg.Add(1)
 
-				go func(retStatus chan string, node string, stream Receiver_IncomingClient, binMsg *BinMsg, logger log.Logger) {
+				go func(retStatus chan string, node string, addr string, client ReceiverClient, binMsg *BinMsg, logger log.Logger) {
 
 					defer wg.Done()
 
 					// Send BinMsg to downstream replica.
-					err := stream.Send(binMsg)
+					conf, err := client.Incoming(context.Background(), binMsg)
 					for err != nil {
 
 						// If we received an error, examine it and
@@ -358,31 +342,13 @@ func (sender *Sender) SendMsgs() {
 						stat, ok := status.FromError(err)
 						if ok && (stat.Code() == codes.Unavailable) {
 							level.Debug(logger).Log(
-								"msg", "downstream replica unavailable during Send(binMsg), trying again...",
+								"msg", "downstream replica unavailable during Incoming(), trying again...",
 								"remote_node", node,
-								"remote_addr", sender.nodes[node],
+								"remote_addr", addr,
 							)
-							err = stream.Send(binMsg)
+							conf, err = client.Incoming(context.Background(), binMsg)
 						} else {
 							retStatus <- fmt.Sprintf("permanent error for sending downstream message to replica %s: %v", node, err)
-							return
-						}
-					}
-
-					// Receive answer from downstream replica.
-					conf, err := stream.Recv()
-					if err != nil {
-
-						stat, ok := status.FromError(err)
-						if ok && (stat.Code() == codes.Unavailable) {
-							level.Debug(logger).Log(
-								"msg", "downstream replica unavailable during Recv(), trying again...",
-								"remote_node", node,
-								"remote_addr", sender.nodes[node],
-							)
-							conf, err = stream.Recv()
-						} else {
-							retStatus <- fmt.Sprintf("permanent error while receiving response from downstream replica %s: %v", node, err)
 							return
 						}
 					}
@@ -393,10 +359,10 @@ func (sender *Sender) SendMsgs() {
 
 					// Indicate success via channel.
 					retStatus <- "0"
-				}(retStatus, node, stream, binMsg, sender.logger)
+				}(retStatus, node, sender.nodes[node], client, binMsg, sender.logger)
 			}
 
-			for i := 0; i < len(sender.syncStreams); i++ {
+			for i := 0; i < len(sender.syncConns); i++ {
 
 				// Wait and check received string on channel.
 				retStat := <-retStatus

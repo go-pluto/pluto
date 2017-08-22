@@ -15,6 +15,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
@@ -204,19 +205,7 @@ func (recv *Receiver) TriggerMsgApplier(waitSeconds time.Duration) {
 // messages reaching a receiver. It accepts transported binary messages
 // and writes their content to the designted receiving log file. Finally,
 // a trigger is sent to the application routine.
-func (recv *Receiver) Incoming(stream Receiver_IncomingServer) error {
-
-	// Accept a *BinMsg from stream.
-	binMsg, err := stream.Recv()
-	if err != nil {
-
-		level.Error(recv.logger).Log(
-			"msg", "error during Recv() at receiver",
-			"err", err,
-		)
-
-		return err
-	}
+func (recv *Receiver) Incoming(ctx context.Context, binMsg *BinMsg) (*Conf, error) {
 
 	// Prepend binary message with length in bytes.
 	// TODO: Make this fast?
@@ -226,15 +215,15 @@ func (recv *Receiver) Incoming(stream Receiver_IncomingServer) error {
 	recv.lock.Lock()
 
 	// Write it to message log file.
-	_, err = recv.writeLog.Write(data)
+	_, err := recv.writeLog.Write(data)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Save to stable storage.
 	err = recv.writeLog.Sync()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Unlock mutex.
@@ -246,15 +235,9 @@ func (recv *Receiver) Incoming(stream Receiver_IncomingServer) error {
 		recv.msgInLog <- struct{}{}
 	}
 
-	// Confirm message to sending node.
-	err = stream.Send(&Conf{
+	return &Conf{
 		Status: 0,
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
+	}, nil
 }
 
 // ApplyStoredMsgs waits for a signal on a channel that
