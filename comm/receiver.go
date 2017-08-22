@@ -170,8 +170,8 @@ func (recv *Receiver) TriggerMsgApplier(waitSeconds time.Duration) {
 	// Specify duration to wait between triggers.
 	triggerD := waitSeconds * time.Second
 
-	// Create a timer that waits for one second
-	// to elapse and then fires.
+	// Create a timer that waits for the specified
+	// amount of seconds to elapse and then fires.
 	triggerT := time.NewTimer(triggerD)
 
 	for {
@@ -205,17 +205,12 @@ func (recv *Receiver) TriggerMsgApplier(waitSeconds time.Duration) {
 // messages reaching a receiver. It accepts transported binary messages
 // and writes their content to the designted receiving log file. Finally,
 // a trigger is sent to the application routine.
-func (recv *Receiver) Incoming(ctx context.Context, binMsg *BinMsg) (*Conf, error) {
+func (recv *Receiver) Incoming(ctx context.Context, binMsgs *BinMsgs) (*Conf, error) {
 
-	// Prepend binary message with length in bytes.
-	// TODO: Make this fast?
-	data := append([]byte(fmt.Sprintf("%d;", len(binMsg.Data))), binMsg.Data...)
-
-	// Lock mutex.
 	recv.lock.Lock()
 
-	// Write it to message log file.
-	_, err := recv.writeLog.Write(data)
+	// Write bulk of messages to message log file.
+	_, err := recv.writeLog.Write(binMsgs.Data)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +221,6 @@ func (recv *Receiver) Incoming(ctx context.Context, binMsg *BinMsg) (*Conf, erro
 		return nil, err
 	}
 
-	// Unlock mutex.
 	recv.lock.Unlock()
 
 	// Indicate to applying routine that a new message
@@ -258,10 +252,9 @@ func (recv *Receiver) ApplyStoredMsgs() {
 		case _, ok := <-recv.msgInLog:
 			if ok {
 
-				// Lock mutex.
 				recv.lock.Lock()
 
-				// Most of the following commands are taking from
+				// Most of the following commands are taken from
 				// this stackoverflow answer describing a way to
 				// pop the first line of a file and write back
 				// the remaining parts:
@@ -313,7 +306,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 						os.Exit(1)
 					}
 
-					// Unlock log file mutex.
 					recv.lock.Unlock()
 
 					// Send signal again to check for next log items.
@@ -321,7 +313,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 						recv.msgInLog <- struct{}{}
 					}
 
-					// Go to next loop iteration.
 					continue
 				}
 
@@ -524,7 +515,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					}
 				}
 
-				// Unlock mutex.
 				recv.lock.Unlock()
 
 				// We do not know how many elements are waiting in the
