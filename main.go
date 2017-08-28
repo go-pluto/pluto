@@ -10,7 +10,10 @@ import (
 
 	"crypto/tls"
 	"io/ioutil"
+	"net/http"
 	"path/filepath"
+
+	_ "net/http/pprof"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -166,6 +169,14 @@ func main() {
 	}
 
 	plutoMetrics := NewPlutoMetrics(conf.Distributor.PrometheusAddr)
+
+	go func() {
+
+		// Enable performance profiling with pprof.
+		level.Info(logger).Log(
+			"msg", http.ListenAndServe("127.0.0.1:6060", nil),
+		)
+	}()
 
 	// Initialize and run a node of the pluto
 	// system based on passed command line flag.
