@@ -386,19 +386,26 @@ func main() {
 		var storageS storage.Service
 		storageS = storage.NewService(conf.Storage.Name, tlsConfig, conf)
 
-		// Create needed synchronization socket used by gRPC.
-		syncSocket, err := net.Listen("tcp", conf.Storage.ListenSyncAddr)
-		if err != nil {
-			level.Error(logger).Log(
-				"msg", "failed to open synchronization socket",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-		defer syncSocket.Close()
-
+		syncSockets := make(map[string]net.Listener)
 		peersToSubnet := make(map[string]string)
 		syncSendChans := make(map[string]chan comm.Msg)
+
+		for subnet, syncAddrs := range conf.Storage.SyncAddrs {
+
+			// Create needed synchronization sockets used by gRPC.
+
+			var err error
+			syncSockets[subnet], err = net.Listen("tcp", syncAddrs["Listen"])
+			if err != nil {
+				level.Error(logger).Log(
+					"msg", "failed to open synchronization socket",
+					"sync_addr", syncAddrs["Listen"],
+					"err", err,
+				)
+				os.Exit(1)
+			}
+			defer syncSockets[subnet].Close()
+		}
 
 		for subnet, peers := range conf.Storage.Peers {
 
@@ -435,9 +442,17 @@ func main() {
 			sendCRDTLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("%s-sending.log", subnet))
 			vclockLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("%s-vclock.log", subnet))
 
+			level.Debug(logger).Log(
+				"msg", "sync addresses used",
+				"subnet", subnet,
+				"listen", conf.Storage.SyncAddrs[subnet]["Listen"],
+				"public", conf.Storage.SyncAddrs[subnet]["Public"],
+				"socket", syncSockets[subnet].Addr(),
+			)
+
 			// Initialize a receiving goroutine for sync operations
 			// for each worker node.
-			incVClock, updVClock, err := comm.InitReceiver(logger, conf.Storage.Name, conf.Storage.ListenSyncAddr, conf.Storage.PublicSyncAddr, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, peers)
+			incVClock, updVClock, err := comm.InitReceiver(logger, conf.Storage.Name, conf.Storage.SyncAddrs[subnet]["Listen"], conf.Storage.SyncAddrs[subnet]["Public"], recvCRDTLog, vclockLog, syncSockets[subnet], tlsConfig, applyCRDTUpd, doneCRDTUpd, peers)
 			if err != nil {
 				level.Error(logger).Log(
 					"msg", "failed to initialize receiver",

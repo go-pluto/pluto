@@ -69,13 +69,12 @@ type Storage struct {
 	Name           string
 	PublicMailAddr string
 	ListenMailAddr string
-	PublicSyncAddr string
-	ListenSyncAddr string
 	PrometheusAddr string
 	CertLoc        string
 	KeyLoc         string
 	MaildirRoot    string
 	CRDTLayerRoot  string
+	SyncAddrs      map[string]map[string]string
 	Peers          map[string]map[string]string
 }
 

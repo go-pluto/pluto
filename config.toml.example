@@ -100,7 +100,7 @@ AuthAdapter = "AuthPostgres"
         [Workers.worker-2.Peers.subnet-2]
         us-west-worker-2 = "127.0.0.1:30102"
         asia-south-worker-2 = "127.0.0.1:30202"
-        storage = "127.0.0.1:31000"
+        storage = "127.0.0.1:32000"
 
     [Workers.worker-3]
     # Name this node uniquely(!) and most fittingly to your
@@ -121,7 +121,7 @@ AuthAdapter = "AuthPostgres"
         [Workers.worker-3.Peers.subnet-3]
         us-west-worker-3 = "127.0.0.1:30103"
         asia-south-worker-3 = "127.0.0.1:30203"
-        storage = "127.0.0.1:31000"
+        storage = "127.0.0.1:33000"
 
 
 [Storage]
@@ -129,23 +129,33 @@ AuthAdapter = "AuthPostgres"
 Name = "storage"
 PublicMailAddr = "127.0.0.1:21000"
 ListenMailAddr = "127.0.0.1:21000"
-PublicSyncAddr = "127.0.0.1:31000"
-ListenSyncAddr = "127.0.0.1:31000"
 PrometheusAddr = "127.0.0.1:9001"
 CertLoc = "/very/complicated/and/long/path/to/your/internal-storage-cert.pem"
 KeyLoc = "/very/complicated/and/long/path/to/your/internal-storage-key.pem"
 MaildirRoot = "/for/example/some/very/unique/path/Maildir/"
 CRDTLayerRoot = "/for/example/some/very/unique/path/crdt-layer/"
 
+    [Storage.SyncAddrs.subnet-1]
+    Public = "127.0.0.1:31000"
+    Listen = "127.0.0.1:31000"
+
     [Storage.Peers.subnet-1]
     eu-west-worker-1 = "127.0.0.1:30001"
     us-west-worker-1 = "127.0.0.1:30101"
     asia-south-worker-1 = "127.0.0.1:30201"
 
+    [Storage.SyncAddrs.subnet-2]
+    Public = "127.0.0.1:32000"
+    Listen = "127.0.0.1:32000"
+
     [Storage.Peers.subnet-2]
     eu-west-worker-2 = "127.0.0.1:30002"
     us-west-worker-2 = "127.0.0.1:30102"
     asia-south-worker-2 = "127.0.0.1:30202"
+
+    [Storage.SyncAddrs.subnet-3]
+    Public = "127.0.0.1:33000"
+    Listen = "127.0.0.1:33000"
 
     [Storage.Peers.subnet-3]
     eu-west-worker-3 = "127.0.0.1:30003"

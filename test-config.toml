@@ -48,23 +48,33 @@ AuthAdapter = "AuthFile"
 Name = "storage"
 PublicMailAddr = "127.0.0.1:21000"
 ListenMailAddr = "127.0.0.1:21000"
-PublicSyncAddr = "127.0.0.1:31000"
-ListenSyncAddr = "127.0.0.1:31000"
 PrometheusAddr = "127.0.0.1:9001"
 CertLoc = "private/internal-storage-cert.pem"
 KeyLoc = "private/internal-storage-key.pem"
 MaildirRoot = "private/Maildirs/storage/"
 CRDTLayerRoot = "private/crdt-layers/storage/"
 
+    [Storage.SyncAddrs.subnet-1]
+    Public = "127.0.0.1:31000"
+    Listen = "127.0.0.1:31000"
+
     [Storage.Peers.subnet-1]
     eu-west-worker-1 = "127.0.0.1:30001"
     us-west-worker-1 = "127.0.0.1:30101"
     asia-south-worker-1 = "127.0.0.1:30201"
 
+    [Storage.SyncAddrs.subnet-2]
+    Public = "127.0.0.1:32000"
+    Listen = "127.0.0.1:32000"
+
     [Storage.Peers.subnet-2]
     eu-west-worker-2 = "127.0.0.1:30002"
     us-west-worker-2 = "127.0.0.1:30102"
     asia-south-worker-2 = "127.0.0.1:30202"
+
+    [Storage.SyncAddrs.subnet-3]
+    Public = "127.0.0.1:33000"
+    Listen = "127.0.0.1:33000"
 
     [Storage.Peers.subnet-3]
     eu-west-worker-3 = "127.0.0.1:30003"
