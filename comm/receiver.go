@@ -350,13 +350,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 							)
 							os.Exit(1)
 						}
-
-						level.Debug(recv.logger).Log(
-							"msg", "extracted start and end of area",
-							"metaLines[i]", metaLines[i],
-							"start", meta[i]["start"],
-							"end", meta[i]["end"],
-						)
 					}
 				}
 
@@ -412,8 +405,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 						var consideredBytes int64 = 0
 
 						for (lastEnd + consideredBytes) != meta[i]["start"] {
-
-							level.Debug(recv.logger).Log("msg", fmt.Sprintf("(lEnd + conBytes) ?= meta[%d][\"start\"]   =>   (%d + %d) = %d ?= %d\n", i, lastEnd, consideredBytes, (lastEnd+consideredBytes), meta[i]["start"]))
 
 							// We found a potentially applicable message.
 							// Overlay current position from data slice with buffer.
@@ -570,8 +561,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 						}
 					}
 				}
-
-				level.Debug(recv.logger).Log("msg", fmt.Sprintf("merged meta: %v\n", meta))
 
 				// Construct marshalled meta data representation
 				// that we can write back to log file.
