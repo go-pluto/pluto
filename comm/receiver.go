@@ -96,7 +96,7 @@ func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr 
 
 	// Open log file for tracking meta data about already
 	// applied parts of the CRDT update messages log file.
-	meta, err := os.OpenFile(metaFilePath, (os.O_CREATE | os.O_RDWR), 0600)
+	meta, err := os.OpenFile(metaFilePath, (os.O_CREATE | os.O_WRONLY), 0600)
 	if err != nil {
 		return nil, nil, fmt.Errorf("opening meta data log file of applied CRDT update messages failed with: %v", err)
 	}
@@ -268,17 +268,13 @@ func (recv *Receiver) ApplyStoredMsgs() {
 		case _, ok := <-recv.msgInLog:
 			if ok {
 
-				// fmt.Println("attempting to apply stored messages")
-
 				recv.lock.Lock()
 
 				// Read the whole current content of the CRDT update
 				// messages log file to have it present in memory.
 				data, err := ioutil.ReadFile(recv.logFilePath)
 				if err != nil {
-
 					recv.lock.Unlock()
-
 					level.Error(recv.logger).Log(
 						"msg", "failed to read whole CRDT update messages log file",
 						"err", err,
@@ -291,7 +287,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// If there currently is no content available
 				// to apply, skip to next iteration.
 				if len(data) == 0 {
-					fmt.Println("CRDT update messages log file empty, skipping run")
+					level.Debug(recv.logger).Log("msg", "CRDT update messages log file empty, skipping run")
 					continue
 				}
 
@@ -315,8 +311,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					)
 					continue
 				}
-
-				fmt.Printf("metaRaw: '%#q'\n", metaRaw)
 
 				meta := make([]map[string]int64, 0)
 
@@ -374,8 +368,6 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				}
 				meta = append(meta, fenceItem)
 
-				fmt.Printf("BEGIN meta: '%v'\n", meta)
-
 				done := false
 				for !done {
 
@@ -389,16 +381,11 @@ func (recv *Receiver) ApplyStoredMsgs() {
 
 					for i := 0; i < len(meta); i++ {
 
-						fmt.Printf("cur iter:   meta[%d] = %v\n", i, meta[i])
-
 						// If we currently look at the very first
 						// area, directly skip to the next one.
 						if meta[i]["start"] == 0 {
-							fmt.Println("start is 0, skipping...")
 							continue
 						}
-
-						fmt.Println("A 1")
 
 						// Calculate difference between start of
 						// current area and end of last one.
@@ -413,11 +400,8 @@ func (recv *Receiver) ApplyStoredMsgs() {
 						// If areas are contiguous, continue
 						// with next area.
 						if diffStartEnd < 1 {
-							fmt.Println("contiguous areas, skipping...")
 							continue
 						}
-
-						fmt.Println("A 2")
 
 						// Gaps mean that there are still messages
 						// we might be able to apply. Indicate this.
@@ -429,7 +413,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 
 						for (lastEnd + consideredBytes) != meta[i]["start"] {
 
-							fmt.Printf("(lastEnd + consideredBytes) ?= meta[%d][\"start\"] => (%d + %d) = %d ?= %d\n", i, lastEnd, consideredBytes, (lastEnd + consideredBytes), meta[i]["start"])
+							level.Debug(recv.logger).Log("msg", fmt.Sprintf("(lEnd + conBytes) ?= meta[%d][\"start\"]   =>   (%d + %d) = %d ?= %d\n", i, lastEnd, consideredBytes, (lastEnd+consideredBytes), meta[i]["start"]))
 
 							// We found a potentially applicable message.
 							// Overlay current position from data slice with buffer.
@@ -558,16 +542,16 @@ func (recv *Receiver) ApplyStoredMsgs() {
 								consideredBytes += msgSize
 								i++
 
-								fmt.Printf("END meta: '%v'\n", meta)
-
 							} else {
 								level.Warn(recv.logger).Log("msg", "message was out of order, taking next one")
 							}
 						}
 					}
 
+					// If we could neither apply one message
+					// nor even find an applicable one, we have
+					// to reload the CRDT message log.
 					if (noneLeft == true) || (noneApplied == true) {
-						fmt.Println("noneLeft or noneApplied => done true")
 						done = true
 					}
 				}
@@ -587,7 +571,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					}
 				}
 
-				fmt.Printf("MERGED meta: %v\n", meta)
+				level.Debug(recv.logger).Log("msg", fmt.Sprintf("merged meta: %v\n", meta))
 
 				// Construct marshalled meta data representation
 				// that we can write back to log file.
