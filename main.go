@@ -315,11 +315,12 @@ func main() {
 		// Construct path to receiving and sending CRDT logs
 		// for the subnet this worker node is part of.
 		recvCRDTLog := filepath.Join(wConfig.CRDTLayerRoot, fmt.Sprintf("%s-receiving.log", subnet))
+		metaDataLog := filepath.Join(wConfig.CRDTLayerRoot, fmt.Sprintf("%s-receiving-meta.log", subnet))
 		sendCRDTLog := filepath.Join(wConfig.CRDTLayerRoot, fmt.Sprintf("%s-sending.log", subnet))
 		vclockLog := filepath.Join(wConfig.CRDTLayerRoot, fmt.Sprintf("%s-vclock.log", subnet))
 
 		// Initialize receiving goroutine for sync operations.
-		incVClock, updVClock, err := comm.InitReceiver(logger, wConfig.Name, wConfig.ListenSyncAddr, wConfig.PublicSyncAddr, recvCRDTLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, peers)
+		incVClock, updVClock, err := comm.InitReceiver(logger, wConfig.Name, wConfig.ListenSyncAddr, wConfig.PublicSyncAddr, recvCRDTLog, metaDataLog, vclockLog, syncSocket, tlsConfig, applyCRDTUpd, doneCRDTUpd, peers)
 		if err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to initialize receiver",
@@ -450,20 +451,13 @@ func main() {
 			// Construct path to receiving and sending CRDT logs
 			// for the current subnet.
 			recvCRDTLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("%s-receiving.log", subnet))
+			metaDataLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("%s-receiving-meta.log", subnet))
 			sendCRDTLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("%s-sending.log", subnet))
 			vclockLog := filepath.Join(conf.Storage.CRDTLayerRoot, fmt.Sprintf("%s-vclock.log", subnet))
 
-			level.Debug(logger).Log(
-				"msg", "sync addresses used",
-				"subnet", subnet,
-				"listen", conf.Storage.SyncAddrs[subnet]["Listen"],
-				"public", conf.Storage.SyncAddrs[subnet]["Public"],
-				"socket", syncSockets[subnet].Addr(),
-			)
-
 			// Initialize a receiving goroutine for sync operations
 			// for each worker node.
-			incVClock, updVClock, err := comm.InitReceiver(logger, conf.Storage.Name, conf.Storage.SyncAddrs[subnet]["Listen"], conf.Storage.SyncAddrs[subnet]["Public"], recvCRDTLog, vclockLog, syncSockets[subnet], tlsConfig, applyCRDTUpd, doneCRDTUpd, peers)
+			incVClock, updVClock, err := comm.InitReceiver(logger, conf.Storage.Name, conf.Storage.SyncAddrs[subnet]["Listen"], conf.Storage.SyncAddrs[subnet]["Public"], recvCRDTLog, metaDataLog, vclockLog, syncSockets[subnet], tlsConfig, applyCRDTUpd, doneCRDTUpd, peers)
 			if err != nil {
 				level.Error(logger).Log(
 					"msg", "failed to initialize receiver",

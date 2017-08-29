@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"crypto/tls"
+	"io/ioutil"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -18,6 +19,17 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
+
+// Variables
+
+// Separator for splitting meta data log
+// file content at newline character.
+var lineSep = []byte("\n")
+
+// Separator for splitting each meta data
+// log file line into start and end value
+// for byte range they it describes.
+var areaSep = []byte("-")
 
 // Structs
 
@@ -32,8 +44,10 @@ type Receiver struct {
 	msgInLog         chan struct{}
 	socket           net.Listener
 	tlsConfig        *tls.Config
+	logFilePath      string
 	writeLog         *os.File
-	updLog           *os.File
+	metaFilePath     string
+	metaLog          *os.File
 	incVClock        chan string
 	updVClock        chan map[string]uint32
 	vclock           map[string]uint32
@@ -50,9 +64,8 @@ type Receiver struct {
 // InitReceiver initializes above struct and sets
 // default values. It starts involved background
 // routines and send initial channel trigger.
-func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr string, logFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan Msg, doneCRDTUpdChan chan struct{}, nodes map[string]string) (chan string, chan map[string]uint32, error) {
+func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr string, logFilePath string, metaFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan Msg, doneCRDTUpdChan chan struct{}, nodes map[string]string) (chan string, chan map[string]uint32, error) {
 
-	// Create and initialize new struct.
 	recv := &Receiver{
 		lock:             &sync.Mutex{},
 		logger:           logger,
@@ -62,6 +75,8 @@ func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr 
 		msgInLog:         make(chan struct{}, 1),
 		socket:           socket,
 		tlsConfig:        tlsConfig,
+		logFilePath:      logFilePath,
+		metaFilePath:     metaFilePath,
 		incVClock:        make(chan string),
 		updVClock:        make(chan map[string]uint32),
 		vclock:           make(map[string]uint32),
@@ -75,24 +90,25 @@ func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr 
 	// Open log file descriptor for writing.
 	write, err := os.OpenFile(logFilePath, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
 	if err != nil {
-		return nil, nil, fmt.Errorf("opening CRDT log file for writing failed with: %v", err)
+		return nil, nil, fmt.Errorf("opening CRDT log file for writing append-only failed with: %v", err)
 	}
 	recv.writeLog = write
 
-	// Open log file descriptor for updating.
-	upd, err := os.OpenFile(logFilePath, os.O_RDWR, 0600)
+	// Open log file for tracking meta data about already
+	// applied parts of the CRDT update messages log file.
+	meta, err := os.OpenFile(metaFilePath, (os.O_CREATE | os.O_RDWR), 0600)
 	if err != nil {
-		return nil, nil, fmt.Errorf("opening CRDT log file for updating failed with: %v", err)
+		return nil, nil, fmt.Errorf("opening meta data log file of applied CRDT update messages failed with: %v", err)
 	}
-	recv.updLog = upd
+	recv.metaLog = meta
 
-	// Initially, reset position in update file to beginning.
-	_, err = recv.updLog.Seek(0, os.SEEK_SET)
+	// Initially, reset position in meta file to beginning.
+	_, err = recv.metaLog.Seek(0, os.SEEK_SET)
 	if err != nil {
-		return nil, nil, fmt.Errorf("could not reset position in update CRDT log file: %v", err)
+		return nil, nil, fmt.Errorf("could not reset position in meta data log file: %v", err)
 	}
 
-	// Initially set vector clock entries to 0.
+	// Initially, set vector clock entries to 0.
 	for node := range nodes {
 		recv.vclock[node] = 0
 	}
@@ -209,7 +225,7 @@ func (recv *Receiver) Incoming(ctx context.Context, binMsgs *BinMsgs) (*Conf, er
 
 	recv.lock.Lock()
 
-	// Write bulk of messages to message log file.
+	// Append bulk of messages to message log file.
 	_, err := recv.writeLog.Write(binMsgs.Data)
 	if err != nil {
 		return nil, err
@@ -242,288 +258,283 @@ func (recv *Receiver) ApplyStoredMsgs() {
 
 	for {
 
-		select {
+		level.Debug(recv.logger).Log("msg", "attempting to apply stored messages")
 
-		case <-recv.stopApply:
-			return
+		recv.lock.Lock()
 
-		// Wait for signal that new message was written to
-		// log file so that we can process it.
-		case _, ok := <-recv.msgInLog:
-			if ok {
+		// Read the whole current content of the CRDT update
+		// messages log file to have it present in memory.
+		data, err := ioutil.ReadFile(recv.logFilePath)
+		if err != nil {
 
-				recv.lock.Lock()
+			recv.lock.Unlock()
 
-				// Most of the following commands are taken from
-				// this stackoverflow answer describing a way to
-				// pop the first line of a file and write back
-				// the remaining parts:
-				// http://stackoverflow.com/a/30948278
-				info, err := recv.updLog.Stat()
-				if err != nil {
-					level.Error(recv.logger).Log(
-						"msg", "could not get CRDT log file information",
-						"err", err,
-					)
-					os.Exit(1)
-				}
+			level.Error(recv.logger).Log(
+				"msg", "failed to read whole CRDT update messages log file",
+				"err", err,
+			)
+			continue
+		}
 
-				// Store accessed file size for multiple use.
-				logSize := info.Size()
+		recv.lock.Unlock()
 
-				// Check if log file is empty and continue at next
-				// for loop iteration if that is the case.
-				if logSize == 0 {
-					recv.lock.Unlock()
+		// If there currently is no content available to apply,
+		// sleep shortly and skip to next iteration.
+		if len(data) == 0 {
+			level.Debug(recv.logger).Log("msg", "CRDT update messages log file empty, skipping run")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		// Reset position in meta data file to beginning again.
+		_, err = recv.metaLog.Seek(0, os.SEEK_SET)
+		if err != nil {
+			level.Error(recv.logger).Log(
+				"msg", "could not reset position in meta data log file",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+
+		// Read the whole content of the meta data log file
+		// that stores the CRDT file areas we already applied.
+		metaRaw, err := ioutil.ReadFile(recv.metaFilePath)
+		if err != nil {
+			level.Error(recv.logger).Log(
+				"msg", "failed to read whole meta data log file",
+				"err", err,
+			)
+			continue
+		}
+
+		// Split the meta data file at newline.
+		metaLines := bytes.Split(metaRaw, lineSep)
+
+		// Prepare slice of map of start and end positions.
+		meta := make([]map[string]int64, len(metaLines))
+
+		for i, areaRaw := range metaLines {
+
+			var err error
+			meta[i] = make(map[string]int64)
+
+			// Split current area at hyphen that separates
+			// start from end range value.
+			area := bytes.Split(areaRaw, areaSep)
+
+			// Parse byte representation of start value into int64.
+			meta[i]["start"], err = strconv.ParseInt(string(area[0]), 10, 64)
+			if err != nil {
+				level.Error(recv.logger).Log(
+					"msg", "failed to convert string to int indicating start of current area",
+					"err", err,
+				)
+				os.Exit(1)
+			}
+
+			// Parse byte representation of end value into int64.
+			meta[i]["end"], err = strconv.ParseInt(string(area[1]), 10, 64)
+			if err != nil {
+				level.Error(recv.logger).Log(
+					"msg", "failed to convert string to int indicating end of current area",
+					"err", err,
+				)
+				os.Exit(1)
+			}
+
+			level.Debug(recv.logger).Log(
+				"msg", "extracted start and end of area",
+				"areaRaw", areaRaw,
+				"start", meta[i]["start"],
+				"end", meta[i]["end"],
+			)
+		}
+
+		done := false
+		for !done {
+
+			// Initially, assume there is not one
+			// message anymore to potentially apply.
+			noneLeft := true
+
+			// Initially, assume we were not able to
+			// find one applicable message.
+			noneApplied := true
+
+			for i, area := range meta {
+
+				// If we currently look at the very first
+				// area, directly skip to the next one.
+				if area["start"] == 0 {
 					continue
 				}
 
-				// Save current position of head for later use.
-				curOffset, err := recv.updLog.Seek(0, os.SEEK_CUR)
-				if err != nil {
-					level.Error(recv.logger).Log(
-						"msg", "error while retrieving current head position in CRDT log file",
-						"err", err,
-					)
-					os.Exit(1)
+				// Calculate difference between start of
+				// current area and end of last one.
+				lastEnd := meta[(i - 1)]["end"]
+				diffStartEnd := area["start"] - lastEnd
+
+				// If areas are contiguous, continue
+				// with next area.
+				if diffStartEnd < 1 {
+					continue
 				}
 
-				// Calculate size of needed buffer.
-				bufferSize := logSize - curOffset
+				// Gaps mean that there are still messages
+				// we might be able to apply. Indicate this.
+				noneLeft = false
 
-				// Account for case when offset reached end of log file
-				// or accidentally the current offset is bigger than the
-				// log file's size.
-				if logSize <= curOffset {
+				// We found a potentially applicable message.
+				// Overlay current position from data slice with buffer.
+				// . . . x x x x MESSAGE? x x x x . . .
+				// <-------last| |-read-| |cur-------->
+				buf := bytes.NewBuffer(data[lastEnd:area["start"]])
 
-					// Reset position to beginning of file.
-					_, err = recv.updLog.Seek(0, os.SEEK_SET)
-					if err != nil {
+				// Track how many bytes of the current area
+				// we have already considered.
+				var consideredBytes int64 = 0
+
+				for (lastEnd + consideredBytes) != area["start"] {
+
+					// Read first bytes after last message to find
+					// byte number of enclosed ProtoBuf message.
+					numBytesRaw, err := buf.ReadBytes(';')
+					if (err != nil) && (err != io.EOF) {
 						level.Error(recv.logger).Log(
-							"msg", "could not reset position in CRDT log file",
+							"msg", "error extracting number of bytes of considered message in CRDT log file",
 							"err", err,
 						)
 						os.Exit(1)
 					}
 
-					recv.lock.Unlock()
-
-					// Send signal again to check for next log items.
-					if len(recv.msgInLog) < 1 {
-						recv.msgInLog <- struct{}{}
+					// Convert string to int64.
+					numBytes, err := strconv.ParseInt((string(numBytesRaw[:(len(numBytesRaw) - 1)])), 10, 64)
+					if err != nil {
+						level.Error(recv.logger).Log(
+							"msg", "failed to convert string to int indicating number of bytes",
+							"err", err,
+						)
+						os.Exit(1)
 					}
 
-					continue
-				}
+					// Calculate total space of stored message:
+					// number of bytes prefix + ';' + actual message.
+					msgSize := int64(len(numBytesRaw)) + numBytes
 
-				// Create a buffer of capacity of read file size
-				// minus the current head position offset.
-				buf := bytes.NewBuffer(make([]byte, 0, bufferSize))
+					// Extract marshalled ProtoBuf message area from data.
+					// . . . x x x x 4 1 6 ; P R O T O B U F M S G x x x x . . .
+					// <-------last| |len|   |--------read-------| |cur-------->
+					msgRaw := data[(lastEnd + consideredBytes + int64(len(numBytesRaw))):(lastEnd + consideredBytes + msgSize)]
 
-				// Copy contents of log file to prepared buffer.
-				_, err = io.Copy(buf, recv.updLog)
-				if err != nil {
-					level.Error(recv.logger).Log(
-						"msg", "could not copy CRDT log file contents to buffer",
-						"err", err,
-					)
-					os.Exit(1)
-				}
-
-				// Read byte amount of following binary message.
-				numBytesRaw, err := buf.ReadBytes(';')
-				if (err != nil) && (err != io.EOF) {
-					level.Error(recv.logger).Log(
-						"msg", "error extracting number of bytes of first message in CRDT log file",
-						"err", err,
-					)
-					os.Exit(1)
-				}
-
-				// Convert string to number.
-				numBytes, err := strconv.ParseInt((string(numBytesRaw[:(len(numBytesRaw) - 1)])), 10, 64)
-				if err != nil {
-					level.Error(recv.logger).Log(
-						"msg", "failed to convert string to int indicating number of bytes",
-						"err", err,
-					)
-					os.Exit(1)
-				}
-
-				// Reserve exactly enough space for current message.
-				msgRaw := make([]byte, numBytes)
-
-				// Read current message from buffer of log file.
-				numRead, err := buf.Read(msgRaw)
-				if err != nil {
-					level.Error(recv.logger).Log(
-						"msg", "error during extraction of current message in CRDT log file",
-						"err", err,
-					)
-					os.Exit(1)
-				}
-
-				if int64(numRead) != numBytes {
-					level.Error(recv.logger).Log("msg", fmt.Sprintf("expected message of length %d, but only read %d", numBytes, numRead))
-					os.Exit(1)
-				}
-
-				// Calculate total space of stored message:
-				// number of bytes prefix + ';' + actual message.
-				msgSize := int64(len(numBytesRaw)) + numBytes
-
-				// Unmarshal read ProtoBuf into defined Msg struct.
-				msg := &Msg{}
-				err = proto.Unmarshal(msgRaw, msg)
-				if err != nil {
-					level.Error(recv.logger).Log(
-						"msg", "failed to unmarshal read ProtoBuf into defined Msg struct",
-						"err", err,
-					)
-					os.Exit(1)
-				}
-
-				// Initially, set apply indicator to true. This means,
-				// that the message would be considered for further parsing.
-				applyMsg := true
-
-				// Check if this message is an already received or
-				// the expected next one from the sending node.
-				// If not, set indicator to false.
-				if (msg.Vclock[msg.Replica] != recv.vclock[msg.Replica]) &&
-					(msg.Vclock[msg.Replica] != (recv.vclock[msg.Replica] + 1)) {
-					applyMsg = false
-				}
-
-				for node, value := range msg.Vclock {
-
-					if node != msg.Replica {
-
-						// Next, range over all received vector clock values
-						// and check if they do not exceed the locally stored
-						// values for these nodes.
-						if value > recv.vclock[node] {
-							applyMsg = false
-							break
-						}
+					// Attempt to unmarshal extracted data area
+					// into a ProtoBuf message.
+					msg := &Msg{}
+					err = proto.Unmarshal(msgRaw, msg)
+					if err != nil {
+						level.Error(recv.logger).Log(
+							"msg", "failed to unmarshal considered ProtoBuf message into defined Msg struct",
+							"err", err,
+						)
+						os.Exit(1)
 					}
-				}
 
-				// If this indicator is false, there are messages not yet
-				// processed at this node that causally precede the just
-				// parsed message. We therefore cycle to the next message.
-				if applyMsg {
+					// Initially, set apply indicator to true. This means, that
+					// the message would be considered for further parsing.
+					applyMsg := true
 
-					// If this message is actually the next expected one,
-					// process its contents with CRDT logic. This ensures
-					// that message duplicates will get purged but not applied.
-					if msg.Vclock[msg.Replica] == (recv.vclock[msg.Replica] + 1) {
-
-						// Pass payload for higher-level interpretation
-						// to channel connected to node.
-						recv.applyCRDTUpdChan <- *msg
-
-						// Wait for done signal from node.
-						<-recv.doneCRDTUpdChan
+					// Check if this message is an already received or
+					// the expected next one from the sending node.
+					// If not, set indicator to false.
+					if (msg.Vclock[msg.Replica] != recv.vclock[msg.Replica]) &&
+						(msg.Vclock[msg.Replica] != (recv.vclock[msg.Replica] + 1)) {
+						applyMsg = false
 					}
 
 					for node, value := range msg.Vclock {
 
-						// Adjust local vector clock to continue with pair-wise
-						// maximum of the vector clock elements.
-						if value > recv.vclock[node] {
-							recv.vclock[node] = value
+						if node != msg.Replica {
+
+							// Next, range over all received vector clock values
+							// and check that they do not exceed the locally stored
+							// values for these nodes.
+							if value > recv.vclock[node] {
+								applyMsg = false
+								break
+							}
 						}
 					}
 
-					// Save updated vector clock to log file.
-					err := recv.SaveVClockEntries()
-					if err != nil {
-						level.Error(recv.logger).Log(
-							"msg", "saving updated vector clock to file failed",
-							"err", err,
-						)
-						os.Exit(1)
+					// If this indicator is false, there are messages not yet
+					// processed at this node that causally precede the just
+					// parsed message. We therefore cycle to the next message.
+					if applyMsg {
+
+						noneApplied = false
+
+						// If this message is actually the next expected one,
+						// process its contents with CRDT logic. This ensures
+						// that message duplicates will get purged but not applied.
+						if msg.Vclock[msg.Replica] == (recv.vclock[msg.Replica] + 1) {
+
+							// Pass payload for higher-level interpretation
+							// to channel connected to node.
+							recv.applyCRDTUpdChan <- *msg
+
+							// Wait for done signal from node.
+							<-recv.doneCRDTUpdChan
+						}
+
+						for node, value := range msg.Vclock {
+
+							// Adjust local vector clock to continue with pair-wise
+							// maximum of the vector clock elements.
+							if value > recv.vclock[node] {
+								recv.vclock[node] = value
+							}
+						}
+
+						// Save updated vector clock to log file.
+						err := recv.SaveVClockEntries()
+						if err != nil {
+							level.Error(recv.logger).Log(
+								"msg", "saving updated vector clock to file failed",
+								"err", err,
+							)
+							os.Exit(1)
+						}
+
+						// Mark area as applied by inserting an
+						// entry into the areas structure.
+						meta = append(meta, make(map[string]int64))
+						copy(meta[(i+1):], meta[i:])
+						meta[i]["start"] = (lastEnd + consideredBytes)
+						meta[i]["end"] = (lastEnd + consideredBytes + msgSize)
+
+						// Update number of considered bytes of the
+						// currently inspected area.
+						consideredBytes += msgSize
+
+						level.Debug(recv.logger).Log("msg", "done with receiver main")
+
+					} else {
+						level.Warn(recv.logger).Log("msg", "message was out of order, taking next one")
 					}
-
-					// Reset head position to curOffset saved at beginning of loop.
-					_, err = recv.updLog.Seek(curOffset, os.SEEK_SET)
-					if err != nil {
-						level.Error(recv.logger).Log(
-							"msg", "failed to reset updLog head to saved position",
-							"err", err,
-						)
-						os.Exit(1)
-					}
-
-					// Copy reduced buffer contents back to current position
-					// of CRDT log file, effectively deleting the read message.
-					newNumOfBytes, err := io.Copy(recv.updLog, buf)
-					if err != nil {
-						level.Error(recv.logger).Log(
-							"msg", "error during copying buffer contents back to CRDT log file",
-							"err", err,
-						)
-						os.Exit(1)
-					}
-
-					// Now, truncate log file size to (curOffset + newNumOfBytes),
-					// reducing the file size by length of handled message.
-					err = recv.updLog.Truncate((curOffset + newNumOfBytes))
-					if err != nil {
-						level.Error(recv.logger).Log(
-							"msg", "could not truncate CRDT log file",
-							"err", err,
-						)
-						os.Exit(1)
-					}
-
-					// Sync changes to stable storage.
-					err = recv.updLog.Sync()
-					if err != nil {
-						level.Error(recv.logger).Log(
-							"msg", "syncing CRDT log file to stable storage failed with",
-							"err", err,
-						)
-						os.Exit(1)
-					}
-
-					// Reset position to beginning of file because the
-					// chances are high that we now can proceed in order
-					// of CRDT message log file.
-					_, err = recv.updLog.Seek(0, os.SEEK_SET)
-					if err != nil {
-						level.Error(recv.logger).Log(
-							"msg", "could not reset position in CRDT log file",
-							"err", err,
-						)
-						os.Exit(1)
-					}
-				} else {
-
-					level.Warn(recv.logger).Log("msg", "message was out of order, taking next one")
-
-					// Set position of head to byte after just read message,
-					// effectively delaying execution of that message.
-					_, err = recv.updLog.Seek((curOffset + msgSize), os.SEEK_SET)
-					if err != nil {
-						level.Error(recv.logger).Log(
-							"msg", "error while moving position in CRDT log file to next line",
-							"err", err,
-						)
-						os.Exit(1)
-					}
-				}
-
-				recv.lock.Unlock()
-
-				// We do not know how many elements are waiting in the
-				// log file. Therefore attempt to process next one and
-				// if it does not exist, the loop iteration will abort.
-				if len(recv.msgInLog) < 1 {
-					recv.msgInLog <- struct{}{}
 				}
 			}
+
+			if (noneLeft == true) || (noneApplied == true) {
+				done = true
+			}
 		}
+
+		// Merge ranges in meta data structure.
+		/*for i, area := range meta {
+
+			if area["end"]
+		}*/
+
+		// Write-back updated meta data to log file.
+
+		// Sync meta data log file to stable storage.
 	}
 }
