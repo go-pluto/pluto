@@ -258,385 +258,397 @@ func (recv *Receiver) ApplyStoredMsgs() {
 
 	for {
 
-		// level.Debug(recv.logger).Log("msg", "attempting to apply stored messages")
+		select {
 
-		recv.lock.Lock()
+		case <-recv.stopApply:
+			return
 
-		// Read the whole current content of the CRDT update
-		// messages log file to have it present in memory.
-		data, err := ioutil.ReadFile(recv.logFilePath)
-		if err != nil {
+		// Wait for signal that new message was written to
+		// log file so that we can process it.
+		case _, ok := <-recv.msgInLog:
+			if ok {
 
-			recv.lock.Unlock()
+				// fmt.Println("attempting to apply stored messages")
 
-			level.Error(recv.logger).Log(
-				"msg", "failed to read whole CRDT update messages log file",
-				"err", err,
-			)
-			continue
-		}
+				recv.lock.Lock()
 
-		recv.lock.Unlock()
+				// Read the whole current content of the CRDT update
+				// messages log file to have it present in memory.
+				data, err := ioutil.ReadFile(recv.logFilePath)
+				if err != nil {
 
-		// If there currently is no content available to apply,
-		// sleep shortly and skip to next iteration.
-		if len(data) == 0 {
-			// level.Debug(recv.logger).Log("msg", "CRDT update messages log file empty, skipping run")
-			time.Sleep(1 * time.Second)
-			continue
-		}
+					recv.lock.Unlock()
 
-		// Reset position in meta data file to beginning again.
-		_, err = recv.metaLog.Seek(0, os.SEEK_SET)
-		if err != nil {
-			level.Error(recv.logger).Log(
-				"msg", "could not reset position in meta data log file",
-				"err", err,
-			)
-			os.Exit(1)
-		}
+					level.Error(recv.logger).Log(
+						"msg", "failed to read whole CRDT update messages log file",
+						"err", err,
+					)
+					continue
+				}
 
-		// Read the whole content of the meta data log file
-		// that stores the CRDT file areas we already applied.
-		metaRaw, err := ioutil.ReadFile(recv.metaFilePath)
-		if err != nil {
-			level.Error(recv.logger).Log(
-				"msg", "failed to read whole meta data log file",
-				"err", err,
-			)
-			continue
-		}
+				recv.lock.Unlock()
 
-		meta := make([]map[string]int64, 0)
+				// If there currently is no content available
+				// to apply, skip to next iteration.
+				if len(data) == 0 {
+					fmt.Println("CRDT update messages log file empty, skipping run")
+					continue
+				}
 
-		if len(metaRaw) > 0 {
-
-			// Split the meta data file at newline.
-			metaLines := bytes.Split(metaRaw, lineSep)
-
-			// Prepare slice of map of start and end positions.
-			meta = make([]map[string]int64, len(metaLines))
-
-			for i := range metaLines {
-
-				var err error
-				meta[i] = make(map[string]int64)
-
-				// Split current area at hyphen that separates
-				// start from end range value.
-				area := bytes.Split(metaLines[i], areaSep)
-
-				// Parse byte representation of start value into int64.
-				meta[i]["start"], err = strconv.ParseInt(string(area[0]), 10, 64)
+				// Reset position in meta data file to beginning again.
+				_, err = recv.metaLog.Seek(0, os.SEEK_SET)
 				if err != nil {
 					level.Error(recv.logger).Log(
-						"msg", "failed to convert string to int indicating start of current area",
+						"msg", "could not reset position in meta data log file",
 						"err", err,
 					)
 					os.Exit(1)
 				}
 
-				// Parse byte representation of end value into int64.
-				meta[i]["end"], err = strconv.ParseInt(string(area[1]), 10, 64)
+				// Read the whole content of the meta data log file
+				// that stores the CRDT file areas we already applied.
+				metaRaw, err := ioutil.ReadFile(recv.metaFilePath)
 				if err != nil {
 					level.Error(recv.logger).Log(
-						"msg", "failed to convert string to int indicating end of current area",
+						"msg", "failed to read whole meta data log file",
 						"err", err,
 					)
-					os.Exit(1)
-				}
-
-				level.Debug(recv.logger).Log(
-					"msg", "extracted start and end of area",
-					"metaLines[i]", metaLines[i],
-					"start", meta[i]["start"],
-					"end", meta[i]["end"],
-				)
-			}
-		}
-
-		fenceItem := map[string]int64{
-			"start": int64(len(data)),
-			"end":   int64(len(data)),
-		}
-
-		meta = append(meta, fenceItem)
-
-		// fmt.Printf("BEGIN meta: '%v'\n", meta)
-
-		done := false
-		for !done {
-
-			// Initially, assume there is not one
-			// message anymore to potentially apply.
-			noneLeft := true
-
-			// Initially, assume we were not able to
-			// find one applicable message.
-			noneApplied := true
-
-			for i := 0; i < len(meta); i++ {
-
-				// fmt.Printf("len(meta) = %d\n", len(meta))
-
-				// If we currently look at the very first
-				// area, directly skip to the next one.
-				if meta[i]["start"] == 0 {
 					continue
 				}
 
-				// fmt.Println("still here?")
+				fmt.Printf("metaRaw: '%#q'\n", metaRaw)
 
-				// Calculate difference between start of
-				// current area and end of last one.
-				var lastEnd int64
-				if i == 0 {
-					lastEnd = 0
-				} else {
-					lastEnd = meta[(i - 1)]["end"]
-				}
-				diffStartEnd := meta[i]["start"] - lastEnd
+				meta := make([]map[string]int64, 0)
 
-				// If areas are contiguous, continue
-				// with next area.
-				if diffStartEnd < 1 {
-					continue
-				}
+				if len(metaRaw) > 0 {
 
-				// Gaps mean that there are still messages
-				// we might be able to apply. Indicate this.
-				noneLeft = false
+					// Split the meta data file at newline.
+					metaLines := bytes.Split(metaRaw, lineSep)
 
-				// Track how many bytes of the current area
-				// we have already considered.
-				var consideredBytes int64 = 0
+					// Prepare slice of map of start and end positions.
+					meta = make([]map[string]int64, len(metaLines))
 
-				for (lastEnd + consideredBytes) != meta[i]["start"] {
+					for i := range metaLines {
 
-					// fmt.Printf("(lastEnd + consideredBytes) ?= meta[%d][\"start\"]   =>   (%d + %d) = %d ?= %d\n", i, lastEnd, consideredBytes, (lastEnd + consideredBytes), meta[i]["start"])
+						var err error
+						meta[i] = make(map[string]int64)
 
-					// We found a potentially applicable message.
-					// Overlay current position from data slice with buffer.
-					// . . . x x x x MESSAGE? x x x x . . .
-					// <-------last| |-read-| |cur-------->
-					buf := bytes.NewBuffer(data[(lastEnd + consideredBytes):meta[i]["start"]])
+						// Split current area at hyphen that separates
+						// start from end range value.
+						area := bytes.Split(metaLines[i], areaSep)
 
-					// Read first bytes after last message to find
-					// byte number of enclosed ProtoBuf message.
-					numBytesRaw, err := buf.ReadBytes(';')
-					if (err != nil) && (err != io.EOF) {
-						level.Error(recv.logger).Log(
-							"msg", "error extracting number of bytes of considered message in CRDT log file",
-							"err", err,
-						)
-						os.Exit(1)
-					}
-
-					// Convert string to int64.
-					numBytes, err := strconv.ParseInt((string(numBytesRaw[:(len(numBytesRaw) - 1)])), 10, 64)
-					if err != nil {
-						level.Error(recv.logger).Log(
-							"msg", "failed to convert string to int indicating number of bytes",
-							"err", err,
-						)
-						os.Exit(1)
-					}
-
-					// Calculate total space of stored message:
-					// number of bytes prefix + ';' + actual message.
-					msgSize := int64(len(numBytesRaw)) + numBytes
-
-					// Extract marshalled ProtoBuf message area from data.
-					// . . . x x x x 4 1 6 ; P R O T O B U F M S G x x x x . . .
-					// <-------last| |len|   |--------read-------| |cur-------->
-					msgRaw := data[(lastEnd + consideredBytes + int64(len(numBytesRaw))):(lastEnd + consideredBytes + msgSize)]
-
-					// Attempt to unmarshal extracted data area
-					// into a ProtoBuf message.
-					msg := &Msg{}
-					err = proto.Unmarshal(msgRaw, msg)
-					if err != nil {
-						level.Error(recv.logger).Log(
-							"msg", "failed to unmarshal considered ProtoBuf message into defined Msg struct",
-							"err", err,
-						)
-						os.Exit(1)
-					}
-
-					// Initially, set apply indicator to true. This means, that
-					// the message would be considered for further parsing.
-					applyMsg := true
-
-					// Check if this message is an already received or
-					// the expected next one from the sending node.
-					// If not, set indicator to false.
-					if (msg.Vclock[msg.Replica] != recv.vclock[msg.Replica]) &&
-						(msg.Vclock[msg.Replica] != (recv.vclock[msg.Replica] + 1)) {
-						applyMsg = false
-					}
-
-					for node, value := range msg.Vclock {
-
-						if node != msg.Replica {
-
-							// Next, range over all received vector clock values
-							// and check that they do not exceed the locally stored
-							// values for these nodes.
-							if value > recv.vclock[node] {
-								applyMsg = false
-								break
-							}
-						}
-					}
-
-					// If this indicator is false, there are messages not yet
-					// processed at this node that causally precede the just
-					// parsed message. We therefore cycle to the next message.
-					if applyMsg {
-
-						noneApplied = false
-
-						// If this message is actually the next expected one,
-						// process its contents with CRDT logic. This ensures
-						// that message duplicates will get purged but not applied.
-						if msg.Vclock[msg.Replica] == (recv.vclock[msg.Replica] + 1) {
-
-							// Pass payload for higher-level interpretation
-							// to channel connected to node.
-							recv.applyCRDTUpdChan <- *msg
-
-							// Wait for done signal from node.
-							<-recv.doneCRDTUpdChan
-						}
-
-						for node, value := range msg.Vclock {
-
-							// Adjust local vector clock to continue with pair-wise
-							// maximum of the vector clock elements.
-							if value > recv.vclock[node] {
-								recv.vclock[node] = value
-							}
-						}
-
-						// Save updated vector clock to log file.
-						err := recv.SaveVClockEntries()
+						// Parse byte representation of start value into int64.
+						meta[i]["start"], err = strconv.ParseInt(string(area[0]), 10, 64)
 						if err != nil {
 							level.Error(recv.logger).Log(
-								"msg", "saving updated vector clock to file failed",
+								"msg", "failed to convert string to int indicating start of current area",
 								"err", err,
 							)
 							os.Exit(1)
 						}
 
-						// Mark area as applied by inserting an
-						// entry into the areas structure.
-						meta = append(meta, make(map[string]int64))
-						copy(meta[(i+1):], meta[i:])
-						meta[i] = make(map[string]int64)
-						meta[i]["start"] = (lastEnd + consideredBytes)
-						meta[i]["end"] = (lastEnd + consideredBytes + msgSize)
+						// Parse byte representation of end value into int64.
+						meta[i]["end"], err = strconv.ParseInt(string(area[1]), 10, 64)
+						if err != nil {
+							level.Error(recv.logger).Log(
+								"msg", "failed to convert string to int indicating end of current area",
+								"err", err,
+							)
+							os.Exit(1)
+						}
 
-						// Update number of considered bytes of the
-						// currently inspected area.
-						consideredBytes += msgSize
-
-						// fmt.Printf("END meta: '%v'\n", meta)
-
-						i++
-
-						// level.Debug(recv.logger).Log("msg", "done with receiver main")
-
-					} else {
-
-						level.Warn(recv.logger).Log("msg", "message was out of order, taking next one")
-
-						// TODO: Remove.
-						time.Sleep(3 * time.Second)
+						level.Debug(recv.logger).Log(
+							"msg", "extracted start and end of area",
+							"metaLines[i]", metaLines[i],
+							"start", meta[i]["start"],
+							"end", meta[i]["end"],
+						)
 					}
 				}
-			}
 
-			if (noneLeft == true) || (noneApplied == true) {
-				// fmt.Println("noneLeft or noneApplied => done true")
-				done = true
-			}
-		}
+				// We use the first byte after the whole
+				// content as our fencing (anchor) element.
+				fenceItem := map[string]int64{
+					"start": int64(len(data)),
+					"end":   int64(len(data)),
+				}
+				meta = append(meta, fenceItem)
 
-		// If two or more items are available in meta,
-		// check whether we can merge the areas.
-		if len(meta) > 1 {
+				fmt.Printf("BEGIN meta: '%v'\n", meta)
 
-			for i := 1; i < len(meta); i++ {
+				done := false
+				for !done {
 
-				if meta[(i - 1)]["end"] == meta[i]["start"] {
-					meta[(i - 1)]["end"] = meta[i]["end"]
-					meta = append(meta[:i], meta[(i+1):]...)
-					i--
+					// Initially, assume there is not one
+					// message anymore to potentially apply.
+					noneLeft := true
+
+					// Initially, assume we were not able to
+					// find one applicable message.
+					noneApplied := true
+
+					for i := 0; i < len(meta); i++ {
+
+						fmt.Printf("cur iter:   meta[%d] = %v\n", i, meta[i])
+
+						// If we currently look at the very first
+						// area, directly skip to the next one.
+						if meta[i]["start"] == 0 {
+							fmt.Println("start is 0, skipping...")
+							continue
+						}
+
+						fmt.Println("A 1")
+
+						// Calculate difference between start of
+						// current area and end of last one.
+						var lastEnd int64
+						if i == 0 {
+							lastEnd = 0
+						} else {
+							lastEnd = meta[(i - 1)]["end"]
+						}
+						diffStartEnd := meta[i]["start"] - lastEnd
+
+						// If areas are contiguous, continue
+						// with next area.
+						if diffStartEnd < 1 {
+							fmt.Println("contiguous areas, skipping...")
+							continue
+						}
+
+						fmt.Println("A 2")
+
+						// Gaps mean that there are still messages
+						// we might be able to apply. Indicate this.
+						noneLeft = false
+
+						// Track how many bytes of the current area
+						// we have already considered.
+						var consideredBytes int64 = 0
+
+						for (lastEnd + consideredBytes) != meta[i]["start"] {
+
+							fmt.Printf("(lastEnd + consideredBytes) ?= meta[%d][\"start\"] => (%d + %d) = %d ?= %d\n", i, lastEnd, consideredBytes, (lastEnd + consideredBytes), meta[i]["start"])
+
+							// We found a potentially applicable message.
+							// Overlay current position from data slice with buffer.
+							// . . . x x x x MESSAGE? x x x x . . .
+							// <-------last| |-read-| |cur-------->
+							buf := bytes.NewBuffer(data[(lastEnd + consideredBytes):meta[i]["start"]])
+
+							// Read first bytes after last message to find
+							// byte number of enclosed ProtoBuf message.
+							numBytesRaw, err := buf.ReadBytes(';')
+							if (err != nil) && (err != io.EOF) {
+								level.Error(recv.logger).Log(
+									"msg", "error extracting number of bytes of considered message in CRDT log file",
+									"err", err,
+								)
+								os.Exit(1)
+							}
+
+							// Convert string to int64.
+							numBytes, err := strconv.ParseInt((string(numBytesRaw[:(len(numBytesRaw) - 1)])), 10, 64)
+							if err != nil {
+								level.Error(recv.logger).Log(
+									"msg", "failed to convert string to int indicating number of bytes",
+									"err", err,
+								)
+								os.Exit(1)
+							}
+
+							// Calculate total space of stored message:
+							// number of bytes prefix + ';' + actual message.
+							msgSize := int64(len(numBytesRaw)) + numBytes
+
+							// Extract marshalled ProtoBuf message area from data.
+							// . . . x x x x 4 1 6 ; P R O T O B U F M S G x x x x . . .
+							// <-------last| |len|   |--------read-------| |cur-------->
+							msgRaw := data[(lastEnd + consideredBytes + int64(len(numBytesRaw))):(lastEnd + consideredBytes + msgSize)]
+
+							// Attempt to unmarshal extracted data area
+							// into a ProtoBuf message.
+							msg := &Msg{}
+							err = proto.Unmarshal(msgRaw, msg)
+							if err != nil {
+								level.Error(recv.logger).Log(
+									"msg", "failed to unmarshal considered ProtoBuf message into defined Msg struct",
+									"err", err,
+								)
+								os.Exit(1)
+							}
+
+							// Initially, set apply indicator to true. This means, that
+							// the message would be considered for further parsing.
+							applyMsg := true
+
+							// Check if this message is an already received or
+							// the expected next one from the sending node.
+							// If not, set indicator to false.
+							if (msg.Vclock[msg.Replica] != recv.vclock[msg.Replica]) &&
+								(msg.Vclock[msg.Replica] != (recv.vclock[msg.Replica] + 1)) {
+								applyMsg = false
+							}
+
+							for node, value := range msg.Vclock {
+
+								if node != msg.Replica {
+
+									// Next, range over all received vector clock values
+									// and check that they do not exceed the locally stored
+									// values for these nodes.
+									if value > recv.vclock[node] {
+										applyMsg = false
+										break
+									}
+								}
+							}
+
+							// If this indicator is false, there are messages not yet
+							// processed at this node that causally precede the just
+							// parsed message. We therefore cycle to the next message.
+							if applyMsg {
+
+								noneApplied = false
+
+								// If this message is actually the next expected one,
+								// process its contents with CRDT logic. This ensures
+								// that message duplicates will get purged but not applied.
+								if msg.Vclock[msg.Replica] == (recv.vclock[msg.Replica] + 1) {
+
+									// Pass payload for higher-level interpretation
+									// to channel connected to node.
+									recv.applyCRDTUpdChan <- *msg
+
+									// Wait for done signal from node.
+									<-recv.doneCRDTUpdChan
+								}
+
+								for node, value := range msg.Vclock {
+
+									// Adjust local vector clock to continue with pair-wise
+									// maximum of the vector clock elements.
+									if value > recv.vclock[node] {
+										recv.vclock[node] = value
+									}
+								}
+
+								// Save updated vector clock to log file.
+								err := recv.SaveVClockEntries()
+								if err != nil {
+									level.Error(recv.logger).Log(
+										"msg", "saving updated vector clock to file failed",
+										"err", err,
+									)
+									os.Exit(1)
+								}
+
+								// Mark area as applied by inserting an
+								// entry into the areas structure.
+								meta = append(meta, make(map[string]int64))
+								copy(meta[(i+1):], meta[i:])
+
+								meta[i] = make(map[string]int64)
+								meta[i]["start"] = (lastEnd + consideredBytes)
+								meta[i]["end"] = (lastEnd + consideredBytes + msgSize)
+
+								// Update number of considered bytes of the
+								// currently inspected area.
+								consideredBytes += msgSize
+								i++
+
+								fmt.Printf("END meta: '%v'\n", meta)
+
+							} else {
+								level.Warn(recv.logger).Log("msg", "message was out of order, taking next one")
+							}
+						}
+					}
+
+					if (noneLeft == true) || (noneApplied == true) {
+						fmt.Println("noneLeft or noneApplied => done true")
+						done = true
+					}
+				}
+
+				// If two or more items are available in meta,
+				// check whether we can merge the areas.
+				if len(meta) > 1 {
+
+					for i := 1; i < len(meta); i++ {
+
+						if meta[(i - 1)]["end"] == meta[i]["start"] {
+
+							meta[(i - 1)]["end"] = meta[i]["end"]
+							meta = append(meta[:i], meta[(i+1):]...)
+							i--
+						}
+					}
+				}
+
+				fmt.Printf("MERGED meta: %v\n", meta)
+
+				// Construct marshalled meta data representation
+				// that we can write back to log file.
+				metaLinesBytes := make([][]byte, len(meta))
+
+				for i := range meta {
+					metaLinesBytes[i] = []byte(fmt.Sprintf("%d-%d", meta[i]["start"], meta[i]["end"]))
+				}
+
+				metaBytes := bytes.Join(metaLinesBytes, []byte("\n"))
+
+				// Reset position in meta file to beginning.
+				_, err = recv.metaLog.Seek(0, os.SEEK_SET)
+				if err != nil {
+					level.Error(recv.logger).Log(
+						"msg", "could not reset position in meta data log file",
+						"err", err,
+					)
+					os.Exit(1)
+				}
+
+				// Write-back updated meta data to log file.
+				writtenBytes, err := recv.metaLog.Write(metaBytes)
+				if err != nil {
+					level.Error(recv.logger).Log(
+						"msg", "writing to meta data log failed",
+						"err", err,
+					)
+					os.Exit(1)
+				}
+
+				// Truncate file to amount of bytes written.
+				err = recv.metaLog.Truncate(int64(writtenBytes))
+				if err != nil {
+					level.Error(recv.logger).Log(
+						"msg", "failed to truncate meta data log file to new size",
+						"err", err,
+					)
+					os.Exit(1)
+				}
+
+				// Reset position in meta file to beginning.
+				_, err = recv.metaLog.Seek(0, os.SEEK_SET)
+				if err != nil {
+					level.Error(recv.logger).Log(
+						"msg", "could not reset position in meta data log file",
+						"err", err,
+					)
+					os.Exit(1)
+				}
+
+				// Sync meta data log file to stable storage.
+				err = recv.metaLog.Sync()
+				if err != nil {
+					level.Error(recv.logger).Log(
+						"msg", "could not sync meta data log file to stable storage",
+						"err", err,
+					)
+					os.Exit(1)
 				}
 			}
 		}
-
-		// fmt.Printf("MERGED meta: %v\n", meta)
-
-		metaLinesBytes := make([][]byte, len(meta))
-
-		for i := range meta {
-			metaLinesBytes[i] = []byte(fmt.Sprintf("%d-%d", meta[i]["start"], meta[i]["end"]))
-		}
-
-		metaBytes := bytes.Join(metaLinesBytes, []byte("\n"))
-
-		// Reset position in meta file to beginning.
-		_, err = recv.metaLog.Seek(0, os.SEEK_SET)
-		if err != nil {
-			level.Error(recv.logger).Log(
-				"msg", "could not reset position in meta data log file",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-
-		// Write-back updated meta data to log file.
-		writtenBytes, err := recv.metaLog.Write(metaBytes)
-		if err != nil {
-			level.Error(recv.logger).Log(
-				"msg", "writing to meta data log failed",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-
-		// Truncate file to amount of bytes written.
-		err = recv.metaLog.Truncate(int64(writtenBytes))
-		if err != nil {
-			level.Error(recv.logger).Log(
-				"msg", "failed to truncate meta data log file to new size",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-
-		// Reset position in meta file to beginning.
-		_, err = recv.metaLog.Seek(0, os.SEEK_SET)
-		if err != nil {
-			level.Error(recv.logger).Log(
-				"msg", "could not reset position in meta data log file",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-
-		// Sync meta data log file to stable storage.
-		err = recv.metaLog.Sync()
-		if err != nil {
-			level.Error(recv.logger).Log(
-				"msg", "could not sync meta data log file to stable storage",
-				"err", err,
-			)
-			os.Exit(1)
-		}
-
-		// TODO: Remove.
-		time.Sleep(1 * time.Second)
 	}
 }
