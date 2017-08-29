@@ -87,7 +87,7 @@ func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *t
 		// Connect to downstream replica.
 		conn, err := grpc.Dial(addr, gRPCOptions...)
 		for err != nil {
-			level.Debug(sender.logger).Log(
+			level.Error(sender.logger).Log(
 				"msg", "failed to dial, trying again...",
 				"remote_node", node,
 				"remote_addr", addr,
@@ -96,7 +96,7 @@ func InitSender(logger log.Logger, name string, logFilePath string, tlsConfig *t
 			conn, err = grpc.Dial(addr, gRPCOptions...)
 		}
 
-		level.Debug(sender.logger).Log(
+		level.Error(sender.logger).Log(
 			"msg", "successfully connected",
 			"remote_node", node,
 			"remote_addr", addr,
