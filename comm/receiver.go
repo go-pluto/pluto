@@ -258,7 +258,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 
 	for {
 
-		level.Debug(recv.logger).Log("msg", "attempting to apply stored messages")
+		// level.Debug(recv.logger).Log("msg", "attempting to apply stored messages")
 
 		recv.lock.Lock()
 
@@ -281,7 +281,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 		// If there currently is no content available to apply,
 		// sleep shortly and skip to next iteration.
 		if len(data) == 0 {
-			level.Debug(recv.logger).Log("msg", "CRDT update messages log file empty, skipping run")
+			// level.Debug(recv.logger).Log("msg", "CRDT update messages log file empty, skipping run")
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -307,48 +307,62 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			continue
 		}
 
-		// Split the meta data file at newline.
-		metaLines := bytes.Split(metaRaw, lineSep)
+		meta := make([]map[string]int64, 0)
 
-		// Prepare slice of map of start and end positions.
-		meta := make([]map[string]int64, len(metaLines))
+		if len(metaRaw) > 0 {
 
-		for i, areaRaw := range metaLines {
+			// Split the meta data file at newline.
+			metaLines := bytes.Split(metaRaw, lineSep)
 
-			var err error
-			meta[i] = make(map[string]int64)
+			// Prepare slice of map of start and end positions.
+			meta = make([]map[string]int64, len(metaLines))
 
-			// Split current area at hyphen that separates
-			// start from end range value.
-			area := bytes.Split(areaRaw, areaSep)
+			for i := range metaLines {
 
-			// Parse byte representation of start value into int64.
-			meta[i]["start"], err = strconv.ParseInt(string(area[0]), 10, 64)
-			if err != nil {
-				level.Error(recv.logger).Log(
-					"msg", "failed to convert string to int indicating start of current area",
-					"err", err,
+				var err error
+				meta[i] = make(map[string]int64)
+
+				// Split current area at hyphen that separates
+				// start from end range value.
+				area := bytes.Split(metaLines[i], areaSep)
+
+				// Parse byte representation of start value into int64.
+				meta[i]["start"], err = strconv.ParseInt(string(area[0]), 10, 64)
+				if err != nil {
+					level.Error(recv.logger).Log(
+						"msg", "failed to convert string to int indicating start of current area",
+						"err", err,
+					)
+					os.Exit(1)
+				}
+
+				// Parse byte representation of end value into int64.
+				meta[i]["end"], err = strconv.ParseInt(string(area[1]), 10, 64)
+				if err != nil {
+					level.Error(recv.logger).Log(
+						"msg", "failed to convert string to int indicating end of current area",
+						"err", err,
+					)
+					os.Exit(1)
+				}
+
+				level.Debug(recv.logger).Log(
+					"msg", "extracted start and end of area",
+					"metaLines[i]", metaLines[i],
+					"start", meta[i]["start"],
+					"end", meta[i]["end"],
 				)
-				os.Exit(1)
 			}
-
-			// Parse byte representation of end value into int64.
-			meta[i]["end"], err = strconv.ParseInt(string(area[1]), 10, 64)
-			if err != nil {
-				level.Error(recv.logger).Log(
-					"msg", "failed to convert string to int indicating end of current area",
-					"err", err,
-				)
-				os.Exit(1)
-			}
-
-			level.Debug(recv.logger).Log(
-				"msg", "extracted start and end of area",
-				"areaRaw", areaRaw,
-				"start", meta[i]["start"],
-				"end", meta[i]["end"],
-			)
 		}
+
+		fenceItem := map[string]int64{
+			"start": int64(len(data)),
+			"end":   int64(len(data)),
+		}
+
+		meta = append(meta, fenceItem)
+
+		// fmt.Printf("BEGIN meta: '%v'\n", meta)
 
 		done := false
 		for !done {
@@ -361,18 +375,27 @@ func (recv *Receiver) ApplyStoredMsgs() {
 			// find one applicable message.
 			noneApplied := true
 
-			for i, area := range meta {
+			for i := 0; i < len(meta); i++ {
+
+				// fmt.Printf("len(meta) = %d\n", len(meta))
 
 				// If we currently look at the very first
 				// area, directly skip to the next one.
-				if area["start"] == 0 {
+				if meta[i]["start"] == 0 {
 					continue
 				}
 
+				// fmt.Println("still here?")
+
 				// Calculate difference between start of
 				// current area and end of last one.
-				lastEnd := meta[(i - 1)]["end"]
-				diffStartEnd := area["start"] - lastEnd
+				var lastEnd int64
+				if i == 0 {
+					lastEnd = 0
+				} else {
+					lastEnd = meta[(i - 1)]["end"]
+				}
+				diffStartEnd := meta[i]["start"] - lastEnd
 
 				// If areas are contiguous, continue
 				// with next area.
@@ -384,17 +407,19 @@ func (recv *Receiver) ApplyStoredMsgs() {
 				// we might be able to apply. Indicate this.
 				noneLeft = false
 
-				// We found a potentially applicable message.
-				// Overlay current position from data slice with buffer.
-				// . . . x x x x MESSAGE? x x x x . . .
-				// <-------last| |-read-| |cur-------->
-				buf := bytes.NewBuffer(data[lastEnd:area["start"]])
-
 				// Track how many bytes of the current area
 				// we have already considered.
 				var consideredBytes int64 = 0
 
-				for (lastEnd + consideredBytes) != area["start"] {
+				for (lastEnd + consideredBytes) != meta[i]["start"] {
+
+					// fmt.Printf("(lastEnd + consideredBytes) ?= meta[%d][\"start\"]   =>   (%d + %d) = %d ?= %d\n", i, lastEnd, consideredBytes, (lastEnd + consideredBytes), meta[i]["start"])
+
+					// We found a potentially applicable message.
+					// Overlay current position from data slice with buffer.
+					// . . . x x x x MESSAGE? x x x x . . .
+					// <-------last| |-read-| |cur-------->
+					buf := bytes.NewBuffer(data[(lastEnd + consideredBytes):meta[i]["start"]])
 
 					// Read first bytes after last message to find
 					// byte number of enclosed ProtoBuf message.
@@ -507,6 +532,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 						// entry into the areas structure.
 						meta = append(meta, make(map[string]int64))
 						copy(meta[(i+1):], meta[i:])
+						meta[i] = make(map[string]int64)
 						meta[i]["start"] = (lastEnd + consideredBytes)
 						meta[i]["end"] = (lastEnd + consideredBytes + msgSize)
 
@@ -514,27 +540,103 @@ func (recv *Receiver) ApplyStoredMsgs() {
 						// currently inspected area.
 						consideredBytes += msgSize
 
-						level.Debug(recv.logger).Log("msg", "done with receiver main")
+						// fmt.Printf("END meta: '%v'\n", meta)
+
+						i++
+
+						// level.Debug(recv.logger).Log("msg", "done with receiver main")
 
 					} else {
+
 						level.Warn(recv.logger).Log("msg", "message was out of order, taking next one")
+
+						// TODO: Remove.
+						time.Sleep(3 * time.Second)
 					}
 				}
 			}
 
 			if (noneLeft == true) || (noneApplied == true) {
+				// fmt.Println("noneLeft or noneApplied => done true")
 				done = true
 			}
 		}
 
-		// Merge ranges in meta data structure.
-		/*for i, area := range meta {
+		// If two or more items are available in meta,
+		// check whether we can merge the areas.
+		if len(meta) > 1 {
 
-			if area["end"]
-		}*/
+			for i := 1; i < len(meta); i++ {
+
+				if meta[(i - 1)]["end"] == meta[i]["start"] {
+					meta[(i - 1)]["end"] = meta[i]["end"]
+					meta = append(meta[:i], meta[(i+1):]...)
+					i--
+				}
+			}
+		}
+
+		// fmt.Printf("MERGED meta: %v\n", meta)
+
+		metaLinesBytes := make([][]byte, len(meta))
+
+		for i := range meta {
+			metaLinesBytes[i] = []byte(fmt.Sprintf("%d-%d", meta[i]["start"], meta[i]["end"]))
+		}
+
+		metaBytes := bytes.Join(metaLinesBytes, []byte("\n"))
+
+		// Reset position in meta file to beginning.
+		_, err = recv.metaLog.Seek(0, os.SEEK_SET)
+		if err != nil {
+			level.Error(recv.logger).Log(
+				"msg", "could not reset position in meta data log file",
+				"err", err,
+			)
+			os.Exit(1)
+		}
 
 		// Write-back updated meta data to log file.
+		writtenBytes, err := recv.metaLog.Write(metaBytes)
+		if err != nil {
+			level.Error(recv.logger).Log(
+				"msg", "writing to meta data log failed",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+
+		// Truncate file to amount of bytes written.
+		err = recv.metaLog.Truncate(int64(writtenBytes))
+		if err != nil {
+			level.Error(recv.logger).Log(
+				"msg", "failed to truncate meta data log file to new size",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+
+		// Reset position in meta file to beginning.
+		_, err = recv.metaLog.Seek(0, os.SEEK_SET)
+		if err != nil {
+			level.Error(recv.logger).Log(
+				"msg", "could not reset position in meta data log file",
+				"err", err,
+			)
+			os.Exit(1)
+		}
 
 		// Sync meta data log file to stable storage.
+		err = recv.metaLog.Sync()
+		if err != nil {
+			level.Error(recv.logger).Log(
+				"msg", "could not sync meta data log file to stable storage",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+
+		// TODO: Remove.
+		time.Sleep(1 * time.Second)
 	}
 }
