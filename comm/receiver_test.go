@@ -102,8 +102,6 @@ var (
 		}
 	*/
 	writeApply2 = []byte{0x31, 0x31, 0x36, 0x3b, 0xa, 0x8, 0x77, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x2d, 0x31, 0x12, 0xc, 0xa, 0x8, 0x77, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x2d, 0x31, 0x10, 0x1, 0x12, 0xb, 0xa, 0x7, 0x73, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x10, 0x0, 0x1a, 0x6, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x22, 0x45, 0xa, 0x5, 0x75, 0x73, 0x65, 0x72, 0x32, 0x12, 0x16, 0x4c, 0x6f, 0x6e, 0x67, 0x41, 0x6e, 0x64, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x67, 0x4e, 0x61, 0x6d, 0x65, 0x1a, 0x24, 0x35, 0x32, 0x35, 0x61, 0x33, 0x66, 0x34, 0x30, 0x2d, 0x37, 0x63, 0x32, 0x63, 0x2d, 0x34, 0x62, 0x39, 0x61, 0x2d, 0x39, 0x34, 0x63, 0x38, 0x2d, 0x61, 0x33, 0x34, 0x33, 0x32, 0x66, 0x32, 0x35, 0x61, 0x32, 0x38, 0x61, 0x31, 0x35, 0x36, 0x3b, 0xa, 0x8, 0x77, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x2d, 0x31, 0x12, 0xc, 0xa, 0x8, 0x77, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x2d, 0x31, 0x10, 0x2, 0x12, 0xb, 0xa, 0x7, 0x73, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x10, 0x0, 0x1a, 0x6, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x2a, 0x6d, 0xa, 0x5, 0x75, 0x73, 0x65, 0x72, 0x32, 0x12, 0x16, 0x4c, 0x6f, 0x6e, 0x67, 0x41, 0x6e, 0x64, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x67, 0x4e, 0x61, 0x6d, 0x65, 0x1a, 0x24, 0x35, 0x32, 0x35, 0x61, 0x33, 0x66, 0x34, 0x30, 0x2d, 0x37, 0x63, 0x32, 0x63, 0x2d, 0x34, 0x62, 0x39, 0x61, 0x2d, 0x39, 0x34, 0x63, 0x38, 0x2d, 0x61, 0x33, 0x34, 0x33, 0x32, 0x66, 0x32, 0x35, 0x61, 0x32, 0x38, 0x61, 0x22, 0x26, 0x6d, 0x61, 0x69, 0x6c, 0x2d, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x2d, 0x6e, 0x61, 0x6d, 0x65, 0x2d, 0x67, 0x65, 0x6e, 0x65, 0x72, 0x61, 0x74, 0x65, 0x64, 0x2d, 0x62, 0x79, 0x2d, 0x6d, 0x61, 0x69, 0x6c, 0x64, 0x69, 0x72}
-
-	checkApply2 = []byte{0x31, 0x35, 0x36, 0x3b, 0xa, 0x8, 0x77, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x2d, 0x31, 0x12, 0xc, 0xa, 0x8, 0x77, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x2d, 0x31, 0x10, 0x2, 0x12, 0xb, 0xa, 0x7, 0x73, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x10, 0x0, 0x1a, 0x6, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x2a, 0x6d, 0xa, 0x5, 0x75, 0x73, 0x65, 0x72, 0x32, 0x12, 0x16, 0x4c, 0x6f, 0x6e, 0x67, 0x41, 0x6e, 0x64, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x67, 0x4e, 0x61, 0x6d, 0x65, 0x1a, 0x24, 0x35, 0x32, 0x35, 0x61, 0x33, 0x66, 0x34, 0x30, 0x2d, 0x37, 0x63, 0x32, 0x63, 0x2d, 0x34, 0x62, 0x39, 0x61, 0x2d, 0x39, 0x34, 0x63, 0x38, 0x2d, 0x61, 0x33, 0x34, 0x33, 0x32, 0x66, 0x32, 0x35, 0x61, 0x32, 0x38, 0x61, 0x22, 0x26, 0x6d, 0x61, 0x69, 0x6c, 0x2d, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x2d, 0x6e, 0x61, 0x6d, 0x65, 0x2d, 0x67, 0x65, 0x6e, 0x65, 0x72, 0x61, 0x74, 0x65, 0x64, 0x2d, 0x62, 0x79, 0x2d, 0x6d, 0x61, 0x69, 0x6c, 0x64, 0x69, 0x72}
 )
 
 // Functions
@@ -165,28 +163,32 @@ func TestIncoming(t *testing.T) {
 
 	// Create path to temporary log file.
 	tmpLogFile := filepath.Join(dir, "log")
+	tmpMetaFile := filepath.Join(dir, "meta")
 
 	// Open log file for writing.
 	write, err := os.OpenFile(tmpLogFile, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
 	assert.Nilf(t, err, "failed to open temporary log file for writing: %v", err)
 
-	// Open log file for updating.
-	upd, err := os.OpenFile(tmpLogFile, os.O_RDWR, 0600)
-	assert.Nilf(t, err, "failed to open temporary log file for updating: %v", err)
+	// Open log file for tracking meta data about already
+	// applied parts of the CRDT update messages log file.
+	meta, err := os.OpenFile(tmpMetaFile, (os.O_CREATE | os.O_WRONLY), 0600)
+	assert.Nilf(t, err, "failed to open temporary log file for meta data: %v", err)
 
 	// Bundle information in Receiver struct.
 	recv := &Receiver{
-		lock:     &sync.Mutex{},
-		logger:   logger,
-		name:     "worker-1",
-		msgInLog: make(chan struct{}, 1),
-		writeLog: write,
-		updLog:   upd,
+		lock:         &sync.Mutex{},
+		logger:       logger,
+		name:         "worker-1",
+		msgInLog:     make(chan struct{}, 1),
+		logFilePath:  tmpLogFile,
+		writeLog:     write,
+		metaFilePath: tmpMetaFile,
+		metaLog:      meta,
 	}
 
-	// Reset position in update file to beginning.
-	_, err = recv.updLog.Seek(0, os.SEEK_SET)
-	assert.Nilf(t, err, "expected resetting of position in update log not to fail but received: %v", err)
+	// Reset position in meta log file to beginning.
+	_, err = recv.metaLog.Seek(0, os.SEEK_SET)
+	assert.Nilf(t, err, "expected resetting of position in meta log not to fail but received: %v", err)
 
 	// Value 1.
 	// Write first value to log file.
@@ -288,7 +290,7 @@ func TestApplyStoredMsgs(t *testing.T) {
 	// Create logger.
 	logger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stdout))
 	logger = log.With(logger,
-		"caller", log.DefaultCaller,
+		"caller", log.Caller(4),
 	)
 
 	// Create temporary directory.
@@ -298,6 +300,7 @@ func TestApplyStoredMsgs(t *testing.T) {
 
 	// Create path to temporary log files.
 	tmpLogFile := filepath.Join(dir, "log")
+	tmpMetaFile := filepath.Join(dir, "meta")
 	tmpVClockFile := filepath.Join(dir, "vclock")
 
 	// Write binary encoded test message to log file.
@@ -308,9 +311,10 @@ func TestApplyStoredMsgs(t *testing.T) {
 	write, err := os.OpenFile(tmpLogFile, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
 	assert.Nilf(t, err, "failed to open temporary log file for writing: %v", err)
 
-	// Open log file for updating.
-	upd, err := os.OpenFile(tmpLogFile, os.O_RDWR, 0600)
-	assert.Nilf(t, err, "failed to open temporary log file for updating: %v", err)
+	// Open log file for tracking meta data about already
+	// applied parts of the CRDT update messages log file.
+	meta, err := os.OpenFile(tmpMetaFile, (os.O_CREATE | os.O_WRONLY), 0600)
+	assert.Nilf(t, err, "failed to open temporary log file for meta data: %v", err)
 
 	// Open log file of last known vector clock values.
 	vclockLog, err := os.OpenFile(tmpVClockFile, (os.O_CREATE | os.O_RDWR), 0600)
@@ -329,8 +333,10 @@ func TestApplyStoredMsgs(t *testing.T) {
 		logger:           logger,
 		name:             "worker-1",
 		msgInLog:         make(chan struct{}, 1),
+		logFilePath:      tmpLogFile,
 		writeLog:         write,
-		updLog:           upd,
+		metaFilePath:     tmpMetaFile,
+		metaLog:          meta,
 		vclock:           make(map[string]uint32),
 		vclockLog:        vclockLog,
 		stopApply:        make(chan struct{}),
@@ -339,9 +345,9 @@ func TestApplyStoredMsgs(t *testing.T) {
 		nodes:            nodes,
 	}
 
-	// Reset position in update file to beginning.
-	_, err = recv.updLog.Seek(0, os.SEEK_SET)
-	assert.Nilf(t, err, "expected resetting of position in update log not to fail but received: %v", err)
+	// Reset position in meta log file to beginning.
+	_, err = recv.metaLog.Seek(0, os.SEEK_SET)
+	assert.Nilf(t, err, "expected resetting of position in meta log not to fail but received: %v", err)
 
 	// Reset position in vector clock file to beginning.
 	_, err = recv.vclockLog.Seek(0, os.SEEK_SET)
@@ -389,7 +395,7 @@ func TestApplyStoredMsgs(t *testing.T) {
 	// Check file system content of log file.
 	content, err := ioutil.ReadFile(tmpLogFile)
 	assert.Nilf(t, err, "expected nil error for ReadFile() but received: %v", err)
-	assert.Equalf(t, []byte{}, content, "expected '%s' in log file but found: %v", []byte{}, content)
+	assert.Equalf(t, writeApply1, content, "expected '%s' in log file but found: %v", writeApply1, content)
 
 	// Check file system content of vector clock file.
 	content, err = ioutil.ReadFile(tmpVClockFile)
@@ -399,6 +405,10 @@ func TestApplyStoredMsgs(t *testing.T) {
 	// Write second binary encoded test message to log file.
 	err = ioutil.WriteFile(tmpLogFile, writeApply2, 0600)
 	assert.Nilf(t, err, "expected writing test content 2 to log file not to fail but received: %v", err)
+
+	// Reset meta data log file.
+	err = recv.metaLog.Truncate(0)
+	assert.Nilf(t, err, "expected truncating meta data log file not to fail but received: %v", err)
 
 	// Reset vector clock internally.
 	recv.vclock["worker-1"] = uint32(0)
@@ -438,7 +448,7 @@ func TestApplyStoredMsgs(t *testing.T) {
 	// Check file system content of log file.
 	content, err = ioutil.ReadFile(tmpLogFile)
 	assert.Nilf(t, err, "expected nil error for ReadFile() but received: %v", err)
-	assert.Equalf(t, checkApply2, content, "expected '%s' in log file but found: %v", checkApply2, content)
+	assert.Equalf(t, writeApply2, content, "expected '%s' in log file but found: %v", writeApply2, content)
 
 	// Check file system content of vector clock file.
 	content, err = ioutil.ReadFile(tmpVClockFile)
@@ -474,7 +484,7 @@ func TestApplyStoredMsgs(t *testing.T) {
 	// Check file system content of log file.
 	content, err = ioutil.ReadFile(tmpLogFile)
 	assert.Nilf(t, err, "expected nil error for ReadFile() but received: %v", err)
-	assert.Equalf(t, []byte{}, content, "expected '%s' in log file but found: %v", []byte{}, content)
+	assert.Equalf(t, writeApply2, content, "expected '%s' in log file but found: %v", writeApply2, content)
 
 	// Check file system content of vector clock file.
 	content, err = ioutil.ReadFile(tmpVClockFile)
