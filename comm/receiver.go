@@ -36,7 +36,6 @@ var areaSep = []byte("-")
 // Receiver bundles all information needed to accept
 // and process incoming CRDT downstream messages.
 type Receiver struct {
-	lock             *sync.Mutex
 	logger           log.Logger
 	name             string
 	listenAddr       string
@@ -44,13 +43,15 @@ type Receiver struct {
 	msgInLog         chan struct{}
 	socket           net.Listener
 	tlsConfig        *tls.Config
-	logFilePath      string
-	writeLog         *os.File
+	updateLogPath    string
+	updateLogLock    *sync.Mutex
+	updateLog        *os.File
 	metaFilePath     string
 	metaLog          *os.File
 	incVClock        chan string
 	updVClock        chan map[string]uint32
 	vclock           map[string]uint32
+	vclockLock       *sync.Mutex
 	vclockLog        *os.File
 	stopTrigger      chan struct{}
 	stopApply        chan struct{}
@@ -64,10 +65,9 @@ type Receiver struct {
 // InitReceiver initializes above struct and sets
 // default values. It starts involved background
 // routines and send initial channel trigger.
-func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr string, logFilePath string, metaFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan Msg, doneCRDTUpdChan chan struct{}, nodes map[string]string) (chan string, chan map[string]uint32, error) {
+func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr string, updateLogPath string, metaFilePath string, vclockLogPath string, socket net.Listener, tlsConfig *tls.Config, applyCRDTUpdChan chan Msg, doneCRDTUpdChan chan struct{}, nodes map[string]string) (chan string, chan map[string]uint32, error) {
 
 	recv := &Receiver{
-		lock:             &sync.Mutex{},
 		logger:           logger,
 		name:             name,
 		listenAddr:       listenAddr,
@@ -75,11 +75,13 @@ func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr 
 		msgInLog:         make(chan struct{}, 1),
 		socket:           socket,
 		tlsConfig:        tlsConfig,
-		logFilePath:      logFilePath,
+		updateLogPath:    updateLogPath,
+		updateLogLock:    &sync.Mutex{},
 		metaFilePath:     metaFilePath,
 		incVClock:        make(chan string),
 		updVClock:        make(chan map[string]uint32),
 		vclock:           make(map[string]uint32),
+		vclockLock:       &sync.Mutex{},
 		stopTrigger:      make(chan struct{}),
 		stopApply:        make(chan struct{}),
 		applyCRDTUpdChan: applyCRDTUpdChan,
@@ -88,11 +90,11 @@ func InitReceiver(logger log.Logger, name string, listenAddr string, publicAddr 
 	}
 
 	// Open log file descriptor for writing.
-	write, err := os.OpenFile(logFilePath, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
+	update, err := os.OpenFile(updateLogPath, (os.O_CREATE | os.O_WRONLY | os.O_APPEND), 0600)
 	if err != nil {
 		return nil, nil, fmt.Errorf("opening CRDT log file for writing append-only failed with: %v", err)
 	}
-	recv.writeLog = write
+	recv.updateLog = update
 
 	// Open log file for tracking meta data about already
 	// applied parts of the CRDT update messages log file.
@@ -223,21 +225,21 @@ func (recv *Receiver) TriggerMsgApplier(waitSeconds time.Duration) {
 // a trigger is sent to the application routine.
 func (recv *Receiver) Incoming(ctx context.Context, binMsgs *BinMsgs) (*Conf, error) {
 
-	recv.lock.Lock()
+	recv.updateLogLock.Lock()
 
 	// Append bulk of messages to message log file.
-	_, err := recv.writeLog.Write(binMsgs.Data)
+	_, err := recv.updateLog.Write(binMsgs.Data)
 	if err != nil {
 		return nil, err
 	}
 
 	// Save to stable storage.
-	err = recv.writeLog.Sync()
+	err = recv.updateLog.Sync()
 	if err != nil {
 		return nil, err
 	}
 
-	recv.lock.Unlock()
+	recv.updateLogLock.Unlock()
 
 	// Indicate to applying routine that a new message
 	// is available to process.
@@ -268,13 +270,13 @@ func (recv *Receiver) ApplyStoredMsgs() {
 		case _, ok := <-recv.msgInLog:
 			if ok {
 
-				recv.lock.Lock()
+				recv.updateLogLock.Lock()
 
 				// Read the whole current content of the CRDT update
 				// messages log file to have it present in memory.
-				data, err := ioutil.ReadFile(recv.logFilePath)
+				data, err := ioutil.ReadFile(recv.updateLogPath)
 				if err != nil {
-					recv.lock.Unlock()
+					recv.updateLogLock.Unlock()
 					level.Error(recv.logger).Log(
 						"msg", "failed to read whole CRDT update messages log file",
 						"err", err,
@@ -282,7 +284,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 					continue
 				}
 
-				recv.lock.Unlock()
+				recv.updateLogLock.Unlock()
 
 				// If there currently is no content available
 				// to apply, skip to next iteration.
@@ -458,6 +460,8 @@ func (recv *Receiver) ApplyStoredMsgs() {
 							// the message would be considered for further parsing.
 							applyMsg := true
 
+							recv.vclockLock.Lock()
+
 							// Check if this message is an already received or
 							// the expected next one from the sending node.
 							// If not, set indicator to false.
@@ -519,6 +523,8 @@ func (recv *Receiver) ApplyStoredMsgs() {
 									os.Exit(1)
 								}
 
+								recv.vclockLock.Unlock()
+
 								// Mark area as applied by inserting an
 								// entry into the areas structure.
 								meta = append(meta, make(map[string]int64))
@@ -534,6 +540,7 @@ func (recv *Receiver) ApplyStoredMsgs() {
 								i++
 
 							} else {
+								recv.vclockLock.Unlock()
 								level.Warn(recv.logger).Log("msg", "message was out of order, taking next one")
 							}
 						}

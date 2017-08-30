@@ -118,11 +118,11 @@ func TestTriggerMsgApplier(t *testing.T) {
 
 	// Bundle information in Receiver struct.
 	recv := &Receiver{
-		lock:        &sync.Mutex{},
-		logger:      logger,
-		name:        "worker-1",
-		msgInLog:    make(chan struct{}, 1),
-		stopTrigger: make(chan struct{}),
+		logger:        logger,
+		name:          "worker-1",
+		msgInLog:      make(chan struct{}, 1),
+		stopTrigger:   make(chan struct{}),
+		updateLogLock: &sync.Mutex{},
 	}
 
 	// Run trigger function.
@@ -176,14 +176,14 @@ func TestIncoming(t *testing.T) {
 
 	// Bundle information in Receiver struct.
 	recv := &Receiver{
-		lock:         &sync.Mutex{},
-		logger:       logger,
-		name:         "worker-1",
-		msgInLog:     make(chan struct{}, 1),
-		logFilePath:  tmpLogFile,
-		writeLog:     write,
-		metaFilePath: tmpMetaFile,
-		metaLog:      meta,
+		logger:        logger,
+		name:          "worker-1",
+		msgInLog:      make(chan struct{}, 1),
+		updateLogPath: tmpLogFile,
+		updateLogLock: &sync.Mutex{},
+		updateLog:     write,
+		metaFilePath:  tmpMetaFile,
+		metaLog:       meta,
 	}
 
 	// Reset position in meta log file to beginning.
@@ -329,15 +329,16 @@ func TestApplyStoredMsgs(t *testing.T) {
 
 	// Bundle information in Receiver struct.
 	recv := &Receiver{
-		lock:             &sync.Mutex{},
 		logger:           logger,
 		name:             "worker-1",
 		msgInLog:         make(chan struct{}, 1),
-		logFilePath:      tmpLogFile,
-		writeLog:         write,
+		updateLogPath:    tmpLogFile,
+		updateLogLock:    &sync.Mutex{},
+		updateLog:        write,
 		metaFilePath:     tmpMetaFile,
 		metaLog:          meta,
 		vclock:           make(map[string]uint32),
+		vclockLock:       &sync.Mutex{},
 		vclockLog:        vclockLog,
 		stopApply:        make(chan struct{}),
 		applyCRDTUpdChan: make(chan Msg),

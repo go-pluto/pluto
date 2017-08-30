@@ -97,9 +97,9 @@ func (recv *Receiver) SetVClockEntries() error {
 	return nil
 }
 
-// IncVClockEntry waits for an incoming name of a node on
-// channel defined during initialization and passed on to
-// senders. If the node is present in vector clock map, its
+// IncVClockEntry waits for an incoming name of a node on a
+// channel defined during initialization and passed on to the
+// sender. If the node is present in vector clock map, its
 // value is incremented by one.
 func (recv *Receiver) IncVClockEntry() {
 
@@ -107,18 +107,14 @@ func (recv *Receiver) IncVClockEntry() {
 
 		// Wait for name of node on channel.
 		entry, ok := <-recv.incVClock
-
 		if ok {
 
-			// Lock receiver struct.
-			recv.lock.Lock()
+			recv.vclockLock.Lock()
 
-			// Check if received node name exists in map.
 			_, exists := recv.vclock[entry]
 			if exists {
 
-				// If it does, increment its vector clock
-				// value by one.
+				// Increment the node's vector clock value.
 				recv.vclock[entry]++
 
 				// Make a deep copy of current vector clock
@@ -143,8 +139,7 @@ func (recv *Receiver) IncVClockEntry() {
 				recv.updVClock <- updatedVClock
 			}
 
-			// Unlock struct.
-			recv.lock.Unlock()
+			recv.vclockLock.Unlock()
 		}
 	}
 }
